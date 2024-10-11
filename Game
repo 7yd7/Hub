@@ -36,6 +36,7 @@ if success and response.StatusCode == 200 then
     
     if not found then
         print("No script found for this Game.")
+loadstring(game:HttpGet("https://raw.githubusercontent.com/7yd7/Hub/refs/heads/Branch/NoGame.lua"))()
     end
 else
     print("Error fetching data: " .. (response and response.StatusMessage or "Unknown error"))
