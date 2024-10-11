@@ -32,7 +32,7 @@ if success and response.StatusCode == 200 then
 
 Fluent:Notify({
     Title = "7yd7 | Hub",
-    Content = "Game is running: " .. mapName,
+    Content = "Script has been run",
     Duration = 8
 })
 
