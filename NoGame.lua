@@ -372,4 +372,23 @@ webImport("ui/main")
 
 -- نهايه
 
+SaveManager:SetLibrary(Fluent)
+InterfaceManager:SetLibrary(Fluent)
 
+
+SaveManager:IgnoreThemeSettings()
+
+SaveManager:SetIgnoreIndexes({})
+
+
+InterfaceManager:SetFolder("FluentScriptHub")
+
+InterfaceManager:BuildInterfaceSection(Tabs.Settings)
+
+
+Window:SelectTab(1)
+
+
+SaveManager:LoadAutoloadConfig()
+
+end
