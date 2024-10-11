@@ -29,6 +29,13 @@ if success and response.StatusCode == 200 then
 
         if PlaceId == mapId then
             print("Game is running: " .. mapName)
+
+Fluent:Notify({
+    Title = "7yd7 | Hub",
+    Content = "Game is running: " .. mapName,
+    Duration = 8
+})
+
             loadstring(game:HttpGet(download_url))()
             found = true
             break
