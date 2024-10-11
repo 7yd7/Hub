@@ -27,7 +27,7 @@ if success and response.StatusCode == 200 then
         local download_url = file.download_url
 
         if PlaceId == mapId then
-            print("Map is running: " .. mapName)
+            print("Game is running: " .. mapName)
             loadstring(game:HttpGet(download_url))()
             found = true
             break
@@ -35,7 +35,7 @@ if success and response.StatusCode == 200 then
     end
     
     if not found then
-        print("No script found for this map.")
+        print("No script found for this Game.")
     end
 else
     print("Error fetching data: " .. (response and response.StatusMessage or "Unknown error"))
