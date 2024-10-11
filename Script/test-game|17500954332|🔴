@@ -1,11 +1,1 @@
-    local Slider = Tabs.Gameworks:AddSlider("Slider", {
-        Title = "WalkSpeed",
-        Description = "Adjust the speed of a personal player",
-        Default = 16,
-        Min = 0,
-        Max = 500,
-        Rounding = 1,
-        Callback = function(Value)
-            game.Players.LocalPlayer.Character.Humanoid.WalkSpeed = Value
-        end
-    })
+print("test")
