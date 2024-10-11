@@ -1,3 +1,4 @@
+local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
 local api_url = "https://api.github.com/repos/7yd7/Hub/contents/Script?ref=Branch"
 
 local PlaceId = game.PlaceId
@@ -36,6 +37,13 @@ if success and response.StatusCode == 200 then
     
     if not found then
         print("No script found for this Game.")
+
+Fluent:Notify({
+    Title = "7yd7 | Hub",
+    Content = "No script found for this Game.",
+    Duration = 8
+})
+
 loadstring(game:HttpGet("https://raw.githubusercontent.com/7yd7/Hub/refs/heads/Branch/NoGame.lua"))()
     end
 else
