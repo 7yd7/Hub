@@ -1,4 +1,4 @@
-    local Slider = Tabs.Window:AddSlider("Slider", {
+    local Slider = Tabs.Gameworks:AddSlider("Slider", {
         Title = "WalkSpeed",
         Description = "Adjust the speed of a personal player",
         Default = 16,
