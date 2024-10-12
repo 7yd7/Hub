@@ -150,7 +150,8 @@ end)
 
 function startorbRollLoop()
     spawn(function()
-                while getgenv().orbValues do  
+        while wait(SpeedAutoFarmOrbs) do
+                if getgenv().orbValues then
              local orbsFolder = workspace.__THINGS.Orbs
 
                 local orbNumbers = {}
@@ -171,6 +172,7 @@ function startorbRollLoop()
                     if orbToRemove then
                         orbToRemove:Destroy()
                     end
+                end
                 end
             end
         end)
