@@ -276,7 +276,92 @@ function startorbRollLoop()
             end
         end)
     end
+
+    Tabs.Gameworks:AddSection("Buy")
+
+    Tabs.Gameworks:AddButton({
+        Title = "Potion Vending Machine",
+         Callback = function()
+            local args = {
+                [1] = "PotionVendingMachine"
+            }
+            
+            game:GetService("ReplicatedStorage").Network.VendingMachines_Purchase:InvokeServer(unpack(args))            
+        end
+    })
+
+
+    local contentFolder = game:GetService("Players").LocalPlayer.PlayerGui._MACHINES.CraftingMachine.Frame.UsingFrame.Content
+
+    local minValue = math.huge
+    local maxValue = -math.huge
     
+    for _, item in pairs(contentFolder:GetChildren()) do
+        if tonumber(item.Name) then
+            local number = tonumber(item.Name)
+            if number < minValue then
+                minValue = number 
+            end
+            if number > maxValue then
+                maxValue = number
+            end
+        end
+    end
+    
+    if minValue == math.huge then
+        minValue = 0
+    end
+    
+    if maxValue == -math.huge then
+        maxValue = 10 
+    end
+    
+    local Slider = Tabs.Gameworks:AddSlider("Slider", {
+        Title = "Number Buy Potion Crafting Machine",
+        Description = "The number you want to buy from the Potion Crafting Machine store in numerical order",
+        Default = 1,
+        Min = minValue, 
+        Max = maxValue, 
+        Rounding = 1,
+        Callback = function(Value)
+            getgenv().PotionCraftingMachinenumber = Value
+        end
+    })
+
+    local function getClosestNumber(target, numbers)
+        local closest = numbers[1]  
+        for _, num in ipairs(numbers) do
+            if math.abs(num - target) < math.abs(closest - target) then
+                closest = num  
+            end
+        end
+        return closest
+    end
+    
+    Tabs.Gameworks:AddButton({
+        Title = "Potion Crafting Machine",
+        Callback = function()
+            local potionCraftingMachineNumber = getgenv().PotionCraftingMachinenumber 
+            local numbers = {}
+    
+            for _, item in pairs(contentFolder:GetChildren()) do
+                if tonumber(item.Name) then
+                    table.insert(numbers, tonumber(item.Name))  
+                end
+            end
+    
+         
+            local closestNumber = getClosestNumber(potionCraftingMachineNumber, numbers)
+    
+          
+            local args = {
+                [1] = "PotionCraftingMachine",
+                [2] = closestNumber  
+            }
+    
+            game:GetService("ReplicatedStorage").Network.CraftingMachine_Craft:InvokeServer(unpack(args))               
+        end
+    })    
 
 
 -- سكربت جميع مابات
