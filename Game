@@ -27,14 +27,15 @@ if success and response.StatusCode == 200 then
         local status = nameParts[3]
         local download_url = file.download_url
 
-        if PlaceId == mapId then
+        -- تحقق مما إذا كان download_url موجودًا
+        if download_url and PlaceId == mapId then
             print("Game is running: " .. mapName)
 
-Fluent:Notify({
-    Title = "7yd7 | Hub",
-    Content = "Script has been run",
-    Duration = 8
-})
+            Fluent:Notify({
+                Title = "7yd7 | Hub",
+                Content = "Script has been run",
+                Duration = 8
+            })
 
             loadstring(game:HttpGet(download_url))()
             found = true
@@ -45,13 +46,13 @@ Fluent:Notify({
     if not found then
         print("No script found for this Game.")
 
-Fluent:Notify({
-    Title = "7yd7 | Hub",
-    Content = "No script found for this Game.",
-    Duration = 8
-})
+        Fluent:Notify({
+            Title = "7yd7 | Hub",
+            Content = "No script found for this Game.",
+            Duration = 8
+        })
 
-loadstring(game:HttpGet("https://raw.githubusercontent.com/7yd7/Hub/refs/heads/Branch/NoGame.lua"))()
+        loadstring(game:HttpGet("https://raw.githubusercontent.com/7yd7/Hub/refs/heads/Branch/NoGame.lua"))()
     end
 else
     print("Error fetching data: " .. (response and response.StatusMessage or "Unknown error"))
