@@ -40,7 +40,7 @@ Tabs.Home:AddParagraph({
 
 -- لعبه متاح
 
-Tabs.Gameworks:AddSection("Pets")
+Tabs.Gameworks:AddSection("Auto")
 
 local Slider = Tabs.Gameworks:AddSlider("Slider", {
     Title = "Speed Wait Eggs Roll",
@@ -59,30 +59,33 @@ local Toggle = Tabs.Gameworks:AddToggle("Eggs_RollsValue", {Title = "Auto Eggs R
 
 Toggle:OnChanged(function()
     getgenv().Eggs_Roll = Options.Eggs_RollsValue.Value
-    
+
     if getgenv().Eggs_Roll then
-        startEggsRollLoop()  
+        startEggsRollLoop()
+    else
+        getgenv().Eggs_Roll = false
     end
 end)
 
-
 function startEggsRollLoop()
     spawn(function()
-            while wait(SpeedEggs) do
-            if getgenv().Eggs_Roll == true then
+        while getgenv().Eggs_Roll do 
+            wait(SpeedEggs)
             game:GetService("ReplicatedStorage").Network.Eggs_Roll:InvokeServer()
-            end
         end
-        end)
-    end
+    end)
+end
+
 
 local Toggle = Tabs.Gameworks:AddToggle("UpgradesValue", {Title = "Auto Upgrades", Description = "Upgrades must also be open. If you want to specify Upgrades, just click on something and it will be done automatically.", Default = false})
 
 Toggle:OnChanged(function()
     getgenv().Upgrades = Options.UpgradesValue.Value
-    
+
     if getgenv().Upgrades then
-        startUpgradesRollLoop()  
+        startUpgradesRollLoop()
+    else
+        getgenv().Upgrades = false
     end
 end)
 
@@ -132,6 +135,110 @@ function startUpgradesRollLoop()
         end
     end)
 end
+
+local Toggle = Tabs.Gameworks:AddToggle("orbValue", {Title = "Auto Orbs", Default = false})
+
+Toggle:OnChanged(function()
+    getgenv().orbValues = Options.orbValue.Value
+
+    if getgenv().orbValues then
+        startorbRollLoop()
+    else
+        getgenv().orbValues = false
+    end
+end)
+
+function startorbRollLoop()
+    spawn(function()
+                while getgenv().orbValues do  
+             local orbsFolder = workspace.__THINGS.Orbs
+
+                local orbNumbers = {}
+                for _, orb in pairs(orbsFolder:GetChildren()) do
+                    table.insert(orbNumbers, orb.Name) 
+                end
+                
+                for _, orbNumber in pairs(orbNumbers) do
+                    local args = {
+                        [1] = {
+                            [1] = tonumber(orbNumber) 
+                        }
+                    }
+                
+                    game:GetService("ReplicatedStorage").Network:FindFirstChild("Orbs: Collect"):FireServer(unpack(args))
+                
+                    local orbToRemove = orbsFolder:FindFirstChild(orbNumber)
+                    if orbToRemove then
+                        orbToRemove:Destroy()
+                    end
+                end
+            end
+        end)
+    end
+
+    Tabs.Gameworks:AddSection("Farm")
+
+    local Slider = Tabs.Gameworks:AddSlider("Slider", {
+        Title = "Speed Wait Auto Farm Orbs",
+        Description = "Speed Wait to Auto Farm Orbs",
+        Default = 1, 
+        Min = 0,    
+        Max = 10,  
+        Rounding = 1, 
+        Callback = function(Value)
+            getgenv().SpeedAutoFarmOrbs = Value
+        end
+    })
+
+    local Toggle = Tabs.Gameworks:AddToggle("AutoFarmorbs", {Title = "Auto Farm Orbs", Default = false})
+
+Toggle:OnChanged(function()
+    getgenv().AutoFarmorb = Options.AutoFarmorbs.Value
+
+    if getgenv().AutoFarmorb then
+        startAutoFarmorbRollLoop()
+    else
+        getgenv().AutoFarmorb = false
+    end
+end)
+
+
+function startAutoFarmorbRollLoop()
+    spawn(function()
+            while wait(SpeedAutoFarmOrbs) do
+            if getgenv().AutoFarmorb then
+                local petsFolder = workspace.__THINGS.Pets
+                local breakablesFolder = workspace.__THINGS.Breakables
+                
+                local petNames = {}
+                for _, pet in pairs(petsFolder:GetChildren()) do
+                    if tonumber(pet.Name) then  
+                        table.insert(petNames, pet.Name)
+                    end
+                end
+                
+                local breakableNumbers = {}
+                for _, breakable in pairs(breakablesFolder:GetChildren()) do
+                    if tonumber(breakable.Name) then  
+                        table.insert(breakableNumbers, breakable.Name)
+                    end
+                end
+                
+                for _, petName in ipairs(petNames) do
+                    local randomBreakableNumber = breakableNumbers[math.random(#breakableNumbers)]
+                    
+                    local args = {
+                        [1] = {
+                            [petName] = tonumber(randomBreakableNumber) 
+                        }
+                    }
+                
+                    game:GetService("ReplicatedStorage").Network.Breakables_JoinPetBulk:FireServer(unpack(args))
+                end
+            end                
+        end
+        end)
+    end
 
 
 
