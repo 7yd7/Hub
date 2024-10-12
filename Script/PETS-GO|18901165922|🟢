@@ -150,7 +150,7 @@ end)
 
 function startorbRollLoop()
     spawn(function()
-        while wait(SpeedAutoFarmOrbs) do
+        while wait() do
                 if getgenv().orbValues then
              local orbsFolder = workspace.__THINGS.Orbs
 
@@ -192,56 +192,79 @@ function startorbRollLoop()
         end
     })
 
+    local Dropdown = Tabs.Gameworks:AddDropdown("FarmMode", {
+        Title = "Farming Mode",
+        Values = {"Random", "All Pets Target One"},
+        Multi = false,
+        Default = 1,
+    })
+    
+    Dropdown:SetValue("Random")
+    
+    Dropdown:OnChanged(function(Value)
+        getgenv().FarmMode = Value
+        print("Farming mode changed:", Value)
+    end)
+    
     local Toggle = Tabs.Gameworks:AddToggle("AutoFarmorbs", {Title = "Auto Farm Orbs", Default = false})
-
-Toggle:OnChanged(function()
-    getgenv().AutoFarmorb = Options.AutoFarmorbs.Value
-
-    if getgenv().AutoFarmorb then
-        startAutoFarmorbRollLoop()
-    else
-        getgenv().AutoFarmorb = false
-    end
-end)
-
-
-function startAutoFarmorbRollLoop()
-    spawn(function()
-            while wait(SpeedAutoFarmOrbs) do
-            if getgenv().AutoFarmorb then
-                local petsFolder = workspace.__THINGS.Pets
-                local breakablesFolder = workspace.__THINGS.Breakables
-                
-                local petNames = {}
-                for _, pet in pairs(petsFolder:GetChildren()) do
-                    if tonumber(pet.Name) then  
-                        table.insert(petNames, pet.Name)
-                    end
-                end
-                
-                local breakableNumbers = {}
-                for _, breakable in pairs(breakablesFolder:GetChildren()) do
-                    if tonumber(breakable.Name) then  
-                        table.insert(breakableNumbers, breakable.Name)
-                    end
-                end
-                
-                for _, petName in ipairs(petNames) do
-                    local randomBreakableNumber = breakableNumbers[math.random(#breakableNumbers)]
-                    
-                    local args = {
-                        [1] = {
-                            [petName] = tonumber(randomBreakableNumber) 
-                        }
-                    }
-                
-                    game:GetService("ReplicatedStorage").Network.Breakables_JoinPetBulk:FireServer(unpack(args))
-                end
-            end                
+    
+    Toggle:OnChanged(function()
+        getgenv().AutoFarmorb = Options.AutoFarmorbs.Value
+    
+        if getgenv().AutoFarmorb then
+            startAutoFarmorbRollLoop()
+        else
+            getgenv().AutoFarmorb = false
         end
+    end)
+    
+    function startAutoFarmorbRollLoop()
+        spawn(function()
+            while wait(SpeedAutoFarmOrbs) do
+                if getgenv().AutoFarmorb then
+                    local petsFolder = workspace.__THINGS.Pets
+                    local breakablesFolder = workspace.__THINGS.Breakables
+                    
+                    local petNames = {}
+                    for _, pet in pairs(petsFolder:GetChildren()) do
+                        if tonumber(pet.Name) then  
+                            table.insert(petNames, pet.Name)
+                        end
+                    end
+                    
+                    local breakableNumbers = {}
+                    for _, breakable in pairs(breakablesFolder:GetChildren()) do
+                        if tonumber(breakable.Name) then  
+                            table.insert(breakableNumbers, breakable.Name)
+                        end
+                    end
+                    
+                    if getgenv().FarmMode == "Random" then
+                        for _, petName in ipairs(petNames) do
+                            local randomBreakableNumber = breakableNumbers[math.random(#breakableNumbers)]
+                            local args = {
+                                [1] = {
+                                    [petName] = tonumber(randomBreakableNumber)
+                                }
+                            }
+                            game:GetService("ReplicatedStorage").Network.Breakables_JoinPetBulk:FireServer(unpack(args))
+                        end
+                    elseif getgenv().FarmMode == "All Pets Target One" then
+                        local targetBreakableNumber = breakableNumbers[math.random(#breakableNumbers)]
+                        for _, petName in ipairs(petNames) do
+                            local args = {
+                                [1] = {
+                                    [petName] = tonumber(targetBreakableNumber)
+                                }
+                            }
+                            game:GetService("ReplicatedStorage").Network.Breakables_JoinPetBulk:FireServer(unpack(args))
+                        end
+                    end
+                end                
+            end
         end)
     end
-
+    
 
 
 -- سكربت جميع مابات
@@ -337,13 +360,44 @@ function startAutoFarmorbRollLoop()
     
     UserInputService.JumpRequest:Connect(function()
         if getgenv().InfiniteJumpEnabled then
-            -- تنفيذ القفز عند الضغط على زر القفز
+          
             if Player.Character and Player.Character:FindFirstChildOfClass('Humanoid') then
                 local Humanoid = Player.Character:FindFirstChildOfClass('Humanoid')
                 Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
             end
         end
     end)
+
+
+    local Toggle = Tabs.Script:AddToggle("AntiAFKEnableds", {Title = "Anti AFK", Default = false})
+
+    Toggle:OnChanged(function()
+        getgenv().AntiAFKEnabled = Options.AntiAFKEnableds.Value
+
+        if getgenv().AntiAFKEnabled then
+            startAntiAFK()
+        else
+            getgenv().AntiAFKEnabled = false
+        end
+    end)
+
+
+    function startAntiAFK()
+        spawn(function()
+    local VirtualUser = game:service'VirtualUser'
+    game:service'Players'.LocalPlayer.Idled:connect(function()
+        while getgenv().AntiAFKEnabled do
+            VirtualUser:CaptureController()
+            VirtualUser:ClickButton2(Vector2.new())
+            print("Prevented AFK kick.")
+        end
+    end)
+end)
+end
+
+
+
+
     
     Tabs.Script:AddSection("Script")
 
@@ -535,13 +589,11 @@ webImport("ui/main")
             for _, file in pairs(data) do
                 local fullName = file.name
                 
-                -- استخدام نمط regex لتقسيم السلسلة
                 local mapName, mapId, status = fullName:match("^(.-)|(%d+)|(.+)$")
                 
                 if mapName and mapId and status then
-                    mapId = tonumber(mapId) -- تحويل المعرف إلى عدد
+                    mapId = tonumber(mapId) 
         
-                    -- إنشاء زر جديد لكل ماب
                     Tabs.game:AddButton({
                         Title = mapName .. " | " .. status,
                         Description = "Game Script",
