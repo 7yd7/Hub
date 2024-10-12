@@ -1,3 +1,11 @@
+local function encodeURL(url)
+    url = string.gsub(url, "|", "%%7C")
+    url = string.gsub(url, "🟢", "%%F0%%9F%%9F%%A2")
+    url = string.gsub(url, "🟠", "%%F0%%9F%%9F%%A0") 
+    url = string.gsub(url, "🔴", "%%F0%%9F%%94%%B4")
+    return url
+end
+
 local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
 local api_url = "https://api.github.com/repos/7yd7/Hub/contents/Script?ref=Branch"
 
@@ -27,7 +35,6 @@ if success and response.StatusCode == 200 then
         local status = nameParts[3]
         local download_url = file.download_url
 
-        -- تحقق مما إذا كان download_url موجودًا
         if download_url and PlaceId == mapId then
             print("Game is running: " .. mapName)
 
@@ -37,9 +44,10 @@ if success and response.StatusCode == 200 then
                 Duration = 8
             })
 
-print(download_url)
+            local encoded_url = encodeURL(download_url)
+            print("Encoded URL: " .. encoded_url)
 
-            loadstring(game:HttpGet(download_url))()
+            loadstring(game:HttpGet(encoded_url))()
             found = true
             break
         end
