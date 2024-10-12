@@ -219,7 +219,7 @@ function startorbRollLoop()
     end)
     
     local Toggle = Tabs.Gameworks:AddToggle("AutoFarmorbs", {Title = "Auto Farm Orbs", Default = false})
-    
+
     Toggle:OnChanged(function()
         getgenv().AutoFarmorb = Options.AutoFarmorbs.Value
     
@@ -237,6 +237,7 @@ function startorbRollLoop()
                     local petsFolder = workspace.__THINGS.Pets
                     local breakablesFolder = workspace.__THINGS.Breakables
                     
+                    -- جمع أسماء البتات
                     local petNames = {}
                     for _, pet in pairs(petsFolder:GetChildren()) do
                         if tonumber(pet.Name) then  
@@ -244,13 +245,40 @@ function startorbRollLoop()
                         end
                     end
                     
+                    -- جمع الأرقام القابلة للكسر
                     local breakableNumbers = {}
                     for _, breakable in pairs(breakablesFolder:GetChildren()) do
                         if tonumber(breakable.Name) then  
                             table.insert(breakableNumbers, breakable.Name)
                         end
                     end
-                    
+    
+                    -- التأكد من عدم استخدام math.random على جدول فارغ
+                    if #petNames == 0 or #breakableNumbers == 0 then
+                        print("Waiting for pets or breakables to appear...")
+                        -- الانتظار حتى تتوفر العناصر
+                        repeat
+                            wait(1) -- الانتظار لمدة ثانية قبل المحاولة مرة أخرى
+                            
+                            -- إعادة جمع أسماء البتات
+                            petNames = {}
+                            for _, pet in pairs(petsFolder:GetChildren()) do
+                                if tonumber(pet.Name) then  
+                                    table.insert(petNames, pet.Name)
+                                end
+                            end
+                            
+                            -- إعادة جمع الأرقام القابلة للكسر
+                            breakableNumbers = {}
+                            for _, breakable in pairs(breakablesFolder:GetChildren()) do
+                                if tonumber(breakable.Name) then  
+                                    table.insert(breakableNumbers, breakable.Name)
+                                end
+                            end
+                        until #petNames > 0 and #breakableNumbers > 0
+                    end
+    
+                    -- بعد التأكد من توفر البتات والأشياء القابلة للكسر
                     if getgenv().FarmMode == "Random" then
                         for _, petName in ipairs(petNames) do
                             local randomBreakableNumber = breakableNumbers[math.random(#breakableNumbers)]
@@ -272,10 +300,11 @@ function startorbRollLoop()
                             game:GetService("ReplicatedStorage").Network.Breakables_JoinPetBulk:FireServer(unpack(args))
                         end
                     end
-                end                
+                end
             end
         end)
     end
+    
 
     Tabs.Gameworks:AddSection("Buy")
 
