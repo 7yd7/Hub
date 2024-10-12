@@ -77,6 +77,18 @@ function startEggsRollLoop()
 end
 
 
+local Slider = Tabs.Gameworks:AddSlider("Slider", {
+    Title = "Process Upgrades Speed",
+    Description = "Increase the speed of process refresh or update rate",    
+    Default = 1, 
+    Min = 0,    
+    Max = 10,  
+    Rounding = 1, 
+    Callback = function(Value)
+        getgenv().SpeedUpgrades = Value
+    end
+})
+
 local Toggle = Tabs.Gameworks:AddToggle("UpgradesValue", {Title = "Auto Upgrades", Description = "Upgrades must also be open. If you want to specify Upgrades, just click on something and it will be done automatically.", Default = false})
 
 Toggle:OnChanged(function()
@@ -131,7 +143,7 @@ function startUpgradesRollLoop()
             
                 game:GetService("ReplicatedStorage").Network.Upgrades_Purchase:InvokeServer(unpack(args))
             end            
-       wait(5)
+       wait(SpeedUpgrades)
         end
     end)
 end
@@ -182,7 +194,7 @@ function startorbRollLoop()
 
     local Slider = Tabs.Gameworks:AddSlider("Slider", {
         Title = "Speed Wait Auto Farm Orbs",
-        Description = "Speed Wait to Auto Farm Orbs",
+        Description = "Adjust the speed at which pets switch between targets during auto farming",
         Default = 1, 
         Min = 0,    
         Max = 10,  
