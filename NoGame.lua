@@ -121,6 +121,7 @@ Tabs.Gameworks:AddParagraph({
         end
     })
 
+
     local Toggle = Tabs.Script:AddToggle("MyToggle", {Title = "InfiniteJump", Default = false})
 
     Toggle:OnChanged(function()
@@ -141,6 +142,34 @@ Tabs.Gameworks:AddParagraph({
             end
         end
     end)
+
+    
+    local Toggle = Tabs.Script:AddToggle("AntiAFKEnableds", {Title = "Anti AFK", Default = false})
+
+    Toggle:OnChanged(function()
+        getgenv().AntiAFKEnabled = Options.AntiAFKEnableds.Value
+
+        if getgenv().AntiAFKEnabled then
+            startAntiAFK()
+        else
+            getgenv().AntiAFKEnabled = false
+        end
+    end)
+
+
+    function startAntiAFK()
+        spawn(function()
+    local VirtualUser = game:service'VirtualUser'
+    game:service'Players'.LocalPlayer.Idled:connect(function()
+        while getgenv().AntiAFKEnabled do
+            VirtualUser:CaptureController()
+            VirtualUser:ClickButton2(Vector2.new())
+            print("Prevented AFK kick.")
+        end
+    end)
+end)
+end
+
     
     Tabs.Script:AddSection("Script")
 
@@ -332,13 +361,11 @@ webImport("ui/main")
             for _, file in pairs(data) do
                 local fullName = file.name
                 
-                -- استخدام نمط regex لتقسيم السلسلة
                 local mapName, mapId, status = fullName:match("^(.-)|(%d+)|(.+)$")
                 
                 if mapName and mapId and status then
-                    mapId = tonumber(mapId) -- تحويل المعرف إلى عدد
+                    mapId = tonumber(mapId)
         
-                    -- إنشاء زر جديد لكل ماب
                     Tabs.game:AddButton({
                         Title = mapName .. " | " .. status,
                         Description = "Game Script",
@@ -371,6 +398,8 @@ webImport("ui/main")
         
 
 -- نهايه
+
+
 
 SaveManager:SetLibrary(Fluent)
 InterfaceManager:SetLibrary(Fluent)
