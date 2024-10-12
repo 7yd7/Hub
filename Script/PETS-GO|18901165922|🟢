@@ -279,6 +279,7 @@ function startorbRollLoop()
 
     Tabs.Gameworks:AddSection("Buy")
 
+
     Tabs.Gameworks:AddButton({
         Title = "Potion Vending Machine",
          Callback = function()
@@ -289,6 +290,32 @@ function startorbRollLoop()
             game:GetService("ReplicatedStorage").Network.VendingMachines_Purchase:InvokeServer(unpack(args))            
         end
     })
+
+    local Toggle = Tabs.Gameworks:AddToggle("PotionVendingMachineValue", {Title = "Auto Potion Vending Machine", Default = false})
+
+Toggle:OnChanged(function()
+    getgenv().AutoPotionVendingMachine = Options.PotionVendingMachineValue.Value
+
+    if getgenv().AutoPotionVendingMachine then
+        AutoPotionVendingMachineLoop()
+    else
+        getgenv().AutoPotionVendingMachine = false
+    end
+end)
+
+function AutoPotionVendingMachineLoop()
+    spawn(function()
+        while getgenv().AutoPotionVendingMachine do 
+            wait(3)
+            local args = {
+                [1] = "PotionVendingMachine"
+            }
+            
+            game:GetService("ReplicatedStorage").Network.VendingMachines_Purchase:InvokeServer(unpack(args))     
+        end
+    end)
+end
+
 
 
     local contentFolder = game:GetService("Players").LocalPlayer.PlayerGui._MACHINES.CraftingMachine.Frame.UsingFrame.Content
