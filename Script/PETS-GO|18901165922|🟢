@@ -101,52 +101,58 @@ Toggle:OnChanged(function()
     end
 end)
 
-
 function startUpgradesRollLoop()
     spawn(function()
-        while getgenv().Upgrades do  
-            local function convertShortenedNumber(shortened)
-                if string.find(shortened, "k") then
-                    local number = string.gsub(shortened, "k", "")
-                    return tonumber(number) * 1000
-                elseif string.find(shortened, "m") then
-                    local number = string.gsub(shortened, "m", "")
-                    return tonumber(number) * 1000000
-                elseif string.find(shortened, "b") then
-                    local number = string.gsub(shortened, "b", "")
-                    return tonumber(number) * 1000000000
-                else
-                    return tonumber(shortened)
-                end
-            end
-            
-            local upgradesFolder = workspace.__THINGS.Upgrades["Upgrades Frontend Render"]
-            local lowestPrice = math.huge
-            local lowestUpgradeName = nil
-            
-            for _, upgrade in pairs(upgradesFolder:GetChildren()) do
-                if upgrade:FindFirstChild("Price") and upgrade.Price:FindFirstChild("SurfaceGui") and upgrade.Price.SurfaceGui:FindFirstChild("Price") then
-                    local priceLabel = upgrade.Price.SurfaceGui.Price
-                    local priceText = convertShortenedNumber(priceLabel.ContentText)
-                    
-                    if priceText and priceText < lowestPrice then
-                        lowestPrice = priceText
-                        lowestUpgradeName = upgrade.Name
+        while getgenv().Upgrades do
+            local upgradesFolder = workspace:FindFirstChild("__THINGS") and workspace.__THINGS:FindFirstChild("Upgrades") and workspace.__THINGS.Upgrades:FindFirstChild("Upgrades Frontend Render")
+
+            if upgradesFolder then
+  
+
+                local function convertShortenedNumber(shortened)
+                    if string.find(shortened, "k") then
+                        local number = string.gsub(shortened, "k", "")
+                        return tonumber(number) * 1000
+                    elseif string.find(shortened, "m") then
+                        local number = string.gsub(shortened, "m", "")
+                        return tonumber(number) * 1000000
+                    elseif string.find(shortened, "b") then
+                        local number = string.gsub(shortened, "b", "")
+                        return tonumber(number) * 1000000000
+                    else
+                        return tonumber(shortened)
                     end
                 end
+                
+                local lowestPrice = math.huge
+                local lowestUpgradeName = nil
+                
+                for _, upgrade in pairs(upgradesFolder:GetChildren()) do
+                    if upgrade:FindFirstChild("Price") and upgrade.Price:FindFirstChild("SurfaceGui") and upgrade.Price.SurfaceGui:FindFirstChild("Price") then
+                        local priceLabel = upgrade.Price.SurfaceGui.Price
+                        local priceText = convertShortenedNumber(priceLabel.ContentText)
+                        
+                        if priceText and priceText < lowestPrice then
+                            lowestPrice = priceText
+                            lowestUpgradeName = upgrade.Name
+                        end
+                    end
+                end
+                
+                if lowestUpgradeName then
+                    local args = {
+                        [1] = lowestUpgradeName
+                    }
+                
+                    game:GetService("ReplicatedStorage").Network.Upgrades_Purchase:InvokeServer(unpack(args))
+                end
             end
-            
-            if lowestUpgradeName then
-                local args = {
-                    [1] = lowestUpgradeName
-                }
-            
-                game:GetService("ReplicatedStorage").Network.Upgrades_Purchase:InvokeServer(unpack(args))
-            end            
-       wait(SpeedUpgrades)
+
+            wait(SpeedUpgrades)
         end
     end)
 end
+
 
 local Toggle = Tabs.Gameworks:AddToggle("orbValue", {Title = "Auto Orbs", Default = false})
 
