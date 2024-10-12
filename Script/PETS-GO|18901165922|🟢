@@ -336,11 +336,11 @@ end
     end
     
     if minValue == math.huge then
-        minValue = 0
+        minValue = 1
     end
     
     if maxValue == -math.huge then
-        maxValue = 10 
+        maxValue = 18 
     end
     
     local Slider = Tabs.Gameworks:AddSlider("Slider", {
