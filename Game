@@ -37,6 +37,8 @@ if success and response.StatusCode == 200 then
                 Duration = 8
             })
 
+print(download_url)
+
             loadstring(game:HttpGet(download_url))()
             found = true
             break
