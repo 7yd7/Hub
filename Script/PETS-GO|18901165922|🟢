@@ -201,7 +201,7 @@ function startorbRollLoop()
     local Slider = Tabs.Gameworks:AddSlider("Slider", {
         Title = "Speed Wait Auto Farm Orbs",
         Description = "Adjust the speed at which pets switch between targets during auto farming",
-        Default = 1, 
+        Default = 0.3, 
         Min = 0,    
         Max = 10,  
         Rounding = 1, 
@@ -417,6 +417,82 @@ end
             game:GetService("ReplicatedStorage").Network.CraftingMachine_Craft:InvokeServer(unpack(args))               
         end
     })    
+
+    Tabs.Gameworks:AddSection("Boosts")
+
+    local fruits = {
+        ["Fruit_Rainbow"] = "0176f62846ba492fa14ad6ebb44fb0f5",
+        ["Fruit_Apple"] = "5d1bac4b437440e1be4a65d7d316647d", 
+        ["Fruit_Banana"] = "620b1190c9894d44a285080967ab8935", 
+        ["Fruit_Orange"] = "152aea2631de45dca7f00e2115fd8b3e", 
+        ["Fruit_Pineapple"] = "b5812bbeddd5431d98ac7e2ba0bcd7e3", 
+        ["Fruit_Watermelon"] = "e66b62370a5a4a65bfe59f4b444c7c18", 
+    }
+    
+    local MultiDropdown = Tabs.Gameworks:AddDropdown("MultiFruitDropdown", {
+        Title = "Select Fruits",
+        Description = "You can select multiple fruits.",
+        Values = {"Fruit_Rainbow", "Fruit_Apple", "Fruit_Banana", "Fruit_Orange", "Fruit_Pineapple", "Fruit_Watermelon"},
+        Multi = true, 
+        Default = {"Fruit_Rainbow"}, 
+    })
+    
+    MultiDropdown:SetValue({
+        Fruit_Rainbow = true,
+        Fruit_Apple = false,
+        Fruit_Banana = false,
+        Fruit_Orange = false,
+        Fruit_Pineapple = false,
+        Fruit_Watermelon = false,
+    })
+    
+    
+    local Slider = Tabs.Gameworks:AddSlider("Slider", {
+        Title = "Select Amount fruits",
+        Description = "Choose the number of fruits to consume",
+        Default = 1, 
+        Min = 1,    
+        Max = 30,  
+        Rounding = 1, 
+        Callback = function(Value)
+            getgenv().fruitsnumber = math.floor(Value)
+        end
+    })
+    
+    MultiDropdown:OnChanged(function(Value)
+        local selectedFruits = {}
+        for fruitName, state in next, Value do
+            if state then
+                table.insert(selectedFruits, fruitName)
+            end
+        end
+    end)
+    
+    Tabs.Gameworks:AddButton({
+        Title = "Consume Selected Fruits", 
+        Callback = function()
+            local selectedFruits = {}
+            for fruitName, state in next, MultiDropdown.Value do
+                if state then
+                    table.insert(selectedFruits, fruitName)
+                end
+            end
+    
+            local amount = getgenv().fruitsnumber 
+    
+            for _, fruitName in ipairs(selectedFruits) do
+                local fruitCode = fruits[fruitName] 
+                if fruitCode then
+                    local args = {
+                        [1] = fruitCode,
+                        [2] = amount
+                    }
+                    game:GetService("ReplicatedStorage").Network:FindFirstChild("Fruits: Consume"):InvokeServer(unpack(args))
+                end
+            end
+        end
+    })
+    
 
 
 -- سكربت جميع مابات
