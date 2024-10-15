@@ -427,12 +427,13 @@ end
         ["Fruit_Orange"] = "152aea2631de45dca7f00e2115fd8b3e", 
         ["Fruit_Pineapple"] = "b5812bbeddd5431d98ac7e2ba0bcd7e3", 
         ["Fruit_Watermelon"] = "e66b62370a5a4a65bfe59f4b444c7c18", 
+        ["Fruit_test"] = "ttest", 
     }
     
     local MultiDropdown = Tabs.Gameworks:AddDropdown("MultiFruitDropdown", {
         Title = "Select Fruits",
         Description = "You can select multiple fruits.",
-        Values = {"Fruit_Rainbow", "Fruit_Apple", "Fruit_Banana", "Fruit_Orange", "Fruit_Pineapple", "Fruit_Watermelon"},
+        Values = {"Fruit_Rainbow", "Fruit_Apple", "Fruit_Banana", "Fruit_Orange", "Fruit_Pineapple", "Fruit_Watermelon", "Fruit_test"},
         Multi = true, 
         Default = {"Fruit_Rainbow"}, 
     })
@@ -444,8 +445,8 @@ end
         Fruit_Orange = false,
         Fruit_Pineapple = false,
         Fruit_Watermelon = false,
+        Fruit_test = false,
     })
-    
     
     local Slider = Tabs.Gameworks:AddSlider("Slider", {
         Title = "Select Amount fruits",
@@ -459,14 +460,34 @@ end
         end
     })
     
-    MultiDropdown:OnChanged(function(Value)
-        local selectedFruits = {}
-        for fruitName, state in next, Value do
-            if state then
-                table.insert(selectedFruits, fruitName)
+    function AutoFruitConsumptionLoop()
+        spawn(function()
+            while getgenv().AutoFruitConsumption do 
+                wait(3) 
+    
+                local boostsFolder = game:GetService("Players").LocalPlayer.PlayerGui.Main.Boosts.Inner
+    
+                if not boostsFolder then
+                    return
+                end
+    
+                for fruitName, state in next, MultiDropdown.Value do
+                    if state then
+                        local fruitCode = fruits[fruitName]
+                        if fruitCode then
+                            if not boostsFolder:FindFirstChild(fruitName) then
+                                local args = {
+                                    [1] = fruitCode,
+                                    [2] = getgenv().fruitsnumber 
+                                }
+                                game:GetService("ReplicatedStorage").Network:FindFirstChild("Fruits: Consume"):InvokeServer(unpack(args))
+                            end
+                        end
+                    end
+                end
             end
-        end
-    end)
+        end)
+    end
     
     Tabs.Gameworks:AddButton({
         Title = "Consume Selected Fruits", 
@@ -493,6 +514,17 @@ end
         end
     })
     
+    local Toggle = Tabs.Gameworks:AddToggle("AutoFruitConsumptionToggle", {Title = "Auto Fruit Consumption", Default = false})
+    
+    Toggle:OnChanged(function()
+        getgenv().AutoFruitConsumption = Toggle.Value
+    
+        if getgenv().AutoFruitConsumption then
+            AutoFruitConsumptionLoop()
+        else
+            getgenv().AutoFruitConsumption = false
+        end
+    end)    
 
 
 -- سكربت جميع مابات
