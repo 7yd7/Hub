@@ -154,47 +154,89 @@ function startUpgradesRollLoop()
 end
 
 
-local Toggle = Tabs.Gameworks:AddToggle("orbValue", {Title = "Auto Orbs", Default = false})
+local MultiDropdown = Tabs.Gameworks:AddDropdown("MultiDropdown", {
+    Title = "Select Collectable Type",
+    Description = "Choose to collect Orbs, Fruits, or both.",
+    Values = {"Orb", "Fruit"},
+    Multi = true,
+    Default = {"Orb", "Fruit"}, 
+})
+
+MultiDropdown:SetValue({
+    Orb = true,
+    Fruit = true
+})
+
+local Toggle = Tabs.Gameworks:AddToggle("orbValue", {Title = "Auto Collect", Default = false})
 
 Toggle:OnChanged(function()
     getgenv().orbValues = Options.orbValue.Value
 
     if getgenv().orbValues then
-        startorbRollLoop()
+        startCollectingLoop()
     else
         getgenv().orbValues = false
     end
 end)
 
-function startorbRollLoop()
+function startCollectingLoop()
     spawn(function()
         while wait() do
-                if getgenv().orbValues then
-             local orbsFolder = workspace.__THINGS.Orbs
-
-                local orbNumbers = {}
-                for _, orb in pairs(orbsFolder:GetChildren()) do
-                    table.insert(orbNumbers, orb.Name) 
-                end
-                
-                for _, orbNumber in pairs(orbNumbers) do
-                    local args = {
-                        [1] = {
-                            [1] = tonumber(orbNumber) 
-                        }
-                    }
-                
-                    game:GetService("ReplicatedStorage").Network:FindFirstChild("Orbs: Collect"):FireServer(unpack(args))
-                
-                    local orbToRemove = orbsFolder:FindFirstChild(orbNumber)
-                    if orbToRemove then
-                        orbToRemove:Destroy()
-                    end
-                end
-                end
+            if getgenv().orbValues and MultiDropdown.Value["Orb"] then
+                collectOrbs()
             end
-        end)
+            
+            if getgenv().orbValues and MultiDropdown.Value["Fruit"] then
+                collectFruits()
+            end
+        end
+    end)
+end
+
+function collectOrbs()
+    local orbsFolder = workspace.__THINGS.Orbs
+
+    local orbNumbers = {}
+    for _, orb in pairs(orbsFolder:GetChildren()) do
+        table.insert(orbNumbers, orb.Name)
     end
+    
+    for _, orbNumber in pairs(orbNumbers) do
+        local args = {
+            [1] = {
+                [1] = tonumber(orbNumber)
+            }
+        }
+    
+        game:GetService("ReplicatedStorage").Network:FindFirstChild("Orbs: Collect"):FireServer(unpack(args))
+    
+        local orbToRemove = orbsFolder:FindFirstChild(orbNumber)
+        if orbToRemove then
+            orbToRemove:Destroy()
+        end
+    end
+end
+
+function collectFruits()
+    local breakablesFolder = workspace.__THINGS.Breakables
+    
+    for _, breakable in pairs(breakablesFolder:GetChildren()) do
+        local base = breakable:FindFirstChild("base")
+        
+        if base then
+            local hitbox = base:FindFirstChild("Hitbox")
+            
+            if hitbox then
+                spawn(function()
+                    firetouchinterest(game.Players.LocalPlayer.Character.HumanoidRootPart, hitbox, 0)
+                    firetouchinterest(game.Players.LocalPlayer.Character.HumanoidRootPart, hitbox, 1)
+                end)
+            end
+        end
+    end
+end
+
+startCollectingLoop()
 
     Tabs.Gameworks:AddSection("Farm")
 
@@ -252,13 +294,12 @@ function startorbRollLoop()
                     
                     local breakableNumbers = {}
                     for _, breakable in pairs(breakablesFolder:GetChildren()) do
-                        if tonumber(breakable.Name) then  
+                        if breakable:FindFirstChild("base") == nil and tonumber(breakable.Name) then
                             table.insert(breakableNumbers, breakable.Name)
                         end
                     end
     
                     if #petNames == 0 or #breakableNumbers == 0 then
-                        print("Waiting for pets or breakables to appear...")
                         repeat
                             wait(1)
                             
@@ -271,7 +312,7 @@ function startorbRollLoop()
                             
                             breakableNumbers = {}
                             for _, breakable in pairs(breakablesFolder:GetChildren()) do
-                                if tonumber(breakable.Name) then  
+                                if breakable:FindFirstChild("base") == nil and tonumber(breakable.Name) then
                                     table.insert(breakableNumbers, breakable.Name)
                                 end
                             end
@@ -303,6 +344,7 @@ function startorbRollLoop()
             end
         end)
     end
+    
     
 
     Tabs.Gameworks:AddSection("Buy")
