@@ -410,7 +410,7 @@ end
     end
     
     if maxValue == -math.huge then
-        maxValue = 18 
+        maxValue = 23
     end
     
     local Slider = Tabs.Gameworks:AddSlider("Slider", {
@@ -458,7 +458,46 @@ end
     
             game:GetService("ReplicatedStorage").Network.CraftingMachine_Craft:InvokeServer(unpack(args))               
         end
-    })    
+    }) 
+
+    local Toggle = Tabs.Gameworks:AddToggle("PotionCraftingMachineValue", {Title = "Auto Potion Crafting Machine", Default = false})
+
+Toggle:OnChanged(function()
+    getgenv().LoopPotionCraftingMachine = Options.PotionCraftingMachineValue.Value
+
+    if getgenv().LoopPotionCraftingMachine then
+        startPotionCraftingMachineLoop()
+    else
+        getgenv().LoopPotionCraftingMachine = false
+    end
+end)
+
+function startPotionCraftingMachineLoop()
+    spawn(function()
+        while getgenv().LoopPotionCraftingMachine do 
+            local potionCraftingMachineNumber = getgenv().PotionCraftingMachinenumber 
+            local numbers = {}
+    
+            for _, item in pairs(contentFolder:GetChildren()) do
+                if tonumber(item.Name) then
+                    table.insert(numbers, tonumber(item.Name))  
+                end
+            end
+    
+         
+            local closestNumber = getClosestNumber(potionCraftingMachineNumber, numbers)
+    
+          
+            local args = {
+                [1] = "PotionCraftingMachine",
+                [2] = closestNumber  
+            }
+    
+            game:GetService("ReplicatedStorage").Network.CraftingMachine_Craft:InvokeServer(unpack(args))    
+        end
+    end)
+end
+
 
 
 local indexShopPurchases = {
