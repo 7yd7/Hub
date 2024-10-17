@@ -387,113 +387,91 @@ function AutoPotionVendingMachineLoop()
 end
 
 
+Tabs.Gameworks:AddParagraph({
+    Title = "WARNING!",
+    Content = "You must open the Potion Crafting gui. If you do not open it, it will not work. If you just open it, do a reset script (close the script and run it again)."
+})
 
-    local contentFolder = game:GetService("Players").LocalPlayer.PlayerGui._MACHINES.CraftingMachine.Frame.UsingFrame.Content
+local craftingItems = {}
 
-    local minValue = math.huge
-    local maxValue = -math.huge
-    
-    for _, item in pairs(contentFolder:GetChildren()) do
-        if tonumber(item.Name) then
-            local number = tonumber(item.Name)
-            if number < minValue then
-                minValue = number 
-            end
-            if number > maxValue then
-                maxValue = number
-            end
+local contentFrame = game:GetService("Players").LocalPlayer.PlayerGui._MACHINES.CraftingMachine.Frame.UsingFrame.Content
+
+local itemNumbers = {}
+
+for _, item in pairs(contentFrame:GetChildren()) do
+    local itemNumber = tonumber(item.Name)
+    if itemNumber then
+        local itemName = item.TextLabel.Text
+        craftingItems[itemName] = itemNumber
+        table.insert(itemNumbers, itemNumber)
+    end
+end
+
+table.sort(itemNumbers)
+
+local sortedCraftingItems = {}
+for _, number in ipairs(itemNumbers) do
+    for itemName, itemNumber in pairs(craftingItems) do
+        if itemNumber == number then
+            table.insert(sortedCraftingItems, itemName) 
+            break
         end
     end
-    
-    if minValue == math.huge then
-        minValue = 1
-    end
-    
-    if maxValue == -math.huge then
-        maxValue = 23
-    end
-    
-    local Slider = Tabs.Gameworks:AddSlider("Slider", {
-        Title = "Number Buy Potion Crafting Machine",
-        Description = "The number you want to buy from the Potion Crafting Machine store in numerical order",
-        Default = 1,
-        Min = minValue, 
-        Max = maxValue, 
-        Rounding = 1,
-        Callback = function(Value)
-            getgenv().PotionCraftingMachinenumber = Value
-        end
-    })
+end
 
-    local function getClosestNumber(target, numbers)
-        local closest = numbers[1]  
-        for _, num in ipairs(numbers) do
-            if math.abs(num - target) < math.abs(closest - target) then
-                closest = num  
-            end
-        end
-        return closest
-    end
-    
-    Tabs.Gameworks:AddButton({
-        Title = "Potion Crafting Machine",
-        Callback = function()
-            local potionCraftingMachineNumber = getgenv().PotionCraftingMachinenumber 
-            local numbers = {}
-    
-            for _, item in pairs(contentFolder:GetChildren()) do
-                if tonumber(item.Name) then
-                    table.insert(numbers, tonumber(item.Name))  
-                end
-            end
-    
-         
-            local closestNumber = getClosestNumber(potionCraftingMachineNumber, numbers)
-    
-          
+local Dropdown = Tabs.Gameworks:AddDropdown("CraftingItemDropdown", {
+    Title = "Select Crafting Item",
+    Description = "Select the crafting item you want to create.",
+    Values = sortedCraftingItems,
+    Multi = false,
+    Default = "Select",
+})
+
+Tabs.Gameworks:AddButton({
+    Title = "Potion Crafting",
+    Callback = function()
+        local selectedItem = Dropdown.Value 
+        local selectedCode = craftingItems[selectedItem]
+
+        if selectedCode then
             local args = {
                 [1] = "PotionCraftingMachine",
-                [2] = closestNumber  
+                [2] = selectedCode 
             }
-    
-            game:GetService("ReplicatedStorage").Network.CraftingMachine_Craft:InvokeServer(unpack(args))               
-        end
-    }) 
 
-    local Toggle = Tabs.Gameworks:AddToggle("PotionCraftingMachineValue", {Title = "Auto Potion Crafting Machine", Default = false})
+            game:GetService("ReplicatedStorage").Network.CraftingMachine_Craft:InvokeServer(unpack(args))
+        end      
+    end
+})
+
+local Toggle = Tabs.Gameworks:AddToggle("AutoPotionCraftingToggle", {Title = "Auto Potion Crafting", Default = false})
 
 Toggle:OnChanged(function()
-    getgenv().LoopPotionCraftingMachine = Options.PotionCraftingMachineValue.Value
+    getgenv().AutoPotionCrafting = Options.AutoPotionCraftingToggle.Value
 
-    if getgenv().LoopPotionCraftingMachine then
-        startPotionCraftingMachineLoop()
+    if getgenv().AutoPotionCrafting then
+        startPotionCraftingMachineLoop() 
     else
-        getgenv().LoopPotionCraftingMachine = false
+        getgenv().AutoPotionCrafting = false
     end
 end)
 
 function startPotionCraftingMachineLoop()
     spawn(function()
-        while getgenv().LoopPotionCraftingMachine do 
-            local potionCraftingMachineNumber = getgenv().PotionCraftingMachinenumber 
-            local numbers = {}
-    
-            for _, item in pairs(contentFolder:GetChildren()) do
-                if tonumber(item.Name) then
-                    table.insert(numbers, tonumber(item.Name))  
-                end
+        while getgenv().AutoPotionCrafting do
+            wait(0.5) 
+            
+            local selectedItem = Dropdown.Value 
+            local selectedCode = craftingItems[selectedItem]
+
+            if selectedCode then
+                local args = {
+                    [1] = "PotionCraftingMachine",
+                    [2] = selectedCode 
+                }
+
+                game:GetService("ReplicatedStorage").Network.CraftingMachine_Craft:InvokeServer(unpack(args))
             end
-    
-         
-            local closestNumber = getClosestNumber(potionCraftingMachineNumber, numbers)
-    
-          
-            local args = {
-                [1] = "PotionCraftingMachine",
-                [2] = closestNumber  
-            }
-    
-            game:GetService("ReplicatedStorage").Network.CraftingMachine_Craft:InvokeServer(unpack(args))    
         end
     end)
 end
