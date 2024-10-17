@@ -389,68 +389,85 @@ end
 
 Tabs.Gameworks:AddParagraph({
     Title = "WARNING!",
-    Content = "You must open the Potion Crafting gui. If you do not open it, it will not work. If you just open it, do a reset script (close the script and run it again)."
+    Content = "Please open the Potion Crafting GUI before using this feature. If the GUI is already open, press the refresh button to update the items. No need to restart the script."
 })
 
-local craftingItems = {}
+getgenv().craftingItems = {}
+getgenv().itemNumbers = {}
 
-local contentFrame = game:GetService("Players").LocalPlayer.PlayerGui._MACHINES.CraftingMachine.Frame.UsingFrame.Content
+local function refreshCraftingItems()
+    getgenv().craftingItems = {}
+    getgenv().itemNumbers = {}
 
-local itemNumbers = {}
+    local contentFrame = game:GetService("Players").LocalPlayer.PlayerGui._MACHINES.CraftingMachine.Frame.UsingFrame.Content
 
-for _, item in pairs(contentFrame:GetChildren()) do
-    local itemNumber = tonumber(item.Name)
-    if itemNumber then
-        local itemName = item.TextLabel.Text
-        craftingItems[itemName] = itemNumber
-        table.insert(itemNumbers, itemNumber)
-    end
-end
-
-table.sort(itemNumbers)
-
-local sortedCraftingItems = {}
-for _, number in ipairs(itemNumbers) do
-    for itemName, itemNumber in pairs(craftingItems) do
-        if itemNumber == number then
-            table.insert(sortedCraftingItems, itemName) 
-            break
+    for _, item in pairs(contentFrame:GetChildren()) do
+        local itemNumber = tonumber(item.Name)
+        if itemNumber then
+            local itemName = item.TextLabel.Text
+            getgenv().craftingItems[itemName] = itemNumber
+            table.insert(getgenv().itemNumbers, itemNumber)
         end
     end
+
+    table.sort(getgenv().itemNumbers)
+
+    local sortedCraftingItems = {}
+    for _, number in ipairs(getgenv().itemNumbers) do
+        for itemName, itemNumber in pairs(getgenv().craftingItems) do
+            if itemNumber == number then
+                table.insert(sortedCraftingItems, itemName)
+                break
+            end
+        end
+    end
+
+    return sortedCraftingItems
 end
+
+local sortedItems = refreshCraftingItems()
 
 local Dropdown = Tabs.Gameworks:AddDropdown("CraftingItemDropdown", {
     Title = "Select Crafting Item",
     Description = "Select the crafting item you want to create.",
-    Values = sortedCraftingItems,
+    Values = sortedItems, 
     Multi = false,
     Default = "Select",
+})
+
+Tabs.Gameworks:AddButton({
+    Title = "Refresh Items",
+    Callback = function()
+        local newSortedItems = refreshCraftingItems()
+
+        Dropdown:SetValues(newSortedItems)
+    end
 })
 
 Tabs.Gameworks:AddButton({
     Title = "Potion Crafting",
     Callback = function()
         local selectedItem = Dropdown.Value 
-        local selectedCode = craftingItems[selectedItem]
+        local selectedCode = getgenv().craftingItems[selectedItem]
 
         if selectedCode then
             local args = {
                 [1] = "PotionCraftingMachine",
-                [2] = selectedCode 
+                [2] = selectedCode
             }
 
             game:GetService("ReplicatedStorage").Network.CraftingMachine_Craft:InvokeServer(unpack(args))
-        end      
+        end
     end
 })
 
 local Toggle = Tabs.Gameworks:AddToggle("AutoPotionCraftingToggle", {Title = "Auto Potion Crafting", Default = false})
 
 Toggle:OnChanged(function()
-    getgenv().AutoPotionCrafting = Options.AutoPotionCraftingToggle.Value
+    getgenv().AutoPotionCrafting = Toggle.Value
 
     if getgenv().AutoPotionCrafting then
-        startPotionCraftingMachineLoop() 
+        startPotionCraftingMachineLoop()
     else
         getgenv().AutoPotionCrafting = false
     end
@@ -459,15 +476,15 @@ end)
 function startPotionCraftingMachineLoop()
     spawn(function()
         while getgenv().AutoPotionCrafting do
-            wait(0.5) 
-            
-            local selectedItem = Dropdown.Value 
-            local selectedCode = craftingItems[selectedItem]
+            wait(0.5)
+
+            local selectedItem = Dropdown.Value
+            local selectedCode = getgenv().craftingItems[selectedItem]
 
             if selectedCode then
                 local args = {
                     [1] = "PotionCraftingMachine",
-                    [2] = selectedCode 
+                    [2] = selectedCode
                 }
 
                 game:GetService("ReplicatedStorage").Network.CraftingMachine_Craft:InvokeServer(unpack(args))
@@ -475,7 +492,6 @@ function startPotionCraftingMachineLoop()
         end
     end)
 end
-
 
 
 local indexShopPurchases = {
