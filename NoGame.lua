@@ -2,8 +2,19 @@ local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/
 local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
 local InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
 
+-- الاضافات
+
+local GamePlaceId = game.PlaceId
+local GameName = game:GetService("MarketplaceService"):GetProductInfo(GamePlaceId).Name
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer
+local playerName = Players.LocalPlayer.name
+local GameJobId = game.JobId
+local AccountAge = player.AccountAge
+local hasPremium = player.MembershipType == Enum.MembershipType.Premium
+
 local Window = Fluent:CreateWindow({
-    Title = "7yd7 | Hub",
+    Title = "7yd7 | Hub | " .. GameName .. " | " .. playerName,
     SubTitle = "",
     TabWidth = 160,
     Size = UDim2.fromOffset(580, 460),
@@ -13,7 +24,7 @@ local Window = Fluent:CreateWindow({
 })
 
 local Tabs = {
-    Home = Window:AddTab({ Title = "Home", Icon = "hammer" }),
+    Main = Window:AddTab({ Title = "Main", Icon = "info" }),
     Gameworks = Window:AddTab({ Title = "unknown", Icon = "gamepad-2" }),
     Script = Window:AddTab({ Title = "Script", Icon = "scroll" }),
      game = Window:AddTab({ Title = "Game", Icon = "usb" }),
@@ -25,17 +36,58 @@ local Options = Fluent.Options
 do
 
 
+local time = os.time()
+local date = os.date("*t", time)
+
+local hour = date.hour % 12
+if hour == 0 then
+    hour = 12
+end
+
+local min = string.format("%02d", date.min)
+local sec = string.format("%02d", date.sec)
+
+local ampm = date.hour >= 12 and "PM" or "AM"
+
+
 -- معلومات عن سكربت
 
-Tabs.Home:AddSection("info")
+Tabs.Main:AddSection("info")
 
-Tabs.Home:AddParagraph({
+Tabs.Main:AddParagraph({
+    Title = "Welcome " ..playerName.. " !"
+})
+
+Tabs.Main:AddParagraph({
+    Title = "name game: " .. GameName
+})
+
+Tabs.Main:AddParagraph({
+    Title = "id game: " .. GamePlaceId
+})
+
+Tabs.Main:AddParagraph({
+    Title = "JobId game: " .. GameJobId
+})
+
+Tabs.Main:AddParagraph({
+    Title = "Account Age: " .. AccountAge
+})
+
+Tabs.Main:AddParagraph({
+    Title = "Player Premium: " .. (hasPremium and "yes" or "no")
+})
+
+Tabs.Main:AddParagraph({
+    Title = "script run time: " .. date.day .. "/" .. date.month .. "/" .. date.year .. " " .. hour .. ":" .. min .. ":" .. sec .. " " .. ampm
+})
+
+
+Tabs.Main:AddParagraph({
     Title = "https://github.com/7yd7/Hub"
 })
 
-Tabs.Home:AddParagraph({
-    Title = "https://github.com/7yd7/Hub/tree/Branch/Script"
-})
+-- لا يوجد ماب
 
 Tabs.Gameworks:AddParagraph({
     Title = "WARNING!",
