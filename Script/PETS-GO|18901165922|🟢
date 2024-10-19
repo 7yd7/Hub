@@ -25,7 +25,7 @@ local Window = Fluent:CreateWindow({
 
 local Tabs = {
     Main = Window:AddTab({ Title = "Main", Icon = "info" }),
-    Gameworks = Window:AddTab({ Title = "unknown", Icon = "gamepad-2" }),
+    Gameworks = Window:AddTab({ Title = GameName, Icon = "gamepad-2" }),
     Script = Window:AddTab({ Title = "Script", Icon = "scroll" }),
      game = Window:AddTab({ Title = "Game", Icon = "usb" }),
     Settings = Window:AddTab({ Title = "Settings", Icon = "settings" })
@@ -94,7 +94,7 @@ Tabs.Gameworks:AddSection("Auto")
 local Slider = Tabs.Gameworks:AddSlider("Slider", {
     Title = "Speed Wait Eggs Roll",
     Description = "Speed Wait to Eggs Roll",
-    Default = 1, 
+    Default = 0.3, 
     Min = 0,    
     Max = 10,  
     Rounding = 1, 
@@ -502,7 +502,8 @@ Tabs.Gameworks:AddButton({
         if selectedCode then
             local args = {
                 [1] = "PotionCraftingMachine",
-                [2] = selectedCode
+                [2] = selectedCode,
+                [3] = 1
             }
 
             game:GetService("ReplicatedStorage").Network.CraftingMachine_Craft:InvokeServer(unpack(args))
@@ -533,7 +534,8 @@ function startPotionCraftingMachineLoop()
             if selectedCode then
                 local args = {
                     [1] = "PotionCraftingMachine",
-                    [2] = selectedCode
+                    [2] = selectedCode,
+                    [3] = 1
                 }
 
                 game:GetService("ReplicatedStorage").Network.CraftingMachine_Craft:InvokeServer(unpack(args))
@@ -780,29 +782,6 @@ end
             })
         end
     })
-
-
-    local Toggle = Tabs.Script:AddToggle("MyToggle", {Title = "InfiniteJump", Default = false})
-
-    Toggle:OnChanged(function()
-        getgenv().InfiniteJumpEnabled = Options.MyToggle.Value
-    end)
-    
-    Options.MyToggle:SetValue(false)
-    
-    local Players = game:GetService("Players")
-    local Player = Players.LocalPlayer
-    
-    UserInputService.JumpRequest:Connect(function()
-        if getgenv().InfiniteJumpEnabled then
-          
-            if Player.Character and Player.Character:FindFirstChildOfClass('Humanoid') then
-                local Humanoid = Player.Character:FindFirstChildOfClass('Humanoid')
-                Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
-            end
-        end
-    end)
-
 
     local Toggle = Tabs.Script:AddToggle("AntiAFKEnableds", {Title = "Anti AFK", Default = false})
 
