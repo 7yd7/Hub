@@ -172,29 +172,6 @@ Tabs.Gameworks:AddParagraph({
             })
         end
     })
-
-
-    local Toggle = Tabs.Script:AddToggle("MyToggle", {Title = "InfiniteJump", Default = false})
-
-    Toggle:OnChanged(function()
-        getgenv().InfiniteJumpEnabled = Options.MyToggle.Value
-    end)
-    
-    Options.MyToggle:SetValue(false)
-    
-    local UserInputService = game:GetService("UserInputService")
-    local Players = game:GetService("Players")
-    local Player = Players.LocalPlayer
-    
-    UserInputService.JumpRequest:Connect(function()
-        if getgenv().InfiniteJumpEnabled then
-            if Player.Character and Player.Character:FindFirstChildOfClass('Humanoid') then
-                local Humanoid = Player.Character:FindFirstChildOfClass('Humanoid')
-                Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
-            end
-        end
-    end)
-
     
     local Toggle = Tabs.Script:AddToggle("AntiAFKEnableds", {Title = "Anti AFK", Default = false})
 
