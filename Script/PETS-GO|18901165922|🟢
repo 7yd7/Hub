@@ -393,6 +393,45 @@ startCollectingLoop()
             end
         end)
     end
+
+    local Toggle = Tabs.Gameworks:AddToggle("FlyingGiftsValue", {Title = "Auto Farm FlyingGifts", Description = "You must have slingshot skills.", Default = false})
+
+Toggle:OnChanged(function()
+    getgenv().FlyingGiftsl = Options.FlyingGiftsValue.Value
+
+    if getgenv().FlyingGiftsl then
+        startFlyingGiftsLoop()
+    else
+        getgenv().FlyingGiftsl = false
+    end
+end)
+
+function startFlyingGiftsLoop()
+    spawn(function()
+        while getgenv().FlyingGiftsl do 
+            wait(1)
+            local player = game:GetService("Players").LocalPlayer
+            local character = player.Character or player.CharacterAdded:Wait()  
+            local rootPart = character:WaitForChild("HumanoidRootPart")
+            
+            local flyingGifts = workspace:WaitForChild("__THINGS"):WaitForChild("FlyingGifts")
+            
+            local function updateFlyingGiftsCFrame()
+                for _, model in pairs(flyingGifts:GetChildren()) do
+                    if model:FindFirstChild("Balloon") then
+                        local newPosition = rootPart.Position + Vector3.new(0, 20, 0)
+                        model.Balloon.CFrame = CFrame.new(newPosition)
+                    end
+                end
+            end
+            
+            if #flyingGifts:GetChildren() > 0 then
+                updateFlyingGiftsCFrame()
+            end
+        end
+    end)
+end
+
     
     
 
