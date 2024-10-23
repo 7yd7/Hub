@@ -312,7 +312,6 @@ startCollectingLoop()
     
     Dropdown:OnChanged(function(Value)
         getgenv().FarmMode = Value
-        print("Farming mode changed:", Value)
     end)
     
     local Toggle = Tabs.Gameworks:AddToggle("AutoFarmorbs", {Title = "Auto Farm Orbs", Default = false})
@@ -792,6 +791,187 @@ end
             getgenv().AutoFruitConsumption = false
         end
     end)    
+
+
+    Tabs.Gameworks:AddSection("Pets Equip")
+
+local Input = Tabs.Gameworks:AddInput("code Pets", {
+    Title = "Code Pets ",
+    Default = "",
+    Placeholder = "9d72f9495cde4cc5b64bd1cdc52ce50b",
+    Numeric = false,
+    Finished = false,
+    Callback = function(Value)
+        local extractedText = Value:match('"(.-)"') or Value
+        getgenv().inputValue = extractedText
+    end
+})
+
+local DropdownValues = {}
+local Dropdown = Tabs.Gameworks:AddDropdown("Dropdown", {
+    Title = "Pets Dropdown Equip",
+    Values = DropdownValues,
+    Multi = false,
+    Default = nil,
+})
+
+Tabs.Gameworks:AddButton({
+    Title = "Add to Dropdown",
+    Callback = function()
+        if getgenv().inputValue then
+            local exists = false
+            for _, value in ipairs(DropdownValues) do
+                if value:match('^' .. getgenv().inputValue) then
+                    exists = true
+                    break
+                end
+            end
+            
+            if not exists then
+                table.insert(DropdownValues, getgenv().inputValue)
+                Dropdown:SetValues(DropdownValues)
+                Fluent:Notify({
+                    Title = "7yd7 | Warning",
+                    Content = "Added value:", getgenv().inputValue,
+                    Duration = 5
+                })
+            else
+                Fluent:Notify({
+                    Title = "7yd7 | Warning",
+                    Content = "Value already exists in the Dropdown!",
+                    Duration = 5
+                })
+            end
+        else
+            Fluent:Notify({
+                Title = "7yd7 | Warning",
+                Content = "No input text to add!",
+                Duration = 5
+            })
+        end
+    end
+})
+
+
+Tabs.Gameworks:AddButton({
+    Title = "Remove Selected Value",
+    Callback = function()
+        local selectedValue = Dropdown.Value
+        
+        for index, value in ipairs(DropdownValues) do
+            if value == selectedValue then
+                table.remove(DropdownValues, index)
+                Dropdown:SetValues(DropdownValues)
+                Fluent:Notify({
+                    Title = "7yd7 | Warning",
+                    Content = "Removed value:", selectedValue,
+                    Duration = 5
+                })
+                break
+            end
+        end
+    end
+})
+
+
+local NumberInput = Tabs.Gameworks:AddInput("Double use", {
+    Title = "Double use",
+    Default = "",
+    Placeholder = "Enter a number",
+    Numeric = true, 
+    Finished = false,
+    Callback = function(Value)
+        local number = tonumber(Value) 
+        getgenv().numberValue = number
+    end
+})
+
+
+Tabs.Gameworks:AddButton({
+    Title = "Apply Number to Selected Pet",
+    Callback = function()
+        local selectedValue = Dropdown.Value
+        local number = getgenv().numberValue
+        
+        if selectedValue and number then
+            if number >= 2 then
+ 
+                for index, value in ipairs(DropdownValues) do
+                    local baseValue = value:match('^(.-),?%s?%d*$') or value 
+                    if baseValue == selectedValue:match('^(.-),?%s?%d*$') then
+                        DropdownValues[index] = baseValue .. ", " .. tostring(number)
+                        Dropdown:SetValues(DropdownValues) 
+                        Fluent:Notify({
+                            Title = "7yd7 | Warning",
+                            Content = "Updated value:", DropdownValues[index],
+                            Duration = 5
+                        })
+                        break
+                    end
+                end
+            elseif number == 1 then
+
+                for index, value in ipairs(DropdownValues) do
+                    local baseValue = value:match('^(.-),?%s?%d*$') or value 
+                    if baseValue == selectedValue:match('^(.-),?%s?%d*$') then
+                        DropdownValues[index] = baseValue 
+                        Dropdown:SetValues(DropdownValues) 
+                        Fluent:Notify({
+                            Title = "7yd7 | Warning",
+                            Content = "Removed number from value:", DropdownValues[index],
+                            Duration = 5
+                        })
+                        break
+                    end
+                end
+            else
+                Fluent:Notify({
+                    Title = "7yd7 | Warning",
+                    Content = "Invalid number! Must be 1 or more.",
+                    Duration = 5
+                })
+            end
+        else
+            Fluent:Notify({
+                Title = "7yd7 | Warning",
+                Content = "Please select a pet and enter a valid number!",
+                Duration = 5
+            })
+        end
+    end
+})
+
+Tabs.Gameworks:AddButton({
+    Title = "Copy script",
+    Description = "After you copy the script, put it in Autoexec and do rejoin.",
+    Callback = function()
+        if #DropdownValues == 0 then
+            Fluent:Notify({
+                Title = "7yd7 | Warning",
+                Content = "No data to copy!",
+                Duration = 5
+            })
+            return
+        end
+
+        local clipboardText = 'getgenv().petsToEquip = {\n'
+        
+        for _, value in ipairs(DropdownValues) do
+            local baseValue, number = value:match('^(.-),%s?(%d+)$') 
+            baseValue = baseValue or value 
+            
+            if number then
+                clipboardText = clipboardText .. string.format('    "%s", %s,\n', baseValue, number)
+            else
+                clipboardText = clipboardText .. string.format('    "%s",\n', baseValue)
+            end
+        end
+        
+        clipboardText = clipboardText .. '}\n\nloadstring(game:HttpGet("https://raw.githubusercontent.com/7yd7/Hub/refs/heads/Branch/Autoexec/PETS-GO"))()'
+        
+        setclipboard(clipboardText)
+    end
+})
 
 
 -- سكربت جميع مابات
