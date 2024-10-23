@@ -832,7 +832,7 @@ Tabs.Gameworks:AddButton({
                 Dropdown:SetValues(DropdownValues)
                 Fluent:Notify({
                     Title = "7yd7 | Warning",
-                    Content = "Added value:", getgenv().inputValue,
+                    Content = "Added value: " .. getgenv().inputValue,
                     Duration = 5
                 })
             else
@@ -864,7 +864,7 @@ Tabs.Gameworks:AddButton({
                 Dropdown:SetValues(DropdownValues)
                 Fluent:Notify({
                     Title = "7yd7 | Warning",
-                    Content = "Removed value:", selectedValue,
+                    Content = "Removed value: " .. selectedValue,
                     Duration = 5
                 })
                 break
@@ -903,7 +903,7 @@ Tabs.Gameworks:AddButton({
                         Dropdown:SetValues(DropdownValues) 
                         Fluent:Notify({
                             Title = "7yd7 | Warning",
-                            Content = "Updated value:", DropdownValues[index],
+                            Content = "Updated value: " .. DropdownValues[index],
                             Duration = 5
                         })
                         break
@@ -918,7 +918,7 @@ Tabs.Gameworks:AddButton({
                         Dropdown:SetValues(DropdownValues) 
                         Fluent:Notify({
                             Title = "7yd7 | Warning",
-                            Content = "Removed number from value:", DropdownValues[index],
+                            Content = "Removed number from value: ".. DropdownValues[index],
                             Duration = 5
                         })
                         break
