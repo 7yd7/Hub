@@ -195,7 +195,6 @@ Tabs.Gameworks:AddParagraph({
                 while getgenv().antiAfkEnabled do
                     VirtualUser:CaptureController()
                     VirtualUser:ClickButton2(Vector2.new())
-                    print("Anti-AFK: Prevented AFK kick.")
                     wait(60)
                 end
             end)
