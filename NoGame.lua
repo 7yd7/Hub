@@ -177,28 +177,30 @@ Tabs.Gameworks:AddParagraph({
 
     Toggle:OnChanged(function()
         getgenv().AntiAFKEnabled = Options.AntiAFKEnableds.Value
-
+    
         if getgenv().AntiAFKEnabled then
             startAntiAFK()
         else
             getgenv().AntiAFKEnabled = false
         end
     end)
-
-
+    
     function startAntiAFK()
         spawn(function()
-    local VirtualUser = game:service'VirtualUser'
-    game:service'Players'.LocalPlayer.Idled:connect(function()
-        while getgenv().AntiAFKEnabled do
-            VirtualUser:CaptureController()
-            VirtualUser:ClickButton2(Vector2.new())
-            print("Prevented AFK kick.")
-        end
-    end)
-end)
-end
-
+            getgenv().antiAfkEnabled = true
+    
+            local VirtualUser = game:GetService("VirtualUser")
+    
+            game:GetService("Players").LocalPlayer.Idled:connect(function()
+                while getgenv().antiAfkEnabled do
+                    VirtualUser:CaptureController()
+                    VirtualUser:ClickButton2(Vector2.new())
+                    print("Anti-AFK: Prevented AFK kick.")
+                    wait(60)
+                end
+            end)
+        end)
+    end    
     
     Tabs.Script:AddSection("Script")
 
