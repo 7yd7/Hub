@@ -1,0 +1,41 @@
+--[[
+Simple script to rejoin the Claim Roll topic
+Change the [number] to a lucky number or a percentage as you call it
+Example: 50000
+If you want more than one thing just put 10-1000 | it will be 10 to 10,000
+]]
+-- getgenv().targetValue = "number"
+
+
+local titleText = workspace.MAP.INTERACT.RetentionDice.Billboard.BillboardGui.Title.Text
+
+
+local numberText = titleText:match("%d[,%d]*")  
+if numberText then
+
+    local cleanNumberText = numberText:gsub(",", "")
+    local extractedNumber = tonumber(cleanNumberText)
+
+
+    if extractedNumber then
+
+        if string.find(getgenv().targetValue, "-") then
+
+            local minValue, maxValue = getgenv().targetValue:match("^(%d+)%-(%d+)$")
+            minValue = tonumber(minValue)
+            maxValue = tonumber(maxValue)
+
+
+            if minValue and maxValue and extractedNumber >= minValue and extractedNumber <= maxValue then
+
+game:GetService("TeleportService"):Teleport(game.PlaceId, game:GetService("Players").LocalPlayer)
+            end
+        else
+
+            local targetNumber = tonumber(getgenv().targetValue)
+            if targetNumber and extractedNumber == targetNumber then
+game:GetService("TeleportService"):Teleport(game.PlaceId, game:GetService("Players").LocalPlayer)
+            end
+        end
+    end
+end
