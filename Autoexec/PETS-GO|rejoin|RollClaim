@@ -27,6 +27,9 @@ if numberText then
 
 
             if minValue and maxValue and extractedNumber >= minValue and extractedNumber <= maxValue then
+                print("Matched: The number matches the specified value.")
+
+            else
 
 game:GetService("TeleportService"):Teleport(game.PlaceId, game:GetService("Players").LocalPlayer)
             end
@@ -34,6 +37,8 @@ game:GetService("TeleportService"):Teleport(game.PlaceId, game:GetService("Playe
 
             local targetNumber = tonumber(getgenv().targetValue)
             if targetNumber and extractedNumber == targetNumber then
+                print("Matched: The number matches the specified value.")
+            else
 game:GetService("TeleportService"):Teleport(game.PlaceId, game:GetService("Players").LocalPlayer)
             end
         end
