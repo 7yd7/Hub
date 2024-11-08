@@ -150,6 +150,30 @@ end
     end)
 end
 
+local Toggle = Tabs.Gameworks:AddToggle("Fishing_Fish", {Title = "Auto Fishing Fish", Default = false})
+
+Toggle:OnChanged(function()
+    getgenv().AutoFishing_Fish = Options.Fishing_Fish.Value
+
+    if getgenv().AutoFishing_Fish then
+        startFishing_FishLoop()
+    else
+        getgenv().AutoFishing_Fish = false
+    end
+end)
+
+function startFishing_FishLoop()
+    spawn(function()
+        while getgenv().AutoFishing_Fish do 
+            wait(1)
+            game:GetService("ReplicatedStorage").Network.Fishing_Fish:InvokeServer()
+            wait(0.1)
+            game:GetService("ReplicatedStorage").Network.Fishing_Success:FireServer()
+        end
+    end)
+end
+
+
 
 
 local Slider = Tabs.Gameworks:AddSlider("Slider", {
