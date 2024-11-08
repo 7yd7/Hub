@@ -686,6 +686,57 @@ function AutoindexShopPurchasesLoop()
     end)
 end
 
+local FishMerchantsPurchases = {
+    { "FishingMerchant", 1 },
+    { "FishingMerchant", 2 },
+    { "FishingMerchant", 3 },
+    { "FishingMerchant", 4 },
+    { "FishingMerchant", 5 },
+    { "FishingMerchant", 6 }
+}
+
+Tabs.Gameworks:AddButton({
+    Title = "Buy All Fish Merchants",
+    Callback = function()
+        for _, purchase in ipairs(FishMerchantsPurchases) do
+            local args = {
+                [1] = purchase[1],
+                [2] = purchase[2]
+            }
+
+            game:GetService("ReplicatedStorage").Network.CustomMerchants_Purchase:InvokeServer(unpack(args))
+        end
+    end
+})
+
+local Toggle = Tabs.Gameworks:AddToggle("AutoFishMerchantsValue", {Title = "Auto Buy All Fish Merchants", Default = false})
+
+Toggle:OnChanged(function()
+    getgenv().AutoFishMerchants = Options.AutoFishMerchantsValue.Value
+
+    if getgenv().AutoFishMerchants then
+        AutoFishMerchantsLoop()
+    else
+        getgenv().AutoFishMerchants = false
+    end
+end)
+
+function AutoFishMerchantsLoop()
+    spawn(function()
+        while getgenv().AutoFishMerchants do 
+            wait(3)
+            for _, purchase in ipairs(FishMerchantsPurchases) do
+                local args = {
+                    [1] = purchase[1],
+                    [2] = purchase[2]
+                }
+    
+                game:GetService("ReplicatedStorage").Network.CustomMerchants_Purchase:InvokeServer(unpack(args))
+             end
+        end
+    end)
+end
+
 local StandardMerchantShopPurchases = {
     { "StandardMerchant", 1 },
     { "StandardMerchant", 2 },
