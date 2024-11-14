@@ -916,6 +916,127 @@ end
         end
     end)    
 
+    Tabs.Gameworks:AddSection("Fish")
+
+local oldNamecall = nil
+
+getgenv().lastBait = "Nothing" 
+getgenv().lastChest = "Nothing" 
+
+local function convertToNumber(input)
+    if type(input) == "string" then
+        local number = tonumber(input:sub(1, -2)) 
+        local suffix = input:sub(-1)
+        
+        if suffix == "k" then
+            return number * 1000 
+        elseif suffix == "m" then
+            return number * 1000000
+        else
+            return tonumber(input)
+        end
+    end
+    return input
+end
+
+local BaitInput = Tabs.Gameworks:AddInput("BaitInput", {
+    Title = "Bait Input",
+    Default = "1", 
+    Placeholder = "Enter Number",
+    Numeric = true, 
+    Finished = false, 
+    Callback = function(Value)
+        getgenv().lastNumber = convertToNumber(Value) or 1
+    end
+})
+
+Tabs.Gameworks:AddButton({
+    Title = "Confirm Input Bait",
+    Callback = function()
+        local inputValue = getgenv().lastNumber or 1
+
+        local args = {
+            [1] = getgenv().lastBait,
+            [2] = inputValue 
+        }
+
+        game:GetService("ReplicatedStorage").Network.Consumables_Consume:InvokeServer(unpack(args))
+
+    end
+})
+
+local ChestInput = Tabs.Gameworks:AddInput("ChestInput", {
+    Title = "Chest Input",
+    Default = "1", 
+    Placeholder = "Enter Lootbox Number",
+    Numeric = true, 
+    Finished = false,
+    Callback = function(Value)
+        getgenv().lastChestNumber = convertToNumber(Value) or 1
+    end
+})
+
+Tabs.Gameworks:AddButton({
+    Title = "Confirm Input Chest", 
+    Callback = function()
+        local chestValue = getgenv().lastChestNumber or 1
+
+        local args = {
+            [1] = getgenv().lastChest,
+            [2] = chestValue 
+        }
+
+        game:GetService("ReplicatedStorage").Network:FindFirstChild("Lootbox: Open"):InvokeServer(unpack(args))
+    end
+})
+
+local Toggle = Tabs.Gameworks:AddToggle("Confirm_Input_Chest", {Title = "Auto Confirm Input Chest", Default = false})
+
+Toggle:OnChanged(function()
+    getgenv().Input_Chest = Options.Confirm_Input_Chest.Value
+
+    if getgenv().Input_Chest then
+        startInput_ChestLoop()
+    else
+        getgenv().Input_Chest = false
+    end
+end)
+
+function startInput_ChestLoop()
+    spawn(function()
+        while getgenv().Input_Chest do 
+            wait(.1)
+            local chestValue = getgenv().lastChestNumber or 1
+
+            local args = {
+                [1] = getgenv().lastChest,
+                [2] = chestValue 
+            }
+    
+            game:GetService("ReplicatedStorage").Network:FindFirstChild("Lootbox: Open"):InvokeServer(unpack(args))
+        end
+    end)
+end
+
+oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
+    local method = getnamecallmethod()
+    local args = {...}
+    
+    if method == "InvokeServer" and tostring(self) == "Consumables_Consume" then
+        if args[1] then
+            getgenv().lastBait = args[1]  
+        end
+    end
+
+    if method == "InvokeServer" and tostring(self) == "Lootbox: Open" then
+        if args[1] then
+            getgenv().lastChest = args[1] 
+        end
+    end
+    
+    return oldNamecall(self, ...)
+end)
+
 
     Tabs.Gameworks:AddSection("Pets Equip")
     
