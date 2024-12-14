@@ -1,4 +1,5 @@
 local TweenService = game:GetService("TweenService")
+local HttpService = game:GetService("HttpService")
 
 
 local local_image_path = "http://www.roblox.com/asset/?id=112563150624040" 
@@ -159,7 +160,7 @@ local function addTermsToScrollingFrame(frame, terms)
 				progressBar.BackgroundColor3 = Color3.fromRGB(52, 152, 219)
 				progressBar.BorderSizePixel = 0
 				progressBar.Parent = progressBarBg
-				
+
 
 				local function animateNotification()
 					container.Position = UDim2.new(1, 400, 1, -140)
@@ -203,9 +204,9 @@ local function addTermsToScrollingFrame(frame, terms)
 						notif:Destroy()
 					end)
 				end
-				
+
 				animateNotification()
-				
+
 				setclipboard(linkLabel.Text)
 			end)
 
@@ -285,6 +286,7 @@ local titleBar = Instance.new("Frame")
 titleBar.Name = "TitleBar"
 titleBar.Size = UDim2.new(1, 0, 0, 30)
 titleBar.BackgroundColor3 = Color3.fromRGB(243, 243, 243)
+titleBar.BackgroundTransparency = 1
 titleBar.Parent = mainFrame
 
 local buttonContainer = Instance.new("Frame")
@@ -301,6 +303,7 @@ local function createTitleBarButton(text, position)
 	button.Text = text
 	button.TextColor3 = Color3.fromRGB(0, 0, 0)
 	button.Font = Enum.Font.SourceSansBold
+	button.BackgroundTransparency = 1
 	button.TextSize = 16
 	button.Parent = buttonContainer
 
@@ -347,10 +350,11 @@ local function closeWindow()
 end
 
 
-local timerButton = createTitleBarButton("", UDim2.new(0, -35, 0, 0))
+local timerButton = createTitleBarButton("", UDim2.new(0, 140, 0, 0))
 timerButton.Text = ""
 timerButton.BackgroundTransparency = 1
 timerButton.AutoButtonColor = false
+timerButton.Parent = titleBar
 
 local outerCircle = Instance.new("Frame")
 outerCircle.Size = UDim2.new(0.85, 0, 0.85, 0)
@@ -386,7 +390,7 @@ local countdownText = Instance.new("TextLabel")
 countdownText.Size = UDim2.new(1, 0, 1, 0)
 countdownText.Position = UDim2.new(0, 0, 0, 0)
 countdownText.BackgroundTransparency = 1
-countdownText.Text = "30"
+countdownText.Text = "60"
 countdownText.TextColor3 = Color3.fromRGB(255, 255, 255)
 countdownText.Font = Enum.Font.GothamBold
 countdownText.TextSize = 14
@@ -395,7 +399,7 @@ countdownText.Parent = innerCircle
 local isTimerRunning = true
 
 local function startTimer()
-	local timeLeft = 30
+	local timeLeft = 60
 	local startColor = Color3.fromRGB(52, 152, 219) 
 	local middleColor = Color3.fromRGB(230, 126, 34)
 	local endColor = Color3.fromRGB(231, 76, 60) 
@@ -448,9 +452,9 @@ spawn(function()
 	startTimer()
 end)
 
-local closeButton = createTitleBarButton("✖", UDim2.new(0, 60, 0, 0))
-local maximizeButton = createTitleBarButton("☐", UDim2.new(0, 30, 0, 0))
-local minimizeButton = createTitleBarButton("━", UDim2.new(0, 0, 0, 0))
+local closeButton = createTitleBarButton("✖", UDim2.new(0, 70, 0, 0))
+local maximizeButton = createTitleBarButton("☐", UDim2.new(0, 40, 0, 0))
+local minimizeButton = createTitleBarButton("━", UDim2.new(0, 10, 0, 0))
 minimizeButton.TextTransparency = 0.5
 minimizeButton.Active = false 
 
@@ -545,7 +549,7 @@ alertImage.Position = UDim2.new(0, 4, 0, 2)
 alertImage.BackgroundTransparency = 1
 alertImage.Image = local_image_path
 alertImage.Name = "Image7YD7"
-alertImage.Parent = mainFrame
+alertImage.Parent = titleBar
 
 local alertTitle = Instance.new("TextLabel")
 alertTitle.Size = UDim2.new(1, -40, 0, 20)
@@ -696,6 +700,8 @@ end
 
 local nextButton = createStyledButton("Run", UDim2.new(1, -100, 1, -35))
 local cancelButton = createStyledButton("Cancel", UDim2.new(1, -190, 1, -35))
+local ViewgamesButton = createStyledButton("View games", UDim2.new(1, -280, 1, -35))
+
 
 mainFrame.Position = UDim2.new(0.5, -250, 0.45, -200)
 mainFrame.BackgroundTransparency = 1
@@ -751,7 +757,7 @@ end)
 
 nextButton.MouseButton1Click:Connect(function()
 	if selected == "accept" then
-        closeWindow()
+		closeWindow()
 		loadstring(game:HttpGet("https://raw.githubusercontent.com/7yd7/Hub/refs/heads/Branch/Game"))()
 	end
 end)
@@ -764,3 +770,206 @@ declineButton.InputBegan:Connect(function(input)
 end)
 
 cancelButton.MouseButton1Click:Connect(closeWindow)
+
+
+
+local function createWindows10Button(parent, text, onClick, buttonType)
+	local button = Instance.new("TextButton")
+	button.Size = UDim2.new(0, 45, 0, 30)
+	button.BackgroundColor3 = Color3.fromRGB(240, 240, 240)
+	button.BorderSizePixel = 0
+	button.Text = text
+	button.TextSize = 16
+	button.Font = Enum.Font.SourceSansSemibold
+	button.TextColor3 = Color3.fromRGB(0, 0, 0)
+	button.Parent = parent
+
+	local hoverColor = Color3.fromRGB(230, 230, 230)
+	local pressColor = Color3.fromRGB(210, 210, 210)
+
+	if buttonType == "close" then
+		button.TextColor3 = Color3.fromRGB(255, 255, 255)
+		button.BackgroundColor3 = Color3.fromRGB(231, 76, 60)
+		hoverColor = Color3.fromRGB(211, 56, 40)
+		pressColor = Color3.fromRGB(191, 36, 20)
+	end
+
+	local function createHoverEffect()
+		return TweenService:Create(button, TweenInfo.new(0.2), {
+			BackgroundColor3 = hoverColor
+		})
+	end
+
+	local hoverTween = createHoverEffect()
+
+	button.MouseEnter:Connect(function()
+		hoverTween:Play()
+	end)
+
+	button.MouseLeave:Connect(function()
+		TweenService:Create(button, TweenInfo.new(0.2), {
+			BackgroundColor3 = buttonType == "close" and Color3.fromRGB(231, 76, 60) or Color3.fromRGB(240, 240, 240)
+		}):Play()
+	end)
+
+	button.MouseButton1Down:Connect(function()
+		TweenService:Create(button, TweenInfo.new(0.1), {
+			BackgroundColor3 = pressColor
+		}):Play()
+	end)
+
+	button.MouseButton1Up:Connect(function()
+		TweenService:Create(button, TweenInfo.new(0.1), {
+			BackgroundColor3 = hoverColor
+		}):Play()
+	end)
+
+	if onClick then
+		button.MouseButton1Click:Connect(onClick)
+	end
+
+	return button
+end
+
+
+local function createWindows10GUI(data)
+	local mainWindow = Instance.new("Frame")
+	mainWindow.Size = UDim2.new(0, 400, 0, 350)
+	mainWindow.Position = UDim2.new(0.5, -200, 0.5, -175)
+	mainWindow.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+	mainWindow.BorderSizePixel = 0
+	mainWindow.BackgroundTransparency = 1 
+
+	local appearTween = TweenService:Create(mainWindow, TweenInfo.new(0.3, Enum.EasingStyle.Cubic, Enum.EasingDirection.Out), {
+		BackgroundTransparency = 0
+	})
+	appearTween:Play()
+
+	local titleBar = Instance.new("Frame")
+	titleBar.Size = UDim2.new(1, 0, 0, 40)
+	titleBar.BackgroundTransparency = 1
+	titleBar.BorderSizePixel = 0
+	titleBar.Parent = mainWindow
+
+	local managerIcon = Instance.new("ImageLabel")
+	managerIcon.Size = UDim2.new(0, 30, 0, 30)
+	managerIcon.Position = UDim2.new(0, 10, 0, 5)
+	managerIcon.Image = local_image_path
+	managerIcon.BackgroundTransparency = 1
+	managerIcon.Parent = titleBar
+
+	local titleLabel = Instance.new("TextLabel")
+	titleLabel.Size = UDim2.new(1, -150, 1, 0)
+	titleLabel.Position = UDim2.new(0, 50, 0, 0)
+	titleLabel.Text = "Script Manager"
+	titleLabel.Font = Enum.Font.SourceSansSemibold
+	titleLabel.TextSize = 16
+	titleLabel.TextColor3 = Color3.fromRGB(0, 0, 0)
+	titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+	titleLabel.BackgroundTransparency = 1
+	titleLabel.Parent = titleBar
+
+	local buttonContainer = Instance.new("Frame")
+	buttonContainer.Size = UDim2.new(0, 135, 1, 0)
+	buttonContainer.Position = UDim2.new(1, -135, 0, 0)
+	buttonContainer.BackgroundTransparency = 1
+	buttonContainer.Parent = titleBar
+
+	local function createWindowButton(text, onClick, isClose, isDisabled)
+		local button = Instance.new("TextButton")
+		button.Size = UDim2.new(0, 45, 1, 0)
+		button.Text = text
+		button.Font = Enum.Font.SourceSansSemibold
+		button.TextSize = 16
+		button.BackgroundTransparency = 1 
+		button.TextTransparency = isDisabled and 0.5 or 0
+		button.AutoButtonColor = false
+
+		button.BorderSizePixel = 0
+		button.Parent = buttonContainer
+
+		if isDisabled then
+			button.MouseButton1Click:Connect(function() end) 
+		else
+			button.MouseButton1Click:Connect(onClick or function() end)
+		end
+
+		return button
+	end
+
+
+	local minimizeButton = createWindowButton("━", nil, false, true) 
+	local maximizeButton = createWindowButton("☐", nil, false, true) 
+	local closeButton = createWindowButton("✖", function()
+		local tweenService = game:GetService("TweenService")
+		local moveTween = tweenService:Create(mainWindow, TweenInfo.new(0.3, Enum.EasingStyle.Cubic, Enum.EasingDirection.In), {
+			Position = UDim2.new(mainWindow.Position.X.Scale, mainWindow.Position.X.Offset, 
+				mainWindow.Position.Y.Scale + 0.1, mainWindow.Position.Y.Offset),
+			BackgroundTransparency = 1
+		})
+
+		moveTween:Play()
+		moveTween.Completed:Connect(function()
+			mainWindow:Destroy()
+		end)
+	end, true)
+
+	closeButton.Position = UDim2.new(0, 90, 0, 0)
+	maximizeButton.Position = UDim2.new(0, 60, 0, 0)
+	minimizeButton.Position = UDim2.new(0, 30, 0, 0)
+
+
+	-- ScrollFrame
+	local scrollFrame = Instance.new("ScrollingFrame")
+	scrollFrame.Size = UDim2.new(1, 0, 1, -50)
+	scrollFrame.Position = UDim2.new(0, 0, 0, 40)
+	scrollFrame.BackgroundTransparency = 1
+	scrollFrame.ScrollBarThickness = 5
+	scrollFrame.Parent = mainWindow
+
+	local yOffset = 0
+	for _, item in pairs(data) do
+		local rawText = item.name 
+		local parts = string.split(rawText, "|")
+		local gameName = parts[1] or "N/A" 
+		local gameID = parts[2] or "N/A"  
+		local status = parts[3] or "N/A"
+
+		local formattedText = string.format("Name game : %s | ID : %s | Status %s", gameName, gameID, status)
+
+		local itemFrame = Instance.new("Frame")
+		itemFrame.Size = UDim2.new(1, -20, 0, 40)
+		itemFrame.Position = UDim2.new(0, 10, 0, yOffset)
+		itemFrame.BackgroundColor3 = Color3.fromRGB(250, 250, 250)
+		itemFrame.BorderColor3 = Color3.fromRGB(230, 230, 230)
+		itemFrame.Parent = scrollFrame
+
+		local nameLabel = Instance.new("TextLabel")
+		nameLabel.Size = UDim2.new(1, 0, 1, 0)
+		nameLabel.Text = formattedText  
+		nameLabel.Font = Enum.Font.SourceSans
+		nameLabel.TextSize = 14
+		nameLabel.TextColor3 = Color3.fromRGB(50, 50, 50)
+		nameLabel.BackgroundTransparency = 1
+		nameLabel.Parent = itemFrame
+
+		yOffset = yOffset + 45
+		scrollFrame.CanvasSize = UDim2.new(0, 0, 0, yOffset)
+	end
+
+
+	return mainWindow
+end
+
+ViewgamesButton.MouseButton1Click:Connect(function()
+	local success, data = pcall(function()
+		return HttpService:JSONDecode(game:HttpGet("https://api.github.com/repos/7yd7/Hub/contents/Script?ref=Branch"))
+	end)
+
+	if success then
+		local newGUI = createWindows10GUI(data)
+		newGUI.Parent = mainFrame
+	else
+		warn("Failed to load data")
+	end
+end)
