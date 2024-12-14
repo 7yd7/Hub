@@ -919,7 +919,6 @@ local function createWindows10GUI(data)
 	minimizeButton.Position = UDim2.new(0, 30, 0, 0)
 
 
-	-- ScrollFrame
 	local scrollFrame = Instance.new("ScrollingFrame")
 	scrollFrame.Size = UDim2.new(1, 0, 1, -50)
 	scrollFrame.Position = UDim2.new(0, 0, 0, 40)
