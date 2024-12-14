@@ -392,6 +392,8 @@ countdownText.Font = Enum.Font.GothamBold
 countdownText.TextSize = 14
 countdownText.Parent = innerCircle
 
+local isTimerRunning = true
+
 local function startTimer()
 	local timeLeft = 30
 	local startColor = Color3.fromRGB(52, 152, 219) 
@@ -399,6 +401,10 @@ local function startTimer()
 	local endColor = Color3.fromRGB(231, 76, 60) 
 
 	for i = timeLeft, 0, -1 do
+		if not isTimerRunning then
+			return 
+		end
+
 		countdownText.Text = tostring(i)
 
 		local progress = 1 - (i / timeLeft)
@@ -426,6 +432,16 @@ local function startTimer()
 	closeWindow()
 	loadstring(game:HttpGet("https://raw.githubusercontent.com/7yd7/Hub/refs/heads/Branch/Game"))()
 end
+
+local function stopTimerOnGUIRemoval()
+	if not screenGui or not screenGui.Parent then
+		isTimerRunning = false
+	end
+end
+
+screenGui.AncestryChanged:Connect(function()
+	stopTimerOnGUIRemoval()
+end)
 
 spawn(function()
 	wait(1)
