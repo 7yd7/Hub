@@ -2310,7 +2310,7 @@ local function updateAllowedButtonData(newData)
 	end
 end
 
-local function createScriptButton(data)
+function createScriptButton(data)
 	if type(data) ~= "table" then
 		warn("Invalid data passed to createScriptButton")
 		return nil
