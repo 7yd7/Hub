@@ -2310,13 +2310,25 @@ local function updateAllowedButtonData(newData)
 	end
 end
 
-local function createScriptButton(data)
+llocal function createScriptButton(data)
+	if type(data) ~= "table" then
+		warn("Invalid data passed to createScriptButton")
+		return nil
+	end
+
 	local button, name, author = addButton(data)
-	table.insert(buttons, {button, name, author})
+	if button then
+		table.insert(buttons, {button, name, author})
+		return button, name, author
+	else
+		warn("Failed to create button for script")
+		return nil
+	end
 end
 
-
 -- Example of use
+
+
 createIconButton({
 	image = "rbxassetid://88990494766919", 
 	name = "Home", 
