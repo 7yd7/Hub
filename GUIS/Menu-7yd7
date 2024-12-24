@@ -38,6 +38,10 @@ createScriptButton({
 ]]
 
 
+
+
+
+
 -- Services
 local UIS = game:GetService("UserInputService")
 local TS = game:GetService("TweenService")
@@ -49,7 +53,6 @@ local Camera = Workspace.CurrentCamera
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local StarterGui = game:GetService("StarterGui")
 local TextService = game:GetService("TextService")
-
 
 local gui = Instance.new("ScreenGui")
 gui.Name = "Taskbar"
@@ -312,11 +315,6 @@ searchBox.Changed:Connect(function(prop)
 		end
 	end
 end)
-
-local function createScriptButton(data)
-	local button, name, author = addButton(data)
-	table.insert(buttons, {button, name, author})
-end
 
 
 local tweenInfo = TweenInfo.new(
@@ -2310,6 +2308,11 @@ local function updateAllowedButtonData(newData)
 	for name, value in pairs(newData) do
 		allowedButtonData[name] = value
 	end
+end
+
+local function createScriptButton(data)
+	local button, name, author = addButton(data)
+	table.insert(buttons, {button, name, author})
 end
 
 
