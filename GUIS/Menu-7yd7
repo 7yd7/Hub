@@ -1,3 +1,43 @@
+--[[
+How to use a script:
+updateConfig() How to use? What is its purpose?
+Update the existing CONFIG script Example usage:
+updateConfig({
+	OPEN_KEY = Enum.KeyCode.F8
+})
+
+updateAllowedButtonData() How to use? What is its purpose?
+Stops buttons or stores the buttons you want to stop, for example:
+updateAllowedButtonData({
+	["Home"] = false,
+})
+Home Special Button Script Not Created
+
+createIconButton() How to use? What is its purpose?
+Create menu buttons Example usage:
+createIconButton({
+	image = "rbxassetid://1", 
+	name = "Test", 
+	enabled = true,
+	closeOnClick = false,
+	action = function(buttonData) 
+		print("test")
+	end
+})
+
+createScriptButton{}
+Create your own buttons gui Universal Scripts button How to use:
+createScriptButton({
+	name = "Test Print ( TEST RUN !!)",
+	author = "Test author",
+	color = Color3.fromRGB(35, 35, 35),
+	action = function() 
+		print("Test") 
+	end
+})
+]]
+
+
 -- Services
 local UIS = game:GetService("UserInputService")
 local TS = game:GetService("TweenService")
@@ -2230,7 +2270,7 @@ end)
 
 
 local iconData = {}
-
+local allowedButtonData = {}
 
 
 for _, data in ipairs(iconData) do
@@ -2243,6 +2283,13 @@ for _, data in ipairs(iconData) do
 end
 
 function createIconButton(params)
+	if allowedButtonData ~= nil then
+		if allowedButtonData[params.name] == false then
+			return nil, nil 
+		end
+	end
+
+	
 	local newIcon = {
 		image = params.image or "rbxassetid://81076981372140",
 		name = params.name or "New Button",
@@ -2258,3 +2305,51 @@ function createIconButton(params)
 
 	return icon, buttonData
 end
+
+local function updateAllowedButtonData(newData)
+	for name, value in pairs(newData) do
+		allowedButtonData[name] = value
+	end
+end
+
+
+-- Example of use
+createIconButton({
+	image = "rbxassetid://88990494766919", 
+	name = "Home", 
+	enabled = true,
+	closeOnClick = false,
+	action = function(buttonData) 
+		toggleGuiHome()
+	end
+})
+
+createIconButton({
+	image = "rbxassetid://116954918143819", 
+	name = "Chat Logs", 
+	enabled = true,
+	closeOnClick = false,
+	action = function(buttonData) 
+		toggleFrame()
+	end
+})
+
+createIconButton({
+	image = "rbxassetid://72528155303943", 
+	name = "Stat Board", 
+	enabled = true,
+	closeOnClick = false,
+	action = function(buttonData) 
+		toggleGuiStatBoard()			
+	end
+})
+
+createIconButton({
+	image = "rbxassetid://114208610575552", 
+	name = "Universal Scripts", 
+	enabled = true,
+	closeOnClick = false,
+	action = function(buttonData) 
+		toggleGUI()
+	end
+})
