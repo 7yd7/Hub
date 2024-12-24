@@ -56,7 +56,7 @@ local TextService = game:GetService("TextService")
 
 local gui = Instance.new("ScreenGui")
 gui.Name = "Taskbar"
-gui.Parent = Players.LocalPlayer:WaitForChild("PlayerGui")
+gui.Parent = game.CoreGui
 gui.ZIndexBehavior = Enum.ZIndexBehavior.Global
 gui.DisplayOrder = 9999
 
