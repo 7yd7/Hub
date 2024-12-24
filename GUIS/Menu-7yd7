@@ -1,0 +1,2260 @@
+-- Services
+local UIS = game:GetService("UserInputService")
+local TS = game:GetService("TweenService")
+local TweenService = game:GetService("TweenService")
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+local TextChatService = game:GetService("TextChatService")
+local Camera = Workspace.CurrentCamera
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local StarterGui = game:GetService("StarterGui")
+local TextService = game:GetService("TextService")
+
+
+local gui = Instance.new("ScreenGui")
+gui.Name = "Taskbar"
+gui.Parent = Players.LocalPlayer:WaitForChild("PlayerGui")
+gui.ZIndexBehavior = Enum.ZIndexBehavior.Global
+gui.DisplayOrder = 9999
+
+local function maximizePriority(gui)
+	gui.ZIndexBehavior = Enum.ZIndexBehavior.Global
+	gui.DisplayOrder = 9999
+
+	for _, child in ipairs(gui:GetDescendants()) do
+		if child:IsA("GuiObject") then
+			child.ZIndex = 9999
+		end
+	end
+end
+
+maximizePriority(gui)
+
+gui.DescendantAdded:Connect(function(descendant)
+	if descendant:IsA("GuiObject") then
+		descendant.ZIndex = 9999
+	end
+end)
+
+local CONFIG = {
+	OPEN_KEY = Enum.KeyCode.F8,
+	Height = 60,
+	BackgroundColor = Color3.fromRGB(27, 27, 27),
+	HeaderColor = Color3.fromRGB(35, 35, 35),
+	ButtonHeight = 40,
+	ButtonSpacing = 5,
+	TitleColor = Color3.fromRGB(255, 255, 255),
+	SubtitleColor = Color3.fromRGB(180, 180, 180),
+	ExecuteColor = Color3.fromRGB(70, 70, 70),
+	IconColor = Color3.fromRGB(255, 255, 255),
+	IconHoverColor = Color3.fromRGB(255, 255, 255),
+	IconTint = Color3.fromRGB(255, 255, 255),
+	CornerRadius = 8,  
+	TimeTextSize = 20,
+	IconSize = 35,      
+	IconPadding = 8,   
+	FadeTime = 0.5,
+	TooltipTextSize = 16,
+	backButtonHoverColors = Color3.fromRGB(255, 255, 255),
+
+	ShadowColor = Color3.fromRGB(0, 0, 0),
+	ShadowTransparency = 0.7,
+	HoverAnimationTime = 0.2,
+
+	DefaultFOV = 70,
+	MinFOV = 50,
+	MaxFOV = 120,
+	FOVChangeSpeed = 0.5,
+
+	ButtonHoverColor = Color3.fromRGB(163, 163, 163),
+	ButtonPressColor = Color3.fromRGB(163, 163, 163),
+	ButtonTransitionSpeed = 0.4
+}
+
+
+function updateConfig(newSettings)
+	for key, value in pairs(newSettings) do
+		if CONFIG[key] ~= nil then
+			CONFIG[key] = value
+		end
+	end
+end
+
+local FOVController = {
+	DefaultFOV = Camera.FieldOfView,
+	CurrentFOV = Camera.FieldOfView,
+	TargetFOV = Camera.FieldOfView
+}
+
+function FOVController:ChangeFOV(newFOV, instant)
+	newFOV = math.clamp(newFOV, CONFIG.MinFOV, CONFIG.MaxFOV)
+	self.TargetFOV = newFOV
+
+	if instant then
+		Camera.FieldOfView = newFOV
+		self.CurrentFOV = newFOV
+	else
+		TS:Create(Camera, 
+			TweenInfo.new(CONFIG.FOVChangeSpeed, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), 
+			{FieldOfView = newFOV}
+		):Play()
+		self.CurrentFOV = newFOV
+	end
+end
+
+function FOVController:ResetFOV(instant)
+	self:ChangeFOV(self.DefaultFOV, instant)
+end
+
+function FOVController:IncreaseFOV(amount, instant)
+	self:ChangeFOV(self.CurrentFOV + (amount or 10), instant)
+end
+
+function FOVController:DecreaseFOV(amount, instant)
+	self:ChangeFOV(self.CurrentFOV - (amount or 10), instant)
+end
+
+
+
+
+
+-- Universal Scripts
+local function makeUICorner(parent, radius)
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, radius or 8)
+	corner.Parent = parent
+	return corner
+end
+
+local taskbar = Instance.new("Frame")
+taskbar.Name = "Universal Scripts"
+taskbar.AnchorPoint = Vector2.new(0.5, 1)
+taskbar.Position = UDim2.new(0.5, 0, 1, -80)
+taskbar.Size = UDim2.new(0, 400, 0, 200)
+taskbar.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+taskbar.BorderSizePixel = 0
+taskbar.Parent = gui
+makeUICorner(taskbar, 10)
+
+local title = Instance.new("TextLabel")
+title.Parent = taskbar
+title.Size = UDim2.new(1, -120, 0, 30)
+title.Position = UDim2.new(0, 15, 0, 0)
+title.BackgroundTransparency = 1
+title.Text = "Universal Scripts"
+title.TextColor3 = Color3.fromRGB(255, 255, 255)
+title.Font = Enum.Font.GothamBold
+title.TextSize = 16
+title.TextXAlignment = Enum.TextXAlignment.Left
+
+local searchFrame = Instance.new("Frame")
+searchFrame.Parent = taskbar
+searchFrame.Size = UDim2.new(0, 120, 0, 24)
+searchFrame.Position = UDim2.new(1, -135, 0, 3)
+searchFrame.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+makeUICorner(searchFrame, 4)
+
+local searchIcon = Instance.new("ImageLabel")
+searchIcon.Parent = searchFrame
+searchIcon.Size = UDim2.new(0, 16, 0, 16)
+searchIcon.Position = UDim2.new(0, 6, 0.5, -8)
+searchIcon.BackgroundTransparency = 1
+searchIcon.Image = "rbxassetid://104986431790017" 
+searchIcon.ImageColor3 = Color3.fromRGB(180, 180, 180)
+
+local searchBox = Instance.new("TextBox")
+searchBox.Parent = searchFrame
+searchBox.Size = UDim2.new(1, -30, 1, 0)
+searchBox.Position = UDim2.new(0, 26, 0, 0)
+searchBox.BackgroundTransparency = 1
+searchBox.Text = ""
+searchBox.PlaceholderText = "Search..."
+searchBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+searchBox.PlaceholderColor3 = Color3.fromRGB(180, 180, 180)
+searchBox.Font = Enum.Font.Gotham
+searchBox.TextStrokeColor3 = Color3.fromRGB(49, 49, 49)
+searchBox.TextSize = 12
+searchBox.TextWrapped = true
+searchBox.TextXAlignment = Enum.TextXAlignment.Left
+
+local underline = Instance.new("Frame")
+underline.Parent = taskbar
+underline.Size = UDim2.new(1, -20, 0, 2)
+underline.Position = UDim2.new(0, 10, 0, 30)
+underline.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+
+local scrollFrame = Instance.new("ScrollingFrame")
+scrollFrame.Parent = taskbar
+scrollFrame.Size = UDim2.new(1, -20, 1, -40)
+scrollFrame.Position = UDim2.new(0, 10, 0, 40)
+scrollFrame.BackgroundTransparency = 1
+scrollFrame.ScrollBarThickness = 2
+scrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+scrollFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
+scrollFrame.ScrollBarImageColor3 = Color3.fromRGB(75, 75, 75)
+
+local listLayout = Instance.new("UIListLayout")
+listLayout.Parent = scrollFrame
+listLayout.Padding = UDim.new(0, 5)
+listLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+listLayout.SortOrder = Enum.SortOrder.LayoutOrder
+
+local function addButton(data)
+	local buttonFrame = Instance.new("Frame")
+	buttonFrame.Size = UDim2.new(1, -10, 0, 45)
+	buttonFrame.BackgroundColor3 = data.color
+	buttonFrame.BorderSizePixel = 0
+	buttonFrame.BackgroundTransparency = 1
+	buttonFrame.Parent = scrollFrame
+	makeUICorner(buttonFrame, 6)
+
+	local scriptName = Instance.new("TextLabel")
+	scriptName.Parent = buttonFrame
+	scriptName.Size = UDim2.new(1, -100, 0, 20)
+	scriptName.Position = UDim2.new(0, 15, 0, 5)
+	scriptName.BackgroundTransparency = 1
+	scriptName.Text = data.name or "Script Name"
+	scriptName.TextColor3 = Color3.fromRGB(255, 255, 255)
+	scriptName.Font = Enum.Font.GothamBold
+	scriptName.TextSize = 14
+	scriptName.TextTransparency = 1
+	scriptName.TextXAlignment = Enum.TextXAlignment.Left
+
+	local scriptAuthor = Instance.new("TextLabel")
+	scriptAuthor.Parent = buttonFrame
+	scriptAuthor.Size = UDim2.new(1, -100, 0, 20)
+	scriptAuthor.Position = UDim2.new(0, 15, 0, 25)
+	scriptAuthor.BackgroundTransparency = 1
+	scriptAuthor.TextTransparency = 1
+	scriptAuthor.Text = data.author or "Author Name"
+	scriptAuthor.TextColor3 = Color3.fromRGB(180, 180, 180)
+	scriptAuthor.Font = Enum.Font.Gotham
+	scriptAuthor.TextSize = 12
+	scriptAuthor.TextXAlignment = Enum.TextXAlignment.Left
+
+	local executeButton = Instance.new("TextButton")
+	executeButton.Parent = buttonFrame
+	executeButton.Size = UDim2.new(0, 65, 0, 25)
+	executeButton.Position = UDim2.new(1, -75, 0.5, -12)
+	executeButton.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+	executeButton.Text = "Execute"
+	executeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+	executeButton.Font = Enum.Font.GothamBold
+	executeButton.BackgroundTransparency = 1
+	executeButton.TextTransparency = 1
+	executeButton.TextSize = 12
+	executeButton.BorderSizePixel = 0
+	makeUICorner(executeButton, 4)
+
+	executeButton.MouseButton1Click:Connect(function()
+		if data.action then
+			data.action()
+		end
+	end)
+
+	return buttonFrame, scriptName.Text, scriptAuthor.Text
+end
+
+local buttons = {}
+searchBox.Changed:Connect(function(prop)
+	if prop == "Text" then
+		local searchText = searchBox.Text:lower()
+		for _, buttonData in ipairs(buttons) do
+			local button = buttonData[1]
+			local scriptName = buttonData[2]:lower()
+			local authorName = buttonData[3]:lower()
+
+			if searchText == "" then
+				button.Visible = true
+			else
+				button.Visible = scriptName:find(searchText) or authorName:find(searchText)
+			end
+		end
+	end
+end)
+
+local function createScriptButton(data)
+	local button, name, author = addButton(data)
+	table.insert(buttons, {button, name, author})
+end
+
+
+local tweenInfo = TweenInfo.new(
+	0.3,
+	Enum.EasingStyle.Sine, 
+	Enum.EasingDirection.InOut
+)
+
+taskbar.BackgroundTransparency = 1
+title.TextTransparency = 1
+underline.BackgroundTransparency = 1
+scrollFrame.ScrollBarImageTransparency = 1
+
+searchIcon.ImageTransparency = 1
+searchBox.TextStrokeTransparency = 1
+searchBox.TextTransparency = 1
+searchBox.Interactable = false
+searchFrame.BackgroundTransparency = 1
+
+local isVisible = false
+
+local function toggleGUI()
+	isVisible = not isVisible
+
+	local targetTransparency = isVisible and 0 or 1
+	local shadowTargetTransparency = isVisible and 0.6 or 1
+
+	local tweens = {
+		TweenService:Create(taskbar, tweenInfo, {
+			BackgroundTransparency = targetTransparency,
+			Position = isVisible and 
+				UDim2.new(0.5, 0, 1, -80) or 
+				UDim2.new(0.5, 0, 1, 20)
+		}),
+		TweenService:Create(title, tweenInfo, {
+			TextTransparency = targetTransparency
+		}),
+		TweenService:Create(underline, tweenInfo, {
+			BackgroundTransparency = targetTransparency
+		}),
+		TweenService:Create(scrollFrame, tweenInfo, {
+			ScrollBarImageTransparency = targetTransparency
+		}),
+		TweenService:Create(searchIcon, tweenInfo, {
+			ImageTransparency = targetTransparency
+		}),
+		TweenService:Create(searchBox, tweenInfo, {
+			TextStrokeTransparency = targetTransparency,
+			TextTransparency = targetTransparency,
+			Interactable = true
+		}),
+		TweenService:Create(searchFrame, tweenInfo, {
+			BackgroundTransparency = targetTransparency,
+		})
+
+
+	}
+
+	for _, tween in ipairs(tweens) do
+		tween:Play()
+	end
+
+	task.spawn(function()
+		for i, button in ipairs(scrollFrame:GetChildren()) do
+			if button:IsA("Frame") then
+				local delay = isVisible and (i * 0.05) or (0.05 * (#scrollFrame:GetChildren() - i))
+
+				task.wait(delay)
+
+				TweenService:Create(button, tweenInfo, {
+					BackgroundTransparency = targetTransparency,
+					Position = UDim2.new(
+						0, 
+						isVisible and 0 or (button.Position.X.Offset + 50),
+						0,
+						button.Position.Y.Offset
+					)
+				}):Play()
+
+				for _, child in ipairs(button:GetChildren()) do
+					if child:IsA("TextLabel") then
+						TweenService:Create(child, tweenInfo, {
+							TextTransparency = targetTransparency,
+							Position = UDim2.new(
+								0,
+								isVisible and 15 or 30,
+								child.Position.Y.Scale,
+								child.Position.Y.Offset
+							)
+						}):Play()
+					elseif child:IsA("TextButton") then
+						TweenService:Create(child, tweenInfo, {
+							BackgroundTransparency = targetTransparency,
+							TextTransparency = targetTransparency
+						}):Play()
+					end
+				end
+			end
+		end
+	end)
+end
+
+
+
+
+
+local taskbar = Instance.new("Frame")
+taskbar.Name = "ChatLogs"
+taskbar.AnchorPoint = Vector2.new(0.5, 1)
+taskbar.Position = UDim2.new(0.5, 0, 1, -80)
+taskbar.Size = UDim2.new(0, 400, 0, 200)
+taskbar.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+taskbar.BorderSizePixel = 0
+taskbar.Parent = gui
+
+local function makeUICorners(parent, radius)
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, radius)
+	corner.Parent = parent
+end
+makeUICorners(taskbar, 10)
+
+local title = Instance.new("TextLabel")
+title.Parent = taskbar
+title.Size = UDim2.new(1, -120, 0, 30)
+title.Position = UDim2.new(0, 15, 0, 0)
+title.BackgroundTransparency = 1
+title.Text = "Chat Logs"
+title.TextColor3 = Color3.fromRGB(255, 255, 255)
+title.Font = Enum.Font.GothamBold
+title.TextSize = 16
+title.TextXAlignment = Enum.TextXAlignment.Left
+
+local searchFrame = Instance.new("Frame")
+searchFrame.Parent = taskbar
+searchFrame.Size = UDim2.new(0, 120, 0, 24)
+searchFrame.Position = UDim2.new(1, -135, 0, 3)
+searchFrame.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+makeUICorners(searchFrame, 4)
+
+
+local searchBox = Instance.new("TextBox")
+searchBox.Parent = searchFrame
+searchBox.Size = UDim2.new(1, -30, 1, 0)
+searchBox.Position = UDim2.new(0, 26, 0, 0)
+searchBox.BackgroundTransparency = 1
+searchBox.Text = ""
+searchBox.PlaceholderText = "Search..."
+searchBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+searchBox.PlaceholderColor3 = Color3.fromRGB(180, 180, 180)
+searchBox.Font = Enum.Font.Gotham
+searchBox.TextWrapped = true
+searchBox.TextSize = 12
+searchBox.TextXAlignment = Enum.TextXAlignment.Left
+
+local searchIcon = Instance.new("ImageLabel")
+searchIcon.Parent = searchFrame
+searchIcon.Size = UDim2.new(0, 16, 0, 16)
+searchIcon.Position = UDim2.new(0, 6, 0.5, -8)
+searchIcon.BackgroundTransparency = 1
+searchIcon.Image = "rbxassetid://104986431790017"
+searchIcon.ImageColor3 = Color3.fromRGB(180, 180, 180)
+
+local underline = Instance.new("Frame")
+underline.Parent = taskbar
+underline.Size = UDim2.new(1, -20, 0, 2)
+underline.Position = UDim2.new(0, 10, 0, 30)
+underline.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+
+local scrollFrame = Instance.new("ScrollingFrame")
+scrollFrame.Parent = taskbar
+scrollFrame.Size = UDim2.new(1, -20, 1, -40)
+scrollFrame.Position = UDim2.new(0, 10, 0, 40)
+scrollFrame.BackgroundTransparency = 1
+scrollFrame.ScrollBarThickness = 2
+scrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+scrollFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
+scrollFrame.ScrollBarImageColor3 = Color3.fromRGB(75, 75, 75)
+
+local listLayout = Instance.new("UIListLayout")
+listLayout.Parent = scrollFrame
+listLayout.Padding = UDim.new(0)
+listLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+listLayout.SortOrder = Enum.SortOrder.LayoutOrder
+
+local processedMessages = {}
+local allMessageLogs = {}
+local completeMessageLog = {}  
+local MESSAGE_COOLDOWN = .5
+local MAX_MESSAGES = 30
+
+local function updateScrollFrame()
+	for _, child in ipairs(scrollFrame:GetChildren()) do
+		if child:IsA("TextLabel") then
+			child:Destroy()
+		end
+	end
+
+	for i = math.max(1, #allMessageLogs - MAX_MESSAGES + 1), #allMessageLogs do
+		local log = allMessageLogs[i]
+		local textLabel = Instance.new("TextLabel")
+		textLabel.Parent = scrollFrame
+		textLabel.Size = UDim2.new(1, 0, 0, 15)
+		textLabel.BackgroundTransparency = 1
+		textLabel.Text = "[" .. log.playerName .. "]: " .. log.message
+		textLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+		textLabel.Font = Enum.Font.Gotham
+		textLabel.TextSize = 14
+		textLabel.TextXAlignment = Enum.TextXAlignment.Left
+		textLabel.TextWrapped = true
+		textLabel.AutomaticSize = Enum.AutomaticSize.Y
+	end
+
+	scrollFrame.CanvasSize = UDim2.new(0, 0, 0, listLayout.AbsoluteContentSize.Y)
+end
+
+local function addMessageToLog(playerName, message)
+	local currentTime = tick()
+	local messageKey = playerName .. ":" .. message
+
+	if not processedMessages[messageKey] or 
+		(processedMessages[messageKey] and 
+			currentTime - processedMessages[messageKey] > MESSAGE_COOLDOWN) then
+
+		local messageData = {
+			playerName = playerName,
+			message = message,
+			timestamp = currentTime
+		}
+
+		table.insert(completeMessageLog, messageData)
+
+		table.insert(allMessageLogs, messageData)
+
+		if #allMessageLogs > MAX_MESSAGES then
+			table.remove(allMessageLogs, 1)
+		end
+
+		local searchText = searchBox.Text:lower()
+
+		if searchText == "" then
+			updateScrollFrame()
+		else
+			for _, child in ipairs(scrollFrame:GetChildren()) do
+				if child:IsA("TextLabel") then
+					local childText = child.Text:lower()
+					child.Visible = childText:find(searchText) ~= nil
+				end
+			end
+		end
+
+		processedMessages[messageKey] = currentTime
+	end
+end
+
+
+local lastSearchText = ""  
+
+searchBox:GetPropertyChangedSignal("Text"):Connect(function()
+	local searchText = searchBox.Text:lower()
+
+	if searchText == "" then
+		updateScrollFrame()
+		lastSearchText = ""
+		return
+	end
+
+	if lastSearchText ~= "" and not searchText:find(lastSearchText) then
+		updateScrollFrame()
+		lastSearchText = ""
+		return
+	end
+
+	for _, child in ipairs(scrollFrame:GetChildren()) do
+		if child:IsA("TextLabel") then
+			child:Destroy()
+		end
+	end
+
+	local matchedResults = 0
+	for i = 1, #completeMessageLog do  
+		local log = completeMessageLog[i]
+
+		local playerNameMatch = log.playerName:lower():find(searchText)
+		local messageMatch = log.message:lower():find(searchText)
+
+		if playerNameMatch or messageMatch then
+			local textLabel = Instance.new("TextLabel")
+			textLabel.Parent = scrollFrame
+			textLabel.Size = UDim2.new(1, 0, 0, 15)
+			textLabel.BackgroundTransparency = 1
+			textLabel.Text = "[" .. log.playerName .. "]: " .. log.message
+			textLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+			textLabel.Font = Enum.Font.Gotham
+			textLabel.TextSize = 14
+			textLabel.TextXAlignment = Enum.TextXAlignment.Left
+			textLabel.TextWrapped = true
+			textLabel.AutomaticSize = Enum.AutomaticSize.Y
+
+			matchedResults = matchedResults + 1
+		end
+	end
+
+	if matchedResults == 0 then
+		local noResultsLabel = Instance.new("TextLabel")
+		noResultsLabel.Parent = scrollFrame
+		noResultsLabel.Size = UDim2.new(1, 0, 0, 30)
+		noResultsLabel.BackgroundTransparency = 1
+		noResultsLabel.Text = "No results found"
+		noResultsLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
+		noResultsLabel.Font = Enum.Font.Gotham
+		noResultsLabel.TextSize = 14
+	end
+
+	scrollFrame.CanvasSize = UDim2.new(0, 0, 0, listLayout.AbsoluteContentSize.Y)
+
+	lastSearchText = searchText
+end)
+
+
+for _, player in pairs(Players:GetPlayers()) do
+	player.Chatted:Connect(function(msg)
+		addMessageToLog(player.Name, msg)
+	end)
+end
+
+Players.PlayerAdded:Connect(function(player)
+	player.Chatted:Connect(function(msg)
+		addMessageToLog(player.Name, msg)
+	end)
+end)
+
+if TextChatService then
+	TextChatService.OnIncomingMessage = function(message)
+		local playerName = message.TextSource and message.TextSource.Name or "System"
+		addMessageToLog(playerName, message.Text)
+	end
+end
+
+
+
+local function makeDraggable(frame)
+	local dragging = false
+	local dragInput
+	local dragStart
+	local startPos
+
+	local function update(input)
+		local delta = input.Position - dragStart
+		frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, 
+			startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+	end
+
+	frame.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or 
+			input.UserInputType == Enum.UserInputType.Touch then
+			dragging = true
+			dragStart = input.Position
+			startPos = frame.Position
+
+			input.Changed:Connect(function()
+				if input.UserInputState == Enum.UserInputState.End then
+					dragging = false
+				end
+			end)
+		end
+	end)
+
+	frame.InputChanged:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseMovement or 
+			input.UserInputType == Enum.UserInputType.Touch then
+			dragInput = input
+		end
+	end)
+
+	UIS.InputChanged:Connect(function(input)
+		if input == dragInput and dragging then
+			update(input)
+		end
+	end)
+end
+
+
+local tweenInfo = TweenInfo.new(
+	0.3, 
+	Enum.EasingStyle.Sine,
+	Enum.EasingDirection.InOut
+)
+
+local function setupToggleAnimation(frame)
+	local isVisible = false
+	local originalPosition = UDim2.new(0.5, 0, 1, -80)
+	local hiddenPosition = UDim2.new(0.5, 0, 1, 20)
+
+	local function initializeTransparency()
+		for _, child in ipairs(frame:GetDescendants()) do
+			if child:IsA("Frame") then
+				child.BackgroundTransparency = 1
+			elseif child:IsA("TextLabel") then
+				child.BackgroundTransparency = 1
+				child.TextTransparency = 1
+			elseif child:IsA("TextBox") then
+				child.BackgroundTransparency = 1
+				child.TextTransparency = 1
+			elseif child:IsA("ImageLabel") then
+				child.BackgroundTransparency = 1
+				child.ImageTransparency = 1
+			end
+		end
+		frame.BackgroundTransparency = 1
+	end
+
+	initializeTransparency()
+
+	local function toggleVisibility()
+		isVisible = not isVisible
+
+		local targetTransparency = isVisible and 0 or 1
+		local shadowTargetTransparency = isVisible and 0.6 or 1
+
+		local tweens = {
+			TweenService:Create(frame, tweenInfo, {
+				BackgroundTransparency = targetTransparency,
+				Position = isVisible and originalPosition or hiddenPosition
+			})
+		}
+
+		for _, child in ipairs(frame:GetDescendants()) do
+			if child:IsA("Frame") then
+				table.insert(tweens, TweenService:Create(child, tweenInfo, {
+					BackgroundTransparency = targetTransparency
+				}))
+			elseif child:IsA("TextLabel") then
+				table.insert(tweens, TweenService:Create(child, tweenInfo, {
+					TextTransparency = targetTransparency
+				}))
+			elseif child:IsA("TextBox") then
+				table.insert(tweens, TweenService:Create(child, tweenInfo, {
+					TextTransparency = targetTransparency
+				}))
+			elseif child:IsA("ImageLabel") then
+				table.insert(tweens, TweenService:Create(child, tweenInfo, {
+					ImageTransparency = targetTransparency
+				}))
+			end
+		end
+
+		for _, tween in ipairs(tweens) do
+			tween:Play()
+		end
+
+		if isVisible then
+			frame.Visible = true
+		else
+			tweens[1].Completed:Connect(function()
+				frame.Visible = false
+			end)
+		end
+
+		task.spawn(function()
+			for i, child in ipairs(frame:GetChildren()) do
+				if child:IsA("ScrollingFrame") then
+					for j, item in ipairs(child:GetChildren()) do
+						if item:IsA("Frame") then
+							local delay = isVisible and (j * 0.05) or (0.05 * (#child:GetChildren() - j))
+
+							task.wait(delay)
+
+							TweenService:Create(item, tweenInfo, {
+								BackgroundTransparency = targetTransparency,
+								Position = UDim2.new(
+									item.Position.X.Scale, 
+									isVisible and item.Position.X.Offset or (item.Position.X.Offset + 50),
+									item.Position.Y.Scale,
+									item.Position.Y.Offset
+								)
+							}):Play()
+
+							for _, subChild in ipairs(item:GetChildren()) do
+								if subChild:IsA("TextLabel") then
+									TweenService:Create(subChild, tweenInfo, {
+										TextTransparency = targetTransparency,
+										Position = UDim2.new(
+											0,
+											isVisible and 15 or 30,
+											subChild.Position.Y.Scale,
+											subChild.Position.Y.Offset
+										)
+									}):Play()
+								end
+							end
+						end
+					end
+				end
+			end
+		end)
+	end
+
+	return toggleVisibility
+end
+
+makeDraggable(taskbar)
+local toggleFrame = setupToggleAnimation(taskbar)
+
+for i = 1,2 do
+	toggleFrame()
+end
+
+
+
+
+local isGuiOpen = false
+local frames = {}
+
+local tweenInfo = TweenInfo.new(
+	0.5, 
+	Enum.EasingStyle.Quad,
+	Enum.EasingDirection.Out
+)
+
+local function createInfoFrame(position, labelText, iconId)
+	local Frame = Instance.new("Frame")
+	Frame.Parent = gui
+	Frame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+	Frame.BorderSizePixel = 0
+	Frame.Position = position
+	Frame.Size = UDim2.new(0, 160, 0, 50)
+	Frame.AnchorPoint = Vector2.new(1, 0)
+	Frame.Active = true
+	Frame.Draggable = true
+	Frame.BackgroundTransparency = 1 
+
+	local UICorner = Instance.new("UICorner")
+	UICorner.CornerRadius = UDim.new(0, 10)
+	UICorner.Parent = Frame
+
+	local UIGradient = Instance.new("UIGradient")
+	UIGradient.Color = ColorSequence.new{
+		ColorSequenceKeypoint.new(0.00, Color3.fromRGB(18, 22, 24)),
+		ColorSequenceKeypoint.new(1.00, Color3.fromRGB(39, 39, 39))
+	}
+	UIGradient.Parent = Frame
+
+	local ImageLabel = Instance.new("ImageLabel")
+	ImageLabel.Parent = Frame
+	ImageLabel.BackgroundTransparency = 1
+	ImageLabel.Position = UDim2.new(0.05, 0, 0.5, -16)
+	ImageLabel.Size = UDim2.new(0, 32, 0, 32)
+	ImageLabel.Image = "rbxassetid://" .. iconId
+	ImageLabel.ImageTransparency = 1
+
+	local TextLabel = Instance.new("TextLabel")
+	TextLabel.Parent = Frame
+	TextLabel.BackgroundTransparency = 1
+	TextLabel.Position = UDim2.new(0.30, 0, 0.5, -15)
+	TextLabel.Size = UDim2.new(0, 100, 0, 30)
+	TextLabel.Font = Enum.Font.SourceSansBold
+	TextLabel.Text = labelText
+	TextLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+	TextLabel.TextSize = 20.000
+	TextLabel.TextXAlignment = Enum.TextXAlignment.Left
+	TextLabel.TextTransparency = 1 
+
+	return Frame, TextLabel, ImageLabel
+end
+
+local basePosition = UDim2.new(0.99, 0, 0, 5)
+local icons = {"133746622922498", "100696028038981", "96009847305866", "120279682762468", "129874671449175"}
+local labels = {"CPU: 0%", "GPU: 0%", "Memory: 0%", "Ping: 0 ms", "FPS: 0"}
+
+for i, labelText in ipairs(labels) do
+	local frame, textLabel, imageLabel = createInfoFrame(
+		UDim2.new(basePosition.X.Scale, basePosition.X.Offset, basePosition.Y.Scale, basePosition.Y.Offset + ((i-1) * 60)),
+		labelText,
+		icons[i]
+	)
+	table.insert(frames, {frame = frame, textLabel = textLabel, imageLabel = imageLabel})
+end
+
+local function toggleGuiStatBoard()
+	isGuiOpen = not isGuiOpen
+
+	for i, frameData in ipairs(frames) do
+		delay(i * 0.1, function()
+			local targetTransparency = isGuiOpen and 0 or 1
+			local targetPosition = UDim2.new(
+				basePosition.X.Scale,
+				basePosition.X.Offset,
+				basePosition.Y.Scale,
+				basePosition.Y.Offset + ((i-1) * 60) + (isGuiOpen and 0 or 20)
+			)
+
+			local frameTween = TweenService:Create(frameData.frame, tweenInfo, {
+				BackgroundTransparency = targetTransparency
+			})
+			frameTween:Play()
+
+			local textTween = TweenService:Create(frameData.textLabel, tweenInfo, {
+				TextTransparency = targetTransparency
+			})
+			textTween:Play()
+
+			local imageTween = TweenService:Create(frameData.imageLabel, tweenInfo, {
+				ImageTransparency = targetTransparency
+			})
+			imageTween:Play()
+
+			local positionTween = TweenService:Create(frameData.frame, tweenInfo, {
+				Position = targetPosition
+			})
+			positionTween:Play()
+		end)
+	end
+end
+
+
+local function updateValues()
+	local cpuUsage = math.random(0, 100)
+	local gpuUsage = math.random(0, 100)
+	local memoryUsage = math.random(0, 100)
+	local pingValue = math.random(20, 100)
+	local fpsValue = math.random(30, 144)
+
+	frames[1].textLabel.Text = "CPU: " .. cpuUsage .. "%"
+	frames[2].textLabel.Text = "GPU: " .. gpuUsage .. "%"
+	frames[3].textLabel.Text = "Memory: " .. memoryUsage .. "%"
+	frames[4].textLabel.Text = "Ping: " .. pingValue .. " ms"
+	frames[5].textLabel.Text = "FPS: " .. fpsValue
+end
+
+task.spawn(function()
+	while true do
+		updateValues()
+		task.wait(1)
+	end
+end)
+
+
+
+
+-- Home
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+
+local WelcomeFrame = Instance.new("Frame")
+local EveningText = Instance.new("TextLabel")
+local EveningText_2 = Instance.new("TextLabel")
+local DiscordFrame = Instance.new("Frame")
+local InfoFrame = Instance.new("Frame")
+local UICorner = Instance.new("UICorner")
+local UICorner_2 = Instance.new("UICorner")
+local DiscordTitle = Instance.new("TextLabel")
+local InfoTitle = Instance.new("TextLabel")
+local DiscordDescription = Instance.new("TextLabel")
+local CopyButton = Instance.new("ImageButton")
+local UICorner_3 = Instance.new("UICorner")
+local UIGradient = Instance.new("UIGradient")
+local UIGradient_2 = Instance.new("UIGradient")
+
+local InfoSubtitle = Instance.new("TextLabel")
+local ExecutorLabel = Instance.new("TextLabel")
+local VersionLabel = Instance.new("TextLabel")
+local TimeLabel = Instance.new("TextLabel")
+local PlayersLabel = Instance.new("TextLabel")
+
+
+
+
+local Home = Instance.new("Frame")
+
+Home.Parent = gui
+Home.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+Home.BackgroundTransparency = 1.000
+Home.BorderColor3 = Color3.fromRGB(0, 0, 0)
+Home.BorderSizePixel = 0
+Home.Name = "Home"
+Home.Size = UDim2.new(1, 0, 1, 0)
+
+
+WelcomeFrame.Name = "WelcomeFrame"
+WelcomeFrame.Parent = Home
+WelcomeFrame.BackgroundTransparency = 1.000
+WelcomeFrame.Position = UDim2.new(0, 10, 0, 35)
+WelcomeFrame.Size = UDim2.new(0, 200, 0, 50)
+
+EveningText.Name = "EveningText"
+EveningText.Parent = WelcomeFrame
+EveningText.BackgroundTransparency = 1.000
+EveningText.Position = UDim2.new(0.170000002, 0, 0, 0)
+EveningText.Size = UDim2.new(0, 225, 0, 43)
+EveningText.Font = Enum.Font.GothamBold
+EveningText.Text = "Evening, " .. Players.LocalPlayer.Name
+EveningText.TextColor3 = Color3.fromRGB(255, 255, 255)
+EveningText.TextSize = 28.000
+EveningText.TextXAlignment = Enum.TextXAlignment.Left
+
+
+EveningText_2.Name = "EveningText"
+EveningText_2.Parent = EveningText
+EveningText_2.BackgroundTransparency = 1.000
+EveningText_2.Position = UDim2.new(-0.00333333341, 0, 0.837209284, 0)
+EveningText_2.Size = UDim2.new(0, 225, 0, 32)
+EveningText_2.Font = Enum.Font.GothamBold
+EveningText_2.Text = "it's getting late.."
+EveningText_2.TextColor3 = Color3.fromRGB(197, 197, 197)
+EveningText_2.TextSize = 18.000
+EveningText_2.TextXAlignment = Enum.TextXAlignment.Left
+EveningText_2.TextYAlignment = Enum.TextYAlignment.Top
+
+DiscordFrame.Name = "DiscordFrame"
+DiscordFrame.Parent = Home
+DiscordFrame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+DiscordFrame.BorderSizePixel = 0
+DiscordFrame.Position = UDim2.new(0, 69, 0, 154)
+DiscordFrame.Size = UDim2.new(0, 346, 0, 154)
+
+UICorner.Parent = DiscordFrame
+
+DiscordTitle.Name = "DiscordTitle"
+DiscordTitle.Parent = DiscordFrame
+DiscordTitle.BackgroundTransparency = 1.000
+DiscordTitle.Position = UDim2.new(0, 20, 0, 17)
+DiscordTitle.Size = UDim2.new(1, -20, 0, 20)
+DiscordTitle.Font = Enum.Font.GothamBold
+DiscordTitle.Text = "GitHub"
+DiscordTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+DiscordTitle.TextSize = 19.000
+DiscordTitle.TextXAlignment = Enum.TextXAlignment.Left
+
+DiscordDescription.Name = "DiscordDescription"
+DiscordDescription.Parent = DiscordFrame
+DiscordDescription.BackgroundTransparency = 1.000
+DiscordDescription.Position = UDim2.new(0, 20, 0, 40)
+DiscordDescription.Size = UDim2.new(0.787878811, -20, 0.188515976, 40)
+DiscordDescription.Font = Enum.Font.Gotham
+DiscordDescription.Text = "We'd love to have you explore our projects! Tap the button to copy the link to our GitHub repository."
+DiscordDescription.TextColor3 = Color3.fromRGB(255, 255, 255)
+DiscordDescription.TextSize = 16.000
+DiscordDescription.TextWrapped = true
+DiscordDescription.TextXAlignment = Enum.TextXAlignment.Left
+DiscordDescription.TextYAlignment = Enum.TextYAlignment.Top
+
+CopyButton.Name = "CopyButton"
+CopyButton.Parent = DiscordFrame
+CopyButton.BackgroundColor3 = Color3.fromRGB(52, 54, 56)
+CopyButton.Position = UDim2.new(0, 20, 0, 107)
+CopyButton.Size = UDim2.new(0, 30, 0, 30)
+CopyButton.Image = "rbxassetid://123987560730541"
+CopyButton.ImageRectOffset = Vector2.new(644, 204)
+CopyButton.ImageRectSize = Vector2.new(36, 36)
+
+UICorner_2.Parent = CopyButton
+
+UIGradient.Color = ColorSequence.new{
+	ColorSequenceKeypoint.new(0.00, Color3.fromRGB(32, 34, 37)),
+	ColorSequenceKeypoint.new(1.00, Color3.fromRGB(50, 53, 58)),
+	ColorSequenceKeypoint.new(1.00, Color3.fromRGB(32, 34, 37))
+}
+UIGradient.Parent = DiscordFrame
+
+local function CopyDiscordLink()
+	local link = "YOUR_DISCORD_LINK"
+end
+
+CopyButton.MouseButton1Click:Connect(CopyDiscordLink)
+
+
+local UICornerCopyButton = Instance.new("UICorner")
+
+
+UICornerCopyButton.Parent = CopyButton
+
+InfoFrame.Name = "InfoFrame"
+InfoFrame.Parent = Home
+InfoFrame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+InfoFrame.BorderSizePixel = 0
+InfoFrame.Position = UDim2.new(0, 69, 0, 320)
+InfoFrame.Size = UDim2.new(0, 346, 0, 310) 
+
+InfoTitle.Name = "InfoTitle"
+InfoTitle.Parent = InfoFrame
+InfoTitle.BackgroundTransparency = 1.000
+InfoTitle.Position = UDim2.new(0, 20, 0, 17)
+InfoTitle.Size = UDim2.new(1, -20, 0, 20)
+InfoTitle.Font = Enum.Font.GothamBold
+InfoTitle.Text = "Information"
+InfoTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+InfoTitle.TextSize = 19.000
+InfoTitle.TextXAlignment = Enum.TextXAlignment.Left
+
+InfoSubtitle.Name = "InfoSubtitle"
+InfoSubtitle.Parent = InfoFrame
+InfoSubtitle.BackgroundTransparency = 1.000
+InfoSubtitle.Position = UDim2.new(0, 20, 0, 40)
+InfoSubtitle.Size = UDim2.new(1, -40, 0, 20)
+InfoSubtitle.Font = Enum.Font.Gotham
+InfoSubtitle.Text = "A brief list of useful data"
+InfoSubtitle.TextColor3 = Color3.fromRGB(185, 185, 185)
+InfoSubtitle.TextSize = 14.000
+InfoSubtitle.TextXAlignment = Enum.TextXAlignment.Left
+
+local function CreateInfoLabel(text, yPos)
+	local label = Instance.new("TextLabel")
+	label.BackgroundTransparency = 1.000
+	label.Position = UDim2.new(0, 20, 0, yPos)
+	label.Size = UDim2.new(1, -40, 0, 20)
+	label.Font = Enum.Font.Gotham
+	label.Text = text
+	label.TextColor3 = Color3.fromRGB(255, 255, 255)
+	label.TextSize = 14.000
+	label.TextXAlignment = Enum.TextXAlignment.Left
+	label.Parent = InfoFrame
+	return label
+end
+
+ExecutorLabel = CreateInfoLabel("Executor: Test", 70)
+VersionLabel = CreateInfoLabel("Version: Test", 90)
+TimeLabel = CreateInfoLabel("Time Since Boot: Test", 110)
+PlayersLabel = CreateInfoLabel("Players: Test", 130)
+
+UICorner.Parent = DiscordFrame
+UICorner_2.Parent = InfoFrame
+UIGradient.Color = ColorSequence.new{
+	ColorSequenceKeypoint.new(0.00, Color3.fromRGB(32, 34, 37)),
+	ColorSequenceKeypoint.new(1.00, Color3.fromRGB(50, 53, 58))
+}
+UIGradient.Parent = DiscordFrame
+
+UIGradient_2.Color = ColorSequence.new{
+	ColorSequenceKeypoint.new(0.00, Color3.fromRGB(32, 34, 37)),
+	ColorSequenceKeypoint.new(1.00, Color3.fromRGB(50, 53, 58))
+}
+UIGradient_2.Parent = InfoFrame
+
+
+local FriendsFrame = Instance.new("Frame")
+local UICorner = Instance.new("UICorner")
+local UIGradient = Instance.new("UIGradient")
+local TitleLabel = Instance.new("TextLabel")
+local SubtitleLabel = Instance.new("TextLabel")
+
+local OnlineFrame = Instance.new("Frame")
+local OfflineFrame = Instance.new("Frame")
+local InServerFrame = Instance.new("Frame")
+local AllFrame = Instance.new("Frame")
+
+
+FriendsFrame.Name = "FriendsFrame"
+FriendsFrame.Parent = Home
+FriendsFrame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+FriendsFrame.BorderSizePixel = 0
+FriendsFrame.Position = UDim2.new(0, 430, 0, 154) 
+FriendsFrame.Size = UDim2.new(0, 396, 0, 230)
+
+UICorner.Parent = FriendsFrame
+UIGradient.Color = ColorSequence.new{
+	ColorSequenceKeypoint.new(0.00, Color3.fromRGB(32, 34, 37)),
+	ColorSequenceKeypoint.new(1.00, Color3.fromRGB(50, 53, 58))
+}
+UIGradient.Parent = FriendsFrame
+
+TitleLabel.Name = "TitleLabel"
+TitleLabel.Parent = FriendsFrame
+TitleLabel.BackgroundTransparency = 1.000
+TitleLabel.Position = UDim2.new(0, 20, 0, 17)
+TitleLabel.Size = UDim2.new(1, -20, 0, 20)
+TitleLabel.Font = Enum.Font.GothamBold
+TitleLabel.Text = "Friends"
+TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+TitleLabel.TextSize = 19.000
+TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+SubtitleLabel.Name = "SubtitleLabel"
+SubtitleLabel.Parent = FriendsFrame
+SubtitleLabel.BackgroundTransparency = 1.000
+SubtitleLabel.Position = UDim2.new(0, 20, 0, 40)
+SubtitleLabel.Size = UDim2.new(1, -40, 0, 20)
+SubtitleLabel.Font = Enum.Font.Gotham
+SubtitleLabel.Text = "Information on your friends"
+SubtitleLabel.TextColor3 = Color3.fromRGB(185, 185, 185)
+SubtitleLabel.TextSize = 14.000
+SubtitleLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+local function CreateStatusFrame(name, icon, position)
+	local frame = Instance.new("Frame")
+	frame.Name = name .. "Frame"
+	frame.Parent = FriendsFrame
+	frame.BackgroundColor3 = Color3.fromRGB(47, 49, 54)
+	frame.Position = position
+	frame.Size = UDim2.new(0, 150, 0, 45)
+
+	local corner = Instance.new("UICorner")
+	corner.Parent = frame
+
+	local iconLabel = Instance.new("ImageLabel")
+	iconLabel.Name = "Icon"
+	iconLabel.Parent = frame
+	iconLabel.BackgroundTransparency = 1
+	iconLabel.Position = UDim2.new(0, 10, 0.5, -10)
+	iconLabel.Size = UDim2.new(0, 20, 0, 20)
+	iconLabel.Image = icon
+
+	local textLabel = Instance.new("TextLabel")
+	textLabel.Name = "Label"
+	textLabel.Parent = frame
+	textLabel.BackgroundTransparency = 1
+	textLabel.Position = UDim2.new(0, 40, 0, 5)
+	textLabel.Size = UDim2.new(1, -50, 0, 20)
+	textLabel.Font = Enum.Font.GothamBold
+	textLabel.Text = name
+	textLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+	textLabel.TextSize = 14
+	textLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+	local countLabel = Instance.new("TextLabel")
+	countLabel.Name = "Count"
+	countLabel.Parent = frame
+	countLabel.BackgroundTransparency = 1
+	countLabel.Position = UDim2.new(0, 40, 0, 25)
+	countLabel.Size = UDim2.new(1, -50, 0, 15)
+	countLabel.Font = Enum.Font.Gotham
+	countLabel.Text = "0 users"
+	countLabel.TextColor3 = Color3.fromRGB(185, 185, 185)
+	countLabel.TextSize = 12
+	countLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+	return frame
+end
+
+local onlineFrame = CreateStatusFrame("Online", "rbxassetid://89054941934303", UDim2.new(0, 20, 0, 70))
+local offlineFrame = CreateStatusFrame("Offline", "rbxassetid://107087932260084", UDim2.new(0, 180, 0, 70))
+local inServerFrame = CreateStatusFrame("In Server", "rbxassetid://81592219795402", UDim2.new(0, 20, 0, 125))
+local allFrame = CreateStatusFrame("All", "rbxassetid://119939476442643", UDim2.new(0, 180, 0, 125))
+
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+
+local function UpdateCounts(online, offline, inServer, all)
+	onlineFrame.Count.Text = online .. " users"
+	offlineFrame.Count.Text = offline .. " users"
+	inServerFrame.Count.Text = inServer .. " users"
+	allFrame.Count.Text = all .. " users"
+end
+
+local function GetFriendsInServer()
+	local inServerCount = 0
+	local currentPlayers = Players:GetPlayers()
+
+	for _, player in pairs(currentPlayers) do
+		if player ~= LocalPlayer then
+			local success, isFriend = pcall(function()
+				return LocalPlayer:IsFriendsWith(player.UserId)
+			end)
+
+			if success and isFriend then
+				inServerCount = inServerCount + 1
+			end
+		end
+	end
+
+	return inServerCount
+end
+
+local function FetchFriendCounts()
+	local success, friendsOnline = pcall(function()
+		return LocalPlayer:GetFriendsOnline()
+	end)
+
+	if not success then
+		warn("Failed to fetch online friends:", friendsOnline)
+		return
+	end
+
+	local inServerCount = GetFriendsInServer()
+
+	UpdateCounts(
+		#friendsOnline,   
+		0,                  
+		inServerCount,      
+		#friendsOnline    
+	)
+end
+
+spawn(function()
+	while wait(10) do
+		pcall(FetchFriendCounts)
+	end
+end)
+
+Players.PlayerAdded:Connect(function()
+	pcall(FetchFriendCounts)
+end)
+
+Players.PlayerRemoving:Connect(function()
+	pcall(FetchFriendCounts)
+end)
+
+FetchFriendCounts()
+
+
+
+
+local PlayerInfoFrame = Instance.new("Frame")
+local PlayerImage = Instance.new("ImageLabel")
+local PlayerNameDisplay = Instance.new("TextLabel")
+local PlayerUsername = Instance.new("TextLabel")
+local PlayerInfoCorner = Instance.new("UICorner")
+local PlayerInfoGradient = Instance.new("UIGradient")
+
+PlayerInfoFrame.Name = "PlayerInfoFrame"
+PlayerInfoFrame.Parent = Home
+PlayerInfoFrame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+PlayerInfoFrame.BorderSizePixel = 0
+PlayerInfoFrame.Position = UDim2.new(0, 430, 0, 397) 
+PlayerInfoFrame.Size = UDim2.new(0, 290, 0, 90)   
+
+PlayerInfoCorner.Parent = PlayerInfoFrame
+PlayerInfoGradient.Color = ColorSequence.new{
+	ColorSequenceKeypoint.new(0.00, Color3.fromRGB(32, 34, 37)),
+	ColorSequenceKeypoint.new(1.00, Color3.fromRGB(50, 53, 58))
+}
+PlayerInfoGradient.Parent = PlayerInfoFrame
+
+PlayerImage.Name = "PlayerImage"
+PlayerImage.Parent = PlayerInfoFrame
+PlayerImage.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+PlayerImage.BackgroundTransparency = 1
+PlayerImage.Position = UDim2.new(0, 20, 0, 9) 
+PlayerImage.Size = UDim2.new(0, 70, 0, 70)    
+PlayerImage.Image = "" 
+
+local ImageCorner = Instance.new("UICorner")
+ImageCorner.CornerRadius = UDim.new(0.5, 0)
+ImageCorner.Parent = PlayerImage
+
+PlayerNameDisplay.Name = "DisplayName"
+PlayerNameDisplay.Parent = PlayerInfoFrame
+PlayerNameDisplay.BackgroundTransparency = 1
+PlayerNameDisplay.Position = UDim2.new(0, 100, 0, 30)
+PlayerNameDisplay.Size = UDim2.new(1, -80, 0, 20)
+PlayerNameDisplay.Font = Enum.Font.GothamBold
+PlayerNameDisplay.TextColor3 = Color3.fromRGB(255, 255, 255)
+PlayerNameDisplay.TextSize = 16
+PlayerNameDisplay.TextXAlignment = Enum.TextXAlignment.Left
+
+PlayerUsername.Name = "Username"
+PlayerUsername.Parent = PlayerInfoFrame
+PlayerUsername.BackgroundTransparency = 1
+PlayerUsername.Position = UDim2.new(0, 100, 0, 50) 
+PlayerUsername.Size = UDim2.new(1, -80, 0, 20)
+PlayerUsername.Font = Enum.Font.Gotham
+PlayerUsername.TextColor3 = Color3.fromRGB(185, 185, 185)
+PlayerUsername.TextSize = 14
+PlayerUsername.TextXAlignment = Enum.TextXAlignment.Left
+
+local function UpdatePlayerInfo()
+	local player = game.Players.LocalPlayer
+
+	PlayerImage.Image = Players:GetUserThumbnailAsync(
+		player.UserId,
+		Enum.ThumbnailType.HeadShot,
+		Enum.ThumbnailSize.Size420x420
+	)
+
+	local displayName = player.DisplayName
+	local username = player.Name
+
+	if displayName and displayName ~= "" then
+		PlayerNameDisplay.Text = displayName
+		PlayerUsername.Text = "@" .. username
+	else
+		PlayerNameDisplay.Text = username
+		PlayerUsername.Text = "@" .. username
+	end
+end
+
+spawn(function()
+	pcall(UpdatePlayerInfo)
+end)
+
+game.Players.LocalPlayer:GetPropertyChangedSignal("DisplayName"):Connect(function()
+	pcall(UpdatePlayerInfo)
+end)
+
+
+local KeybindFrame = Instance.new("Frame")
+local TitleLabel = Instance.new("TextLabel")
+local DescriptionLabel = Instance.new("TextLabel")
+local KeyLabel = Instance.new("TextLabel")
+local KeybindCorner = Instance.new("UICorner")
+local KeybindGradient = Instance.new("UIGradient")
+local KeyFrame = Instance.new("Frame")
+local UICorner = Instance.new("UICorner")
+
+KeybindFrame.Name = "KeybindFrame"
+KeybindFrame.Parent = Home
+KeybindFrame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+KeybindFrame.BorderSizePixel = 0
+KeybindFrame.Position = UDim2.new(0, 430, 0, 497)
+KeybindFrame.Size = UDim2.new(0, 260, 0, 100) 
+
+KeybindCorner.Parent = KeybindFrame
+KeybindGradient.Color = ColorSequence.new{
+	ColorSequenceKeypoint.new(0.00, Color3.fromRGB(32, 34, 37)),
+	ColorSequenceKeypoint.new(1.00, Color3.fromRGB(50, 53, 58))
+}
+KeybindGradient.Parent = KeybindFrame
+
+TitleLabel.Name = "TitleLabel"
+TitleLabel.Parent = KeybindFrame
+TitleLabel.BackgroundTransparency = 1
+TitleLabel.Position = UDim2.new(0, 15, 0, 15) 
+TitleLabel.Size = UDim2.new(1, -30, 0, 20)
+TitleLabel.Font = Enum.Font.GothamBold
+TitleLabel.Text = "Keybind"
+TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+TitleLabel.TextSize = 18
+TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+DescriptionLabel.Name = "DescriptionLabel"
+DescriptionLabel.Parent = KeybindFrame
+DescriptionLabel.BackgroundTransparency = 1
+DescriptionLabel.Position = UDim2.new(0, 15, 0, 35) 
+DescriptionLabel.Size = UDim2.new(1, -30, 0, 20)
+DescriptionLabel.Font = Enum.Font.Gotham
+DescriptionLabel.Text = "Change the UI keybind"
+DescriptionLabel.TextColor3 = Color3.fromRGB(145, 145, 145)
+DescriptionLabel.TextSize = 15
+DescriptionLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+KeyFrame.Name = "KeyFrame"
+KeyFrame.Parent = KeybindFrame
+KeyFrame.BackgroundColor3 = Color3.fromRGB(54, 54, 53)
+KeyFrame.BorderColor3 = Color3.fromRGB(0, 0, 0)
+KeyFrame.BorderSizePixel = 0
+KeyFrame.Position = UDim2.new(0, 15, 0, 60)
+KeyFrame.Size = UDim2.new(1, -200, 0, 25)
+
+KeyLabel.Name = "KeyLabel"
+KeyLabel.Parent = KeyFrame
+KeyLabel.BackgroundColor3 = Color3.fromRGB(54, 54, 53)
+KeyLabel.BackgroundTransparency = 1.000
+KeyLabel.Position = UDim2.new(0, 150, 0, 0)
+KeyLabel.Size = UDim2.new(1, -200, 0, 25)
+KeyLabel.Font = Enum.Font.GothamBold
+task.delay(1, function()
+	KeyLabel.Text = CONFIG.OPEN_KEY.Name
+end)
+KeyLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+KeyLabel.TextSize = 17.000
+KeyLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+UICorner.CornerRadius = UDim.new(0, 6)
+UICorner.Parent = KeyFrame
+
+local Home = Home
+local Camera = workspace.CurrentCamera
+local Lighting = game:GetService("Lighting")
+
+local blur = Instance.new("BlurEffect")
+blur.Parent = Lighting
+blur.Size = 0 
+
+local animatedElements = {}
+local isAnimating = false
+local isGuiOpen = false
+local originalFOV = Camera.FieldOfView
+
+local function findElementsForAnimation(parent)
+	for _, element in ipairs(parent:GetDescendants()) do
+		if element:IsA("Frame") or element:IsA("TextLabel") or element:IsA("ImageLabel") or element:IsA("TextButton") or element:IsA("ImageButton") then
+			if element.BackgroundTransparency == 0 then
+				table.insert(animatedElements, {
+					element = element,
+					originalTransparency = element.BackgroundTransparency
+				})
+			end
+			if (element:IsA("TextLabel") or element:IsA("TextButton")) and element.TextTransparency == 0 then
+				table.insert(animatedElements, {
+					element = element,
+					isText = true,
+					originalTransparency = element.TextTransparency
+				})
+			end
+			if (element:IsA("ImageLabel") or element:IsA("ImageButton")) and element.ImageTransparency == 0 then
+				table.insert(animatedElements, {
+					element = element,
+					isImage = true,
+					originalTransparency = element.ImageTransparency
+				})
+			end
+		end
+	end
+end
+
+local function setupAnimation()
+	findElementsForAnimation(Home)
+	for _, item in ipairs(animatedElements) do
+		if item.isText then
+			item.element.TextTransparency = 1
+		elseif item.isImage then
+			item.element.ImageTransparency = 1
+		else
+			item.element.BackgroundTransparency = 1
+		end
+	end
+end
+
+local function hasVisibleElements()
+	for _, item in ipairs(animatedElements) do
+		if item.isText and item.element.TextTransparency == 0 then
+			return true
+		elseif item.isImage and item.element.ImageTransparency == 0 then
+			return true
+		elseif not item.isText and not item.isImage and item.element.BackgroundTransparency == 0 then
+			return true
+		end
+	end
+	return false
+end
+
+local function animateBlur(targetSize)
+	local tweenInfo = TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+	local tween = TweenService:Create(blur, tweenInfo, {Size = targetSize})
+	tween:Play()
+end
+
+local function animateFOV(targetFOV)
+	local tweenInfo = TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+	local tween = TweenService:Create(Camera, tweenInfo, {FieldOfView = targetFOV})
+	tween:Play()
+end
+
+
+local function animateOpen()
+	isAnimating = true
+	animateBlur(20) 
+	animateFOV(30)
+	for i, item in ipairs(animatedElements) do
+		delay(i  * 0.05, function()
+			if not isGuiOpen then return end
+			local tweenInfo = TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+			local goal = {}
+			if item.isText then
+				goal.TextTransparency = item.originalTransparency
+			elseif item.isImage then
+				goal.ImageTransparency = item.originalTransparency
+			else
+				goal.BackgroundTransparency = item.originalTransparency
+			end
+			local tween = TweenService:Create(item.element, tweenInfo, goal)
+			tween:Play()
+		end)
+	end
+	isAnimating = false
+end
+local function animateClose()
+	isAnimating = true
+	animateBlur(0)
+	animateFOV(originalFOV)
+
+	local tweenInfo = TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+
+	for _, item in ipairs(animatedElements) do
+		if isGuiOpen then return end
+
+		local goal = {}
+		if item.isText then
+			goal.TextTransparency = 1
+		elseif item.isImage then
+			goal.ImageTransparency = 1
+		else
+			goal.BackgroundTransparency = 1
+		end
+
+		local tween = TweenService:Create(item.element, tweenInfo, goal)
+		tween:Play()
+	end
+
+	isAnimating = false
+end
+
+local function toggleGuiHome()
+
+	if hasVisibleElements() then
+		isGuiOpen = false
+		animateClose()
+	else
+		isGuiOpen = true
+		animateOpen()
+	end
+end
+
+
+setupAnimation()
+
+local function UpdateInfo(executor, version, time, players, dataFile)
+	ExecutorLabel.Text = "Executor: " .. executor
+	VersionLabel.Text = "Version: " .. version
+	TimeLabel.Text = "Time Since Boot: " .. time
+	PlayersLabel.Text = "Players: " .. players
+end
+
+local Players = game:GetService("Players")
+local startTime = os.time()
+
+local function formatTime(seconds)
+	if seconds < 60 then
+		return seconds .. "s"
+	elseif seconds < 3600 then
+		return math.floor(seconds/60) .. "m"
+	else
+		return math.floor(seconds/3600) .. "h"
+	end
+end
+
+local function getPlayerCount()
+	local maxPlayers = game.Players.MaxPlayers
+	local currentPlayers = #game.Players:GetPlayers()
+	return currentPlayers .. "/" .. maxPlayers
+end
+
+local identifyexecutor = (pcall(identifyexecutor) and identifyexecutor()) or "Roblox Default"
+
+local function updateInfo()
+	local timeSinceBoot = formatTime(os.time() - startTime)
+	local playerCount = getPlayerCount()
+	UpdateInfo(identifyexecutor, "v1.1", timeSinceBoot, playerCount, "Loaded")
+end
+
+spawn(function()
+	while wait(1) do
+		updateInfo()
+	end
+end)
+
+Players.PlayerAdded:Connect(updateInfo)
+Players.PlayerRemoving:Connect(updateInfo)
+
+updateInfo()
+
+
+
+
+
+
+-- Taskbar
+local function createTaskbar()
+
+	local taskbar = Instance.new("Frame")
+	taskbar.Name = "Taskbar"
+	taskbar.AnchorPoint = Vector2.new(0.5, 1)
+	taskbar.Position = UDim2.new(0.5, 0, 1, 10)
+	taskbar.Size = UDim2.new(0, 400, 0, CONFIG.Height)
+	taskbar.BackgroundColor3 = CONFIG.BackgroundColor
+	taskbar.BorderSizePixel = 0
+	taskbar.BackgroundTransparency = 1
+	taskbar.Parent = gui
+
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, CONFIG.CornerRadius)
+	corner.Parent = taskbar
+
+	local timeLabel = Instance.new("TextLabel")
+	timeLabel.Name = "TimeLabel"
+	timeLabel.Size = UDim2.new(0, 60, 1, 0)
+	timeLabel.Position = UDim2.new(0, 10, 0, 0)
+	timeLabel.BackgroundTransparency = 1
+	timeLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+	timeLabel.Font = Enum.Font.GothamBold
+	timeLabel.TextSize = CONFIG.TimeTextSize
+	timeLabel.TextTransparency = 1
+	timeLabel.Text = os.date("%H:%M")
+	timeLabel.Parent = taskbar
+
+	local iconContainer = Instance.new("Frame")
+	iconContainer.Name = "IconContainer"
+	iconContainer.Position = UDim2.new(0, 80, 0, 0)
+	iconContainer.Size = UDim2.new(1, -90, 1, 0)
+	iconContainer.BackgroundTransparency = 1
+	iconContainer.Parent = taskbar
+
+	local listLayout = Instance.new("UIListLayout")
+	listLayout.FillDirection = Enum.FillDirection.Horizontal
+	listLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
+	listLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+	listLayout.Padding = UDim.new(0, CONFIG.IconPadding)
+	listLayout.Parent = iconContainer
+
+	return taskbar, iconContainer, timeLabel
+end
+
+local function createTooltip()
+	local tooltip = Instance.new("TextLabel")
+	tooltip.BackgroundTransparency = 1
+	tooltip.TextColor3 = Color3.fromRGB(255, 255, 255)
+	tooltip.TextSize = CONFIG.TooltipTextSize
+	tooltip.Font = Enum.Font.Gotham
+	tooltip.Text = ""
+	tooltip.Visible = false
+	tooltip.ZIndex = 2
+	tooltip.Parent = Players.LocalPlayer:WaitForChild("PlayerGui")
+	return tooltip
+end
+
+
+local function toggleTaskbar(taskbar, timeLabel, icons, isVisible)
+	local tweenInfo = TweenInfo.new(
+		CONFIG.FadeTime, 
+		Enum.EasingStyle.Quad, 
+		Enum.EasingDirection.Out
+	)
+
+	local startPosition = UDim2.new(0.5, 0, 1, 60)
+	local endPosition = UDim2.new(0.5, 0, 1, -10)
+
+	local originalTaskbarSize = taskbar.Size
+	local originalIconSizes = {}
+	for _, icon in ipairs(icons) do
+		originalIconSizes[icon] = icon.Size
+	end
+
+	local function checkMouseInactivity(taskbar, icons, originalTaskbarSize, originalIconSizes)
+		local isMouseOverGUI = false
+		local isGUIOpen = false
+		local connection1, connection2
+		local inactivityTimer = nil
+		local INACTIVITY_DURATION = 10 
+
+		local function checkGUIState()
+			wait(1.5)
+			isGUIOpen = taskbar.BackgroundTransparency == 0
+			return isGUIOpen
+		end
+
+		local function updateSizes(reduced)
+			local targetSize = reduced and 
+				UDim2.new(originalTaskbarSize.X.Scale, originalTaskbarSize.X.Offset * 0.9, 
+					originalTaskbarSize.Y.Scale, originalTaskbarSize.Y.Offset * 0.9) or 
+				originalTaskbarSize
+
+			local targetTransparency = reduced and 0.5 or 0
+
+			local sizeTween = TS:Create(taskbar, TweenInfo.new(0.3), {
+				Size = targetSize,
+				BackgroundTransparency = targetTransparency
+			})
+			sizeTween:Play()
+
+			for _, icon in ipairs(icons) do
+				local originalSize = originalIconSizes[icon]
+				local targetIconSize = reduced and 
+					UDim2.new(originalSize.X.Scale, originalSize.X.Offset * 0.9,
+						originalSize.Y.Scale, originalSize.Y.Offset * 0.9) or
+					originalSize
+
+				local iconTween = TS:Create(icon, TweenInfo.new(0.3), {
+					Size = targetIconSize,
+					BackgroundTransparency = targetTransparency
+				})
+				iconTween:Play()
+			end
+		end
+
+		local function resetInactivityTimer()
+			if inactivityTimer then
+				task.cancel(inactivityTimer)
+				inactivityTimer = nil
+			end
+
+			inactivityTimer = task.delay(INACTIVITY_DURATION, function()
+				if not isMouseOverGUI and checkGUIState() then
+					updateSizes(true) 
+				end
+			end)
+		end
+
+
+
+		local function cleanupConnections()
+			if connection1 then 
+				connection1:Disconnect() 
+				connection1 = nil
+			end
+			if connection2 then 
+				connection2:Disconnect() 
+				connection2 = nil
+			end
+			if inactivityTimer then 
+				task.cancel(inactivityTimer)
+				inactivityTimer = nil
+			end
+		end
+
+		spawn(function()
+			while not checkGUIState() do
+				wait(0.1) 
+			end
+
+			connection1 = taskbar.MouseEnter:Connect(function()
+				isMouseOverGUI = true
+				updateSizes(false) 
+
+				if inactivityTimer then
+					task.cancel(inactivityTimer)
+					inactivityTimer = nil
+				end
+			end)
+
+			connection2 = taskbar.MouseLeave:Connect(function()
+				isMouseOverGUI = false
+
+				resetInactivityTimer()
+			end)
+			spawn(function()
+				if checkGUIState() then
+					local mouse = game:GetService("Players").LocalPlayer:GetMouse()
+					local mousePosition = Vector2.new(mouse.X, mouse.Y)
+					local taskbarPosition = taskbar.AbsolutePosition
+					local taskbarSize = taskbar.AbsoluteSize
+
+					isMouseOverGUI = mousePosition.X >= taskbarPosition.X and
+						mousePosition.X <= taskbarPosition.X + taskbarSize.X and
+						mousePosition.Y >= taskbarPosition.Y and
+						mousePosition.Y <= taskbarPosition.Y + taskbarSize.Y
+
+					updateSizes(not isMouseOverGUI)
+
+					if not isMouseOverGUI then
+						resetInactivityTimer()
+					end
+				end
+
+				connection1 = taskbar.MouseEnter:Connect(function()
+					isMouseOverGUI = true
+					updateSizes(false) 
+
+					if inactivityTimer then
+						task.cancel(inactivityTimer)
+						inactivityTimer = nil
+					end
+				end)
+
+				connection2 = taskbar.MouseLeave:Connect(function()
+					isMouseOverGUI = false
+
+					resetInactivityTimer()
+				end)
+			end)
+		end)
+
+		return cleanupConnections
+	end
+
+
+	if isVisible then
+		taskbar.Position = startPosition
+		taskbar.BackgroundTransparency = 1
+		timeLabel.TextTransparency = 1
+
+		local positionTween = TS:Create(taskbar, tweenInfo, {
+			Position = endPosition,
+			BackgroundTransparency = 0
+		})
+
+		local timeLabelTween = TS:Create(timeLabel, tweenInfo, {
+			TextTransparency = 0
+		})
+
+		positionTween:Play()
+		timeLabelTween:Play()
+
+		local cleanupFunction = checkMouseInactivity(taskbar, icons, originalTaskbarSize, originalIconSizes)
+
+
+
+		spawn(function()
+			positionTween.Completed:Wait()
+
+			for i, icon in ipairs(icons) do
+				local delay = (i - 1) * 0.1
+
+				spawn(function()
+					wait(delay)
+
+					icon.BackgroundTransparency = 1
+					icon.Size = UDim2.new(0, CONFIG.IconSize * 0.7, 0, CONFIG.IconSize * 0.7)
+
+					local iconTween = TS:Create(icon, TweenInfo.new(
+						0.3, 
+						Enum.EasingStyle.Back, 
+						Enum.EasingDirection.Out
+						), {
+							BackgroundTransparency = 0,
+							Size = UDim2.new(0, CONFIG.IconSize, 0, CONFIG.IconSize)
+						})
+
+					iconTween:Play()
+				end)
+			end
+		end)
+	else
+
+		local positionTween = TS:Create(taskbar, tweenInfo, {
+			Position = startPosition,
+			BackgroundTransparency = 1
+		})
+
+		local timeLabelTween = TS:Create(timeLabel, tweenInfo, {
+			TextTransparency = 1
+		})
+
+		for i = #icons, 1, -1 do
+			local icon = icons[i]
+			local delay = (#icons - i) * 0.1
+
+			spawn(function()
+				wait(delay)
+
+				local iconTween = TS:Create(icon, TweenInfo.new(
+					0.3, 
+					Enum.EasingStyle.Back, 
+					Enum.EasingDirection.In
+					), {
+						BackgroundTransparency = 1,
+						Size = UDim2.new(0, CONFIG.IconSize * 0.7, 0, CONFIG.IconSize * 0.7)
+					})
+
+				iconTween:Play()
+			end)
+		end
+
+		positionTween:Play()
+		timeLabelTween:Play()
+	end
+
+	spawn(function()
+		wait(CONFIG.FadeTime / 2)
+		if isVisible then
+			FOVController:ChangeFOV(CONFIG.DefaultFOV * 1.2)
+		else
+			FOVController:ResetFOV()
+		end
+	end)
+end
+
+
+local taskbar, iconContainer, timeLabel = createTaskbar()
+local tooltip = createTooltip()
+
+
+local icons = {}
+local buttonDataList = {}
+local dropShadowHolder = {}
+local dropShadow = {}
+
+
+
+local function closeGUI()
+	if taskbar and timeLabel and icons then
+		toggleTaskbar(taskbar, timeLabel, icons, false)
+	end
+end
+
+
+local function createButton(container, config)
+
+	local frame = Instance.new("Frame")
+	frame.Size = UDim2.new(0, CONFIG.IconSize, 0, CONFIG.IconSize)
+	frame.BackgroundColor3 = config.backButtonHoverColors or Color3.fromRGB(38, 38, 38)
+	frame.BackgroundTransparency = config.backgroundTransparency or 1
+
+	local button = Instance.new("ImageButton")
+
+	local buttonSizeReduction = 0.60
+	button.Size = UDim2.new(buttonSizeReduction, 0, buttonSizeReduction, 0)
+	button.AnchorPoint = Vector2.new(0.5, 0.5)
+	button.Position = UDim2.new(0.5, 0, 0.5, 0)
+
+	button.BackgroundColor3 = CONFIG.IconColor
+	button.ImageColor3 = config.iconColor or CONFIG.IconTint
+	button.Image = config.image
+
+	button.BackgroundTransparency = 1
+	button.ImageTransparency = frame.BackgroundTransparency
+
+	frame:GetPropertyChangedSignal("BackgroundTransparency"):Connect(function()
+		button.BackgroundTransparency = 1
+		button.ImageTransparency = frame.BackgroundTransparency
+	end)
+
+	button.Parent = frame
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, CONFIG.CornerRadius)
+	corner.Parent = frame
+
+
+	local function updateTooltipSize(tooltipText, button)
+		local textLength = string.len(tooltipText.Text)
+		local newWidth = math.max(100, textLength * 10) 
+
+		tooltipText.Size = UDim2.new(0, newWidth, 0, 30)
+
+		local buttonSize = button.AbsoluteSize
+		local tooltipSize = tooltipText.AbsoluteSize
+
+		local xOffset = (buttonSize.X - tooltipSize.X) / 2
+		local yOffset = -tooltipSize.Y - 40  
+
+		tooltipText.Position = UDim2.new(
+			0, xOffset, 
+			1, yOffset
+		)
+	end
+
+	local function createTooltipAnimation(tooltipText, button)
+		updateTooltipSize(tooltipText, button)
+
+		local initialPosition = tooltipText.Position
+
+		local showTween = TS:Create(tooltipText, 
+			TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+			{
+				Position = initialPosition + UDim2.new(0, 0, 0, -10),
+				Transparency = 0
+			}
+		)
+
+		local hideTween = TS:Create(tooltipText, 
+			TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+			{
+				Position = initialPosition,
+				Transparency = 1
+			}
+		)
+
+		tooltipText.Position = initialPosition
+		tooltipText.Transparency = 1
+
+		button.MouseEnter:Connect(function()
+			updateTooltipSize(tooltipText, button)  
+			tooltipText.Visible = true
+			showTween:Play()
+		end)
+
+		button.MouseLeave:Connect(function()
+			hideTween:Play()
+			hideTween.Completed:Wait()
+			tooltipText.Visible = false
+		end)
+	end
+
+	local tooltipText = Instance.new("TextLabel")
+	tooltipText.Name = "TooltipText"
+	tooltipText.Visible = false
+	tooltipText.BackgroundColor3 = Color3.fromRGB(27, 27, 27)
+	tooltipText.BackgroundTransparency = 0.2
+	tooltipText.Font = Enum.Font.GothamMedium
+	tooltipText.TextSize = CONFIG.TooltipTextSize
+	tooltipText.TextColor3 = Color3.fromRGB(255, 255, 255)
+	tooltipText.Text = config.name or "Button"
+	tooltipText.TextScaled = true
+
+	local textSizeConstraint = Instance.new("UITextSizeConstraint")
+	textSizeConstraint.MaxTextSize = CONFIG.TooltipTextSize
+	textSizeConstraint.Parent = tooltipText
+
+	local tooltipCorner = Instance.new("UICorner")
+	tooltipCorner.CornerRadius = UDim.new(0, 8)
+	tooltipCorner.Parent = tooltipText
+
+	createTooltipAnimation(tooltipText, button)
+
+	tooltipText.Parent = button
+
+
+	local buttonData = {
+		button = button,
+		frame = frame,
+		enabled = config.enabled or false,
+		name = config.name or "Button",
+		originalColor = button.ImageColor3,
+
+		defaultColor = config.iconColor or CONFIG.IconTint,
+		hoverColor = config.hoverColor or CONFIG.ButtonHoverColor,
+		pressColor = config.pressColor or CONFIG.ButtonPressColor,
+		toggleColor = config.toggleColor or Color3.fromRGB(0, 0, 0),
+		disabledColor = config.disabledColor or Color3.fromRGB(0, 0, 0),
+
+		closeOnClick = config.closeOnClick or false,
+
+		toggle = function(self)
+			self.enabled = not self.enabled
+			self:updateColor()
+			return self.enabled
+		end,
+
+		updateColor = function(self)
+			local targetColor = self.enabled and self.toggleColor or self.disabledColor
+
+			local tween = TS:Create(self.button, 
+				TweenInfo.new(CONFIG.ButtonTransitionSpeed), 
+				{ImageColor3 = targetColor}
+			)
+			tween:Play()
+		end,
+
+
+		resetColor = function(self)
+			local tween = TS:Create(self.button, 
+				TweenInfo.new(CONFIG.ButtonTransitionSpeed), 
+				{ImageColor3 = self.defaultColor}
+			)
+			tween:Play()
+		end
+	}
+
+
+	button.MouseButton1Down:Connect(function()
+		if buttonData.enabled then
+			local tween1 = TS:Create(frame, 
+				TweenInfo.new(CONFIG.ButtonTransitionSpeed), 
+				{BackgroundColor3 = Color3.fromRGB(255, 255, 255)}
+			)
+			local tween2 = TS:Create(button, 
+				TweenInfo.new(CONFIG.ButtonTransitionSpeed), 
+				{ImageColor3 = Color3.fromRGB(0, 0, 0)}
+			)
+			tween1:Play()
+			tween2:Play()
+		end
+	end)
+
+	button.MouseButton1Up:Connect(function()
+		if buttonData.enabled then
+			local tween1 = TS:Create(frame, 
+				TweenInfo.new(CONFIG.ButtonTransitionSpeed), 
+				{BackgroundColor3 = config.backButtonHoverColors or Color3.fromRGB(38, 38, 38)}
+			)
+			local tween2 = TS:Create(button, 
+				TweenInfo.new(CONFIG.ButtonTransitionSpeed), 
+				{ImageColor3 = buttonData.defaultColor}
+			)
+			tween1:Play()
+			tween2:Play()
+		end
+	end)
+
+	button.MouseButton1Click:Connect(function()
+		if buttonData.enabled then
+			if button.ImageColor3 == Color3.fromRGB(0, 0, 0) then
+				local tween1 = TS:Create(frame, 
+					TweenInfo.new(CONFIG.ButtonTransitionSpeed), 
+					{BackgroundColor3 = config.backButtonHoverColors or Color3.fromRGB(38, 38, 38)}
+				)
+				local tween2 = TS:Create(button, 
+					TweenInfo.new(CONFIG.ButtonTransitionSpeed), 
+					{ImageColor3 = buttonData.defaultColor}
+				)
+				tween1:Play()
+				tween2:Play()
+			else
+				local tween1 = TS:Create(frame, 
+					TweenInfo.new(CONFIG.ButtonTransitionSpeed), 
+					{BackgroundColor3 = Color3.fromRGB(255, 255, 255)}
+				)
+				local tween2 = TS:Create(button, 
+					TweenInfo.new(CONFIG.ButtonTransitionSpeed), 
+					{ImageColor3 = Color3.fromRGB(0, 0, 0)}
+				)
+				tween1:Play()
+				tween2:Play()
+			end
+		end
+	end)
+
+	button.MouseButton1Click:Connect(function()
+		if config.action then
+			config.action(buttonData)
+		end
+
+		buttonData:toggle()
+
+		if buttonData.closeOnClick then
+			closeGUI() 
+		end
+	end)
+
+	frame.Parent = container
+	return frame, buttonData
+end
+
+
+local function updateTime(label)
+	while true do
+		label.Text = os.date("%H:%M")
+
+		local currentTime = os.time()
+		local remainingSeconds = 60 - (currentTime % 60)
+
+		wait(remainingSeconds)
+	end
+end
+
+spawn(function()
+	updateTime(timeLabel)
+end)
+
+local function animateButtonsAppearance(icons)
+	for i, icon in ipairs(icons) do
+		local delay = (i - 1) * 0.1
+
+		icon.BackgroundTransparency = 1
+		icon.ImageTransparency = 1
+		icon.Size = UDim2.new(0, CONFIG.IconSize * 0.5, 0, CONFIG.IconSize * 0.5)
+
+		spawn(function()
+			wait(delay)
+
+			local tweenInfo = TweenInfo.new(
+				0.3, 
+				Enum.EasingStyle.Back, 
+				Enum.EasingDirection.Out
+			)
+
+			local backgroundTween = TS:Create(icon, tweenInfo, {
+				BackgroundTransparency = 0.7,
+				ImageTransparency = 0.3
+			})
+
+			local sizeTween = TS:Create(icon, tweenInfo, {
+				Size = UDim2.new(0, CONFIG.IconSize, 0, CONFIG.IconSize)
+			})
+
+			backgroundTween:Play()
+			sizeTween:Play()
+		end)
+	end
+end
+
+
+local isVisible = false
+UIS.InputBegan:Connect(function(input, processed)
+	if input.KeyCode == CONFIG.OPEN_KEY and not processed then
+		isVisible = not isVisible
+		toggleTaskbar(taskbar, timeLabel, icons, isVisible)
+	end
+end)
+
+
+
+local iconData = {}
+
+
+
+for _, data in ipairs(iconData) do
+	local icon, buttonData = createButton(
+		iconContainer, 
+		data
+	)
+	table.insert(icons, icon)
+	table.insert(buttonDataList, buttonData)
+end
+
+function createIconButton(params)
+	local newIcon = {
+		image = params.image or "rbxassetid://81076981372140",
+		name = params.name or "New Button",
+		enabled = params.enabled ~= nil and params.enabled or true,
+		closeOnClick = params.closeOnClick ~= nil and params.closeOnClick or false,
+		action = params.action or function() end
+	}
+
+	local icon, buttonData = createButton(iconContainer, newIcon)
+	table.insert(icons, icon)
+	table.insert(buttonDataList, buttonData)
+	table.insert(iconData, newIcon)
+
+	return icon, buttonData
+end
