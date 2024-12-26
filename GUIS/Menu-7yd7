@@ -929,19 +929,33 @@ local function toggleGuiStatBoard()
 	end
 end
 
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local Stats = game:GetService("Stats")
+
+local fpsValue = 0
+local lastUpdateTime = tick()
+
+RunService.RenderStepped:Connect(function()
+	fpsValue = fpsValue + 1
+end)
 
 local function updateValues()
-	local cpuUsage = math.random(0, 100)
-	local gpuUsage = math.random(0, 100)
-	local memoryUsage = math.random(0, 100)
-	local pingValue = math.random(20, 100)
-	local fpsValue = math.random(30, 144)
+	local currentTime = tick()
+	local deltaTime = currentTime - lastUpdateTime
+	local actualFPS = math.floor(fpsValue / deltaTime)
+	local cpuUsage = math.random(10, 70)
+	local gpuUsage = math.random(10, 70)
+	local memoryUsage = math.random(20, 80)
 
-	frames[1].textLabel.Text = "CPU: " .. cpuUsage .. "%"
-	frames[2].textLabel.Text = "GPU: " .. gpuUsage .. "%"
-	frames[3].textLabel.Text = "Memory: " .. memoryUsage .. "%"
-	frames[4].textLabel.Text = "Ping: " .. pingValue .. " ms"
-	frames[5].textLabel.Text = "FPS: " .. fpsValue
+	frames[1].textLabel.Text = "CPU: " .. "N/A" .. "%"
+	frames[2].textLabel.Text = "GPU: " .. "N/A" .. "%"
+	frames[3].textLabel.Text = "Memory: " .. "N/A" .. "%"
+	frames[4].textLabel.Text = "Ping: " .. "N/A" .. " ms"
+	frames[5].textLabel.Text = "FPS: " .. actualFPS
+
+	fpsValue = 0
+	lastUpdateTime = currentTime
 end
 
 task.spawn(function()
@@ -979,6 +993,9 @@ local ExecutorLabel = Instance.new("TextLabel")
 local VersionLabel = Instance.new("TextLabel")
 local TimeLabel = Instance.new("TextLabel")
 local PlayersLabel = Instance.new("TextLabel")
+local DeviceLabel = Instance.new("TextLabel")
+local GameNameLabel = Instance.new("TextLabel")
+local JobIdLabel = Instance.new("TextLabel")
 
 
 
@@ -1134,6 +1151,10 @@ ExecutorLabel = CreateInfoLabel("Executor: Test", 70)
 VersionLabel = CreateInfoLabel("Version: Test", 90)
 TimeLabel = CreateInfoLabel("Time Since Boot: Test", 110)
 PlayersLabel = CreateInfoLabel("Players: Test", 130)
+DeviceLabel = CreateInfoLabel("Device: Test", 150)
+GameNameLabel = CreateInfoLabel("Game Name: Test", 170)
+JobIdLabel = CreateInfoLabel("Game Name: Test", 190)
+
 
 UICorner.Parent = DiscordFrame
 UICorner_2.Parent = InfoFrame
@@ -1611,11 +1632,14 @@ end
 
 setupAnimation()
 
-local function UpdateInfo(executor, version, time, players, dataFile)
-	ExecutorLabel.Text = "Executor: " .. executor
-	VersionLabel.Text = "Version: " .. version
+local function UpdateInfo(executor, version, time, players, Device, GameName, JobId)
+	ExecutorLabel.Text = "Executor: " .. executor 
+	VersionLabel.Text = "Version: " .. version 
 	TimeLabel.Text = "Time Since Boot: " .. time
-	PlayersLabel.Text = "Players: " .. players
+	PlayersLabel.Text = "Players: " .. players 
+	DeviceLabel.Text = "Device: " .. Device 
+	GameNameLabel.Text = "Game Name: " .. GameName 
+	JobIdLabel.Text = "JobId: " .. JobId 
 end
 
 local Players = game:GetService("Players")
@@ -1639,10 +1663,32 @@ end
 
 local identifyexecutor = (pcall(identifyexecutor) and identifyexecutor()) or "Roblox Default"
 
+local GuiService = game:GetService("GuiService")
+
+
+local function getDeviceType()
+	if UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled then
+		if GuiService:IsTenFootInterface() then
+			return "Tablet"
+		else
+			return "Mobile"
+		end
+	elseif UserInputService.KeyboardEnabled then
+		return "Pc"
+	else
+		return "Unknown Device"
+	end
+end
+
+local deviceType = getDeviceType()
+
 local function updateInfo()
 	local timeSinceBoot = formatTime(os.time() - startTime)
 	local playerCount = getPlayerCount()
-	UpdateInfo(identifyexecutor, "v1.1", timeSinceBoot, playerCount, "Loaded")
+	
+
+	
+	UpdateInfo(identifyexecutor, "v1.2", timeSinceBoot, playerCount, deviceType, game.Name, game.JobId)
 end
 
 spawn(function()
@@ -2273,7 +2319,11 @@ local Menu = Instance.new("ImageButton")
 local Image = Instance.new("ImageLabel") 
 local GuiService = game:GetService("GuiService")
 
-Frame.Parent = gui 
+if not UserInputService.TouchEnabled and UserInputService.KeyboardEnabled then
+	
+else
+Frame.Parent = gui
+Frame.Name = "OpenMenu"
 Frame.BackgroundColor3 = Color3.fromRGB(0, 0, 0) 
 Frame.BackgroundTransparency = 0.3
 Frame.BorderColor3 = Color3.fromRGB(0, 0, 0) 
@@ -2297,7 +2347,7 @@ Menu.Image = "rbxassetid://109900712138994"
 
 Image.Name = "Image" 
 Image.Parent = Frame 
-Image.Active = true 
+Image.Active = false 
 Image.BackgroundColor3 = Color3.fromRGB(255, 255, 255) 
 Image.BackgroundTransparency = 1.000 
 Image.BorderColor3 = Color3.fromRGB(0, 0, 0) 
@@ -2306,6 +2356,7 @@ Image.Position = UDim2.new(0.120369896, 0, 0.162123859, 0)
 Image.Selectable = true 
 Image.Size = UDim2.new(0, 35, 0, 32) 
 Image.Image = "rbxassetid://130498767869873"
+
 
 Menu.MouseButton1Click:Connect(function()
 	isVisible = not isVisible
@@ -2348,8 +2399,7 @@ UserInputService.InputChanged:Connect(function(input)
 		update(input)
 	end
 end)
-
-
+end
 
 local iconData = {}
 local allowedButtonData = {}
