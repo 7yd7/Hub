@@ -42,6 +42,8 @@ else
     }
 end
 
+getgenv().Tabs = Tabs
+
 local Options = Fluent.Options
 
 do
