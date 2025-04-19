@@ -1,6 +1,8 @@
 getgenv().GameName = "PETS GO"
 
 getgenv().Script = function()
+
+
 Tabs.Gameworks:AddSection("Auto")
 
 local Slider = Tabs.Gameworks:AddSlider("Slider", {
