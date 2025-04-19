@@ -29,7 +29,7 @@ if getgenv().GameName then
         Main = Window:AddTab({ Title = "Main", Icon = "info" }),
         Gameworks = Window:AddTab({ Title = getgenv().itemName, Icon = "gamepad-2" }),
         Script = Window:AddTab({ Title = "Script", Icon = "scroll" }),
-        Game = Window:AddTab({ Title = "Game", Icon = "usb" }),
+        game = Window:AddTab({ Title = "Game", Icon = "usb" }),
         Settings = Window:AddTab({ Title = "Settings", Icon = "settings" })
     }
 else
@@ -37,7 +37,7 @@ else
         Main = Window:AddTab({ Title = "Main", Icon = "info" }),
         Gameworks = Window:AddTab({ Title = "Unknown", Icon = "gamepad-2" }),
         Script = Window:AddTab({ Title = "Script", Icon = "scroll" }),
-        Game = Window:AddTab({ Title = "Game", Icon = "usb" }),
+        game = Window:AddTab({ Title = "Game", Icon = "usb" }),
         Settings = Window:AddTab({ Title = "Settings", Icon = "settings" })
     }
 end
