@@ -25,11 +25,16 @@ local Window = Fluent:CreateWindow({
 
 local Tabs = {
     Main = Window:AddTab({ Title = "Main", Icon = "info" }),
-    Gameworks = Window:AddTab({ Title = "unknown", Icon = "gamepad-2" }),
     Script = Window:AddTab({ Title = "Script", Icon = "scroll" }),
-     game = Window:AddTab({ Title = "Game", Icon = "usb" }),
+    Game = Window:AddTab({ Title = "Game", Icon = "usb" }),
     Settings = Window:AddTab({ Title = "Settings", Icon = "settings" })
 }
+
+if getgenv().GameName then
+    Tabs.Gameworks = Window:AddTab({ Title = getgenv().itemName, Icon = "gamepad-2" })
+else
+    Tabs.Gameworks = Window:AddTab({ Title = "Unknown", Icon = "gamepad-2" })
+end
 
 local Options = Fluent.Options
 
