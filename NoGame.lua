@@ -89,10 +89,14 @@ Tabs.Main:AddParagraph({
 
 -- لا يوجد ماب
 
-Tabs.Gameworks:AddParagraph({
+if getgenv().myGlobalFunction then
+    getgenv().myGlobalFunction()
+else
+   Tabs.Gameworks:AddParagraph({
     Title = "WARNING!",
     Content = "It seems that the game you entered is either unknown or has not been added to the game script."
 })
+end
 
 -- سكربت جميع مابات
 
