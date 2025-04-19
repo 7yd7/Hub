@@ -2,8 +2,7 @@ getgenv().Tabs = nil
 getgenv().Options = nil
 getgenv().Window = nil
 getgenv().Toggle = nil
-getgenv().GameName = nil
-getgenv().Script = nil
+getgenv().Value = nil
 
 getgenv().GameName = "PETS GO"
 
