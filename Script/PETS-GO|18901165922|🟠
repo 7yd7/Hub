@@ -1,6 +1,7 @@
 getgenv().Tabs = nil
 getgenv().Options = nil
 getgenv().Window = nil
+getgenv().Toggle = nil
 
 getgenv().GameName = "PETS GO"
 
