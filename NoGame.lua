@@ -89,8 +89,8 @@ Tabs.Main:AddParagraph({
 
 -- لا يوجد ماب
 
-if getgenv().myGlobalFunction then
-    getgenv().myGlobalFunction()
+if getgenv().Script then
+    getgenv().Script()
 else
    Tabs.Gameworks:AddParagraph({
     Title = "WARNING!",
