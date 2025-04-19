@@ -27,7 +27,7 @@ local Tabs
 if getgenv().GameName then
     Tabs = {
         Main = Window:AddTab({ Title = "Main", Icon = "info" }),
-        Gameworks = Window:AddTab({ Title = getgenv().itemName, Icon = "gamepad-2" }),
+        Gameworks = Window:AddTab({ Title = getgenv().GameName, Icon = "gamepad-2" }),
         Script = Window:AddTab({ Title = "Script", Icon = "scroll" }),
         game = Window:AddTab({ Title = "Game", Icon = "usb" }),
         Settings = Window:AddTab({ Title = "Settings", Icon = "settings" })
