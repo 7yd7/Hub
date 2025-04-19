@@ -42,9 +42,11 @@ else
     }
 end
 
-getgenv().Tabs = Tabs
-
 local Options = Fluent.Options
+
+getgenv().Tabs = Tabs
+getgenv().Options = Options
+getgenv().Window = Window
 
 do
 
