@@ -47,6 +47,7 @@ local Options = Fluent.Options
 getgenv().Tabs = Tabs
 getgenv().Options = Options
 getgenv().Window = Window
+getgenv().Value = Value
 
 do
 
