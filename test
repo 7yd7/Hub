@@ -1,0 +1,3 @@
+if getgenv().Script then
+getgenv().Script()
+end
