@@ -1,3 +1,7 @@
+getgenv().Tabs = nil
+getgenv().Options = nil
+getgenv().Window = nil
+
 getgenv().GameName = "PETS GO"
 
 getgenv().Script = function()
