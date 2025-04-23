@@ -1,0 +1,499 @@
+getgenv().Tabs = nil
+getgenv().Options = nil
+getgenv().Window = nil
+getgenv().Toggle = nil
+getgenv().Value = nil
+
+getgenv().GameName = "Regretevator"
+
+getgenv().Script = function()
+
+function checkConcreteExists()
+    if workspace.Elevator and workspace.Elevator.Ceiling and workspace.Elevator.Ceiling:FindFirstChild("Concrete") then
+        return true
+    else
+        Fluent:Notify({
+            Title = "7yd7 | Hub",
+            Content = "Concrete ceiling not found in workspace.Elevator.Ceiling!",
+            Duration = 8
+        })
+        return false
+    end
+end
+
+function createAFKPart()
+    if not checkConcreteExists() then
+        return nil
+    end
+
+    if workspace:FindFirstChild("7yd7") then
+        return workspace:FindFirstChild("7yd7")
+    end
+    
+    local concrete = workspace.Elevator.Ceiling:FindFirstChild("Concrete")
+    
+    local afkPart = Instance.new("Part")
+    afkPart.Name = "7yd7"
+    afkPart.Size = Vector3.new(21.584325790405273, 7.663055896759033, 17.89038848876953)
+    afkPart.Anchored = true
+    afkPart.CanCollide = true
+    
+    local concretePosition = concrete.Position
+    afkPart.Position = Vector3.new(concretePosition.X, concretePosition.Y + 5000, concretePosition.Z)
+    
+    afkPart.Parent = workspace
+    
+    return afkPart
+end
+
+function isPlayerAbovePart(player, part)
+    if not player.Character then return false end
+    
+    local humanoidRootPart = player.Character:FindFirstChild("HumanoidRootPart")
+    if not humanoidRootPart then return false end
+    
+    local playerPos = humanoidRootPart.Position
+    
+    local partMin = Vector2.new(part.Position.X - (part.Size.X/2), part.Position.Z - (part.Size.Z/2))
+    local partMax = Vector2.new(part.Position.X + (part.Size.X/2), part.Position.Z + (part.Size.Z/2))
+    
+    if playerPos.X >= partMin.X and playerPos.X <= partMax.X and
+       playerPos.Z >= partMin.Y and playerPos.Z <= partMax.Y then
+        
+        local partTopY = part.Position.Y + (part.Size.Y/2)
+        local distanceAbove = playerPos.Y - partTopY
+        
+        if distanceAbove >= -1 and distanceAbove <= 50 then
+            return true
+        end
+    end
+    
+    return false
+end
+
+function returnToElevator()
+    if not checkConcreteExists() then
+        return
+    end
+
+    local player = game.Players.LocalPlayer
+    local character = player.Character or player.CharacterAdded:Wait()
+    local humanoidRootPart = character:WaitForChild("HumanoidRootPart")
+    
+    local concrete = workspace.Elevator.Ceiling:FindFirstChild("Concrete")
+    humanoidRootPart.CFrame = concrete.CFrame + Vector3.new(0, -10, 0)
+end
+
+function teleportToAFKPart()
+    if not checkConcreteExists() then
+        return
+    end
+
+    local player = game.Players.LocalPlayer
+    local character = player.Character or player.CharacterAdded:Wait()
+    local humanoidRootPart = character:WaitForChild("HumanoidRootPart")
+    
+    local afkPart = createAFKPart()
+    if afkPart then
+        if not isPlayerAbovePart(player, afkPart) then
+            humanoidRootPart.CFrame = afkPart.CFrame + Vector3.new(0, 10, 0) 
+        end
+    end
+end
+
+function startAFKLoop()
+    if not checkConcreteExists() then
+        return
+    end
+
+    spawn(function()
+        while getgenv().AFK do
+            teleportToAFKPart()
+            wait(5) 
+            
+            if not getgenv().AFK then
+                break
+            end
+        end
+    end)
+end
+
+local Toggle = Tabs.Gameworks:AddToggle("AFKValue", {Title = "AFK", Default = false})
+
+Toggle:OnChanged(function()
+    if not checkConcreteExists() and Options.AFKValue.Value then
+        Toggle:SetValue(false)
+        return
+    end
+
+    getgenv().AFK = Options.AFKValue.Value
+
+    if getgenv().AFK then
+        startAFKLoop()
+    else
+        returnToElevator()
+        getgenv().AFK = false
+    end
+end)
+
+local AdvancedSection = Tabs.Gameworks:AddSection("Floors")
+
+
+getgenv().ObbyMonitor = false
+local selectedObbies = {}
+local monitoringActive = false
+
+local values = {
+    "Intense Obby", "Rock Park", "Jeremy", "Fina The Path", "WALL OF", 
+    "Fun Flood At Squishy's", "Flood Fill Mine", "Space Dropper", 
+    "Suspiciously Long Room", "Superhighway", "Gumball Machine", 
+    "Snowy Slope", "Minefield", "Obby", "Random Maze"
+}
+
+local ObbyDropdown = Tabs.Gameworks:AddDropdown("ObbySelector", {
+    Title = "Select Floors to Monitor",
+    Description = "You can select multiple Floors to monitor. (Not all Floor)",
+    Values = values,
+    Multi = true,
+    Default = table.clone(values),
+})
+
+local obbyMappings = {
+    ["Intense Obby"] = "IntenseObby",
+    ["Rock Park"] = "THEROCK",
+    ["Jeremy"] = "Jeremy",
+    ["Fina The Path"] = "FindThePath",
+    ["WALL OF"] = "WALL_OF",
+    ["Fun Flood At Squishy's"] = "FunTimesAtSquishyFlood",
+    ["Flood Fill Mine"] = "FloodFillMine",
+    ["Space Dropper"] = "SuperDropper",
+    ["Suspiciously Long Room"] = "SuspiciouslyLongRoom",
+    ["Superhighway"] = "Superhighway",
+    ["Gumball Machine"] = "GumballMachine",
+    ["Snowy Slope"] = "SnowySlope",
+    ["Minefield"] = "Minefield",
+    ["Obby"] = "Obby",
+    ["Random Maze"] = "RandomMazeWindows"
+}
+
+local obbyActions = {
+    ["Intense Obby"] = function()
+        firetouchinterest(game.Players.LocalPlayer.Character.HumanoidRootPart, workspace.IntenseObby.ENDBLOCK, 0)
+    end,
+    ["Rock Park"] = function()
+        firetouchinterest(game.Players.LocalPlayer.Character.HumanoidRootPart, workspace.THEROCK.WinPart, 0)
+    end,
+    ["Jeremy"] = function()
+        firetouchinterest(game.Players.LocalPlayer.Character.HumanoidRootPart, workspace.MegaFunObby.FinishLine, 0)
+    end,
+    ["Fina The Path"] = function()
+        firetouchinterest(game.Players.LocalPlayer.Character.HumanoidRootPart, workspace.FindThePath.Build.End.win_zone, 0)
+    end,
+    ["WALL OF"] = function()
+        firetouchinterest(game.Players.LocalPlayer.Character.HumanoidRootPart, workspace.WALL_OF.Checkpoints.EndCheckpoint, 0)
+    end,
+    ["Fun Flood At Squishy's"] = function()
+        firetouchinterest(game.Players.LocalPlayer.Character.HumanoidRootPart, workspace.FunTimesAtSquishyFlood.Build.Winparts:GetChildren()[4], 0)
+        firetouchinterest(game.Players.LocalPlayer.Character.HumanoidRootPart, workspace.FunTimesAtSquishyFlood.Build.Winparts:GetChildren()[3], 0)
+        firetouchinterest(game.Players.LocalPlayer.Character.HumanoidRootPart, workspace.FunTimesAtSquishyFlood.Build.Winparts:GetChildren()[2], 0)
+        firetouchinterest(game.Players.LocalPlayer.Character.HumanoidRootPart, workspace.FunTimesAtSquishyFlood.Build.Winparts.WinPart, 0)
+    end,
+    ["Flood Fill Mine"] = function()
+        firetouchinterest(game.Players.LocalPlayer.Character.HumanoidRootPart, workspace.FloodFillMine.Build.Shield.Bubble, 0)
+    end,
+    ["Space Dropper"] = function()
+        firetouchinterest(game.Players.LocalPlayer.Character.HumanoidRootPart, workspace.SuperDropper.Build.WinPool, 0)
+    end,
+    ["Suspiciously Long Room"] = function()
+        firetouchinterest(game.Players.LocalPlayer.Character.HumanoidRootPart, workspace.SuspiciouslyLongRoom.Checkpoints.EndCheckpoint, 0)
+    end,
+    ["Superhighway"] = function()
+        firetouchinterest(game.Players.LocalPlayer.Character.HumanoidRootPart, workspace.Superhighway.WinPoint, 0)
+    end,
+    ["Gumball Machine"] = function()
+        firetouchinterest(game.Players.LocalPlayer.Character.HumanoidRootPart, workspace.GumballMachine.Build.Generated.EndColumn.WinPart, 0)
+    end,
+    ["Snowy Slope"] = function()
+        firetouchinterest(game.Players.LocalPlayer.Character.HumanoidRootPart, workspace.SnowySlope.WinPart, 0)
+    end,
+    ["Minefield"] = function()
+        firetouchinterest(game.Players.LocalPlayer.Character.HumanoidRootPart, workspace.Minefield.Build.WinPart, 0)
+    end,
+    ["Obby"] = function()
+        firetouchinterest(game.Players.LocalPlayer.Character.HumanoidRootPart, workspace.Obby.Build.EndPart, 0)
+    end,
+    ["Random Maze"] = function()
+        firetouchinterest(game.Players.LocalPlayer.Character.HumanoidRootPart, workspace.RandomMazeWindows.Build:GetChildren()[7], 0)
+        firetouchinterest(game.Players.LocalPlayer.Character.HumanoidRootPart, workspace.RandomMazeWindows.Build.Part, 0)
+    end
+}
+
+ObbyDropdown:OnChanged(function(Value)
+    selectedObbies = {}
+    for GameName, State in next, Value do
+        if State then
+            table.insert(selectedObbies, GameName)
+        end
+    end
+end)
+
+local Toggle = Tabs.Gameworks:AddToggle("ObbyMonitorToggle", {
+    Title = "Enable Auto Monitor",
+    Default = false
+})
+
+function startObbyMonitoring()
+    spawn(function()
+        while getgenv().ObbyMonitor do
+            for _, obbyName in ipairs(selectedObbies) do
+                local internalName = obbyMappings[obbyName]
+                if internalName then
+                    if workspace:FindFirstChild(internalName) then
+                        spawn(function()
+                            wait(3)
+                            if obbyActions[obbyName] then
+                                pcall(obbyActions[obbyName])
+                            end
+                        end)
+                    end
+                end
+            end
+            wait(1)
+        end
+    end)
+    
+    workspace.ChildAdded:Connect(function(child)
+        if not getgenv().ObbyMonitor then return end
+        
+        for _, obbyName in ipairs(selectedObbies) do
+            local internalName = obbyMappings[obbyName]
+            if child.Name == internalName then
+                spawn(function()
+                    wait(3)
+                    if obbyActions[obbyName] then
+                        pcall(obbyActions[obbyName])
+                    end
+                end)
+            end
+        end
+    end)
+end
+
+Toggle:OnChanged(function()
+    getgenv().ObbyMonitor = Options.ObbyMonitorToggle.Value
+    
+    if getgenv().ObbyMonitor then
+        if not monitoringActive then
+            monitoringActive = true
+            startObbyMonitoring()
+        end
+    else
+        monitoringActive = false
+    end
+end)
+
+local DelaySlider = Tabs.Gameworks:AddSlider("ActionDelay", {
+    Title = "Action Delay (seconds)",
+    Description = "Set the delay before executing action after detection",
+    Default = 3,
+    Min = 0,
+    Max = 10,
+    Rounding = 1,
+    Callback = function(Value)
+        
+    end
+})
+
+local ImmediateCheckButton = Tabs.Gameworks:AddButton({
+    Title = "Immediate Check",
+    Callback = function()
+        for _, obbyName in ipairs(selectedObbies) do
+            local internalName = obbyMappings[obbyName]
+            if internalName and workspace:FindFirstChild(internalName) then
+                if obbyActions[obbyName] then
+                    pcall(obbyActions[obbyName])
+                end
+            end
+        end
+    end
+})
+
+spawn(function()
+    while wait(5) do
+        local gameInfo = "Game Info: "
+        local foundAny = false
+        
+        for _, obbyName in ipairs(selectedObbies) do
+            local internalName = obbyMappings[obbyName]
+            if internalName and workspace:FindFirstChild(internalName) then
+                gameInfo = gameInfo .. obbyName .. " (active), "
+                foundAny = true
+            end
+        end
+        
+        if not foundAny then
+            gameInfo = gameInfo .. "No selected games detected"
+        else
+            gameInfo = string.sub(gameInfo, 1, -3)
+        end
+    end
+end)
+
+local AdvancedSection = Tabs.Gameworks:AddSection("Farm")
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local LocalPlayer = Players.LocalPlayer
+local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
+local Humanoid = Character:WaitForChild("Humanoid")
+
+local coinSearchInterval = 2
+local maxAttempts = 3
+local interactionDelay = 0.15
+local coinAttempts = {}
+local isCollecting = false
+local autoCoinFarmRunning = false
+local originalCFrame = HumanoidRootPart.CFrame
+
+local function isCoin(obj)
+    local function isInsideTool(object)
+        local parent = object.Parent
+        while parent do
+            if parent:IsA("Tool") then return true end
+            parent = parent.Parent
+        end
+        return false
+    end
+    if obj:IsA("Tool") or isInsideTool(obj) then return false end
+    return obj.Name:lower() == "coin"
+end
+
+local function searchForCoins(parent)
+    local coins = {}
+    local function recursiveSearch(obj)
+        if isCoin(obj) then table.insert(coins, obj) end
+        for _, child in pairs(obj:GetChildren()) do
+            recursiveSearch(child)
+        end
+    end
+    for _, child in pairs(parent:GetChildren()) do
+        if not child:IsA("Tool") and child ~= LocalPlayer.Backpack then
+            recursiveSearch(child)
+        end
+    end
+    return coins
+end
+
+local function saveOriginalState()
+    local camera = workspace.CurrentCamera
+    return {
+        cframe = HumanoidRootPart.CFrame,
+        walkSpeed = Humanoid.WalkSpeed,
+        jumpPower = Humanoid.JumpPower,
+        hipHeight = Humanoid.HipHeight,
+        camSubject = camera.CameraSubject,
+        camType = camera.CameraType
+    }
+end
+
+local function restoreOriginalState(state)
+    HumanoidRootPart.CFrame = state.cframe
+    Humanoid.WalkSpeed = state.walkSpeed
+    Humanoid.JumpPower = state.jumpPower
+    Humanoid.HipHeight = state.hipHeight
+    local camera = workspace.CurrentCamera
+    camera.CameraSubject = state.camSubject
+    camera.CameraType = state.camType
+end
+
+local function interactWithCoin(coin)
+    if not coin or not coin.Parent then return false end
+    isCollecting = true
+    local state = saveOriginalState()
+    Humanoid.WalkSpeed = 0
+    Humanoid.JumpPower = 0
+    workspace.CurrentCamera.CameraType = Enum.CameraType.Scriptable
+    HumanoidRootPart.CFrame = typeof(coin.CFrame) == "CFrame" and coin.CFrame or CFrame.new(coin.Position)
+    task.wait(interactionDelay)
+    local success = (not coin or not coin.Parent)
+    restoreOriginalState(state)
+    isCollecting = false
+    return success
+end
+
+local function collectCoinWithRetry(coin)
+    if coinAttempts[coin] and coinAttempts[coin] >= maxAttempts then return false end
+    coinAttempts[coin] = (coinAttempts[coin] or 0) + 1
+    local success = interactWithCoin(coin)
+    if success then coinAttempts[coin] = nil end
+    return success
+end
+
+local function collectAllCoins()
+    for coin, _ in pairs(coinAttempts) do
+        if not coin or not coin.Parent then
+            coinAttempts[coin] = nil
+        end
+    end
+    local coins = searchForCoins(game.Workspace)
+    table.sort(coins, function(a, b)
+        return (a.Position - HumanoidRootPart.Position).Magnitude < (b.Position - HumanoidRootPart.Position).Magnitude
+    end)
+    for _, coin in pairs(coins) do
+        if not isCollecting then
+            collectCoinWithRetry(coin)
+            task.wait(0.1)
+        end
+    end
+end
+
+local function coinFarmLoop()
+    while autoCoinFarmRunning do
+        local success, _ = pcall(collectAllCoins)
+        HumanoidRootPart.CFrame = CFrame.new(HumanoidRootPart.Position)
+        task.wait(coinSearchInterval)
+    end
+end
+
+RunService.RenderStepped:Connect(function()
+    if isCollecting then
+        workspace.CurrentCamera.CameraType = Enum.CameraType.Scriptable
+    end
+end)
+
+LocalPlayer.CharacterRemoving:Connect(function()
+    autoCoinFarmRunning = false
+    isCollecting = false
+end)
+
+local Toggle = Tabs.Gameworks:AddToggle("AutoCoinFarm", {
+    Title = "Auto Coin Farm",
+    Default = false
+})
+
+Toggle:OnChanged(function()
+    getgenv().AutoCoinFarm = Options.AutoCoinFarm.Value
+    if getgenv().AutoCoinFarm then
+        autoCoinFarmRunning = true
+        task.spawn(coinFarmLoop)
+    else
+        autoCoinFarmRunning = false
+        isCollecting = false
+    end
+end)
+
+
+Tabs.Gameworks:AddSection("Event")
+
+Tabs.Gameworks:AddButton({
+    Title = "Put In Elevator",
+    Description = "",
+    Callback = function()
+        game:GetService("ReplicatedStorage").RE.PutInElevator:FireServer()
+    end
+})
+
+end
+
+loadstring(game:HttpGet("https://raw.githubusercontent.com/7yd7/Hub/refs/heads/Branch/NoGame.lua"))()
