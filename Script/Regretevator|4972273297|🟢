@@ -6,6 +6,10 @@ getgenv().Value = nil
 
 getgenv().GameName = "Regretevator"
 
+if getgenv().Script then
+    getgenv().Script = nil
+end
+
 getgenv().Script = function()
 
 function checkConcreteExists()
