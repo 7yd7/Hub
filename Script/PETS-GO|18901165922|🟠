@@ -6,6 +6,10 @@ getgenv().Value = nil
 
 getgenv().GameName = "PETS GO"
 
+if getgenv().Script then
+    getgenv().Script = nil
+end
+
 getgenv().Script = function()
 
 Tabs.Gameworks:AddSection("Auto")
