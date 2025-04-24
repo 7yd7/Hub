@@ -106,12 +106,16 @@ Tabs.Main:AddParagraph({
 -- لا يوجد ماب
 
 if getgenv().Script then
-    getgenv().Script()
+    pcall(function() 
+        getgenv().Script() 
+    end)
 else
-   Tabs.Gameworks:AddParagraph({
-    Title = "WARNING!",
-    Content = "It seems that the game you entered is either unknown or has not been added to the game script."
-})
+    if Tabs and Tabs.Gameworks then
+        Tabs.Gameworks:AddParagraph({
+            Title = "WARNING!",
+            Content = "It seems that the game you entered is either unknown or has not been added to the game script."
+        })
+    end
 end
 
 -- سكربت جميع مابات
