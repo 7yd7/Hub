@@ -105,9 +105,9 @@ Tabs.Main:AddParagraph({
 
 -- لا يوجد ماب
 
-if getgenv().Script then
-    pcall(function() 
-        getgenv().Script() 
+if _G.Script then
+    local success, errorMsg = pcall(function()
+        _G.Script()
     end)
 else
     if Tabs and Tabs.Gameworks then
