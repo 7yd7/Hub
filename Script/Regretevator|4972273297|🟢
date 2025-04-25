@@ -10,6 +10,13 @@ if getgenv().Script then
     getgenv().Script = nil
 end
 
+getgenv().update = function()
+    local text = [[
+Test
+    ]]
+    return text
+end
+
 getgenv().Script = function()
     function checkConcreteExists()
         if workspace.Elevator and workspace.Elevator.Ceiling and workspace.Elevator.Ceiling:FindFirstChild("Concrete") then
