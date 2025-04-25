@@ -27,6 +27,7 @@ local Tabs
 if getgenv().GameName then
     Tabs = {
         Main = Window:AddTab({ Title = "Main", Icon = "info" }),
+        Update = Window:AddTab({ Title = "Update", Icon = "upload" }),
         Gameworks = Window:AddTab({ Title = getgenv().GameName, Icon = "gamepad-2" }),
         Script = Window:AddTab({ Title = "Script", Icon = "scroll" }),
         game = Window:AddTab({ Title = "Game", Icon = "usb" }),
@@ -102,6 +103,32 @@ Tabs.Main:AddParagraph({
 Tabs.Main:AddParagraph({
     Title = "https://github.com/7yd7/Hub"
 })
+
+-- تحديثات سكربت
+
+
+if getgenv().update then
+    local isLoaded1 = false
+
+    pcall(function()
+        Tabs.Gameworks:AddParagraph({
+            Title = "Update to ".. getgenv().GameName,
+            Content = getgenv().update()
+        })
+        isLoaded1 = true 
+    end)
+
+    while not isLoaded1 do
+        wait()
+    end
+else
+    if Tabs and Tabs.Gameworks then
+        Tabs.Gameworks:AddParagraph({
+            Title = "Update to ".. getgenv().GameName,
+            Content = "No script update :("
+        })
+    end
+end
 
 -- لا يوجد ماب
 
