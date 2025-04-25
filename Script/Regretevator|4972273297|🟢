@@ -609,7 +609,6 @@ getgenv().Script = function()
         Content = "step 1: Add Name Emote Enter the name of the Emote you want [If you don't know, just search the browser for 'Regretevator Wiki Emotes']\nstep 2: Just click on Add Cosmetic emote, your game data will be modified, so rejoin and the emote you want will be added."
     })
     
-    local player = game:GetService("Players")["14f607aryek9up0wsqm2"]
     local guiText = player.PlayerGui.RadialMenu.Misc.Top.center
     
     local positionOrder = {
