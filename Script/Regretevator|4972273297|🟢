@@ -1,1182 +1,515 @@
-getgenv().Tabs = nil
-getgenv().Options = nil
-getgenv().Window = nil
-getgenv().Toggle = nil
-getgenv().Value = nil
+local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
+local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
+local InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
 
-getgenv().GameName = "Regretevator"
+-- الاضافات
+
+local GamePlaceId = game.PlaceId
+local GameName = game:GetService("MarketplaceService"):GetProductInfo(GamePlaceId).Name
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer
+local playerName = Players.LocalPlayer.name
+local GameJobId = game.JobId
+local AccountAge = player.AccountAge
+local hasPremium = player.MembershipType == Enum.MembershipType.Premium
+
+local Window = Fluent:CreateWindow({
+    Title = "7yd7 | Hub | " .. GameName .. " | " .. playerName,
+    SubTitle = "",
+    TabWidth = 160,
+    Size = UDim2.fromOffset(580, 460),
+    Acrylic = true, 
+    Theme = "Dark",
+    MinimizeKey = Enum.KeyCode.LeftControl 
+})
+
+local Tabs
+if getgenv().GameName then
+    Tabs = {
+        Main = Window:AddTab({ Title = "Main", Icon = "info" }),
+        Update = Window:AddTab({ Title = "Update", Icon = "upload" }),
+        Gameworks = Window:AddTab({ Title = getgenv().GameName, Icon = "gamepad-2" }),
+        Script = Window:AddTab({ Title = "Script", Icon = "scroll" }),
+        game = Window:AddTab({ Title = "Game", Icon = "usb" }),
+        Settings = Window:AddTab({ Title = "Settings", Icon = "settings" })
+    }
+else
+    Tabs = {
+        Main = Window:AddTab({ Title = "Main", Icon = "info" }),
+        Gameworks = Window:AddTab({ Title = "Unknown", Icon = "gamepad-2" }),
+        Script = Window:AddTab({ Title = "Script", Icon = "scroll" }),
+        game = Window:AddTab({ Title = "Game", Icon = "usb" }),
+        Settings = Window:AddTab({ Title = "Settings", Icon = "settings" })
+    }
+end
+
+local Options = Fluent.Options
+
+getgenv().Tabs = Tabs
+getgenv().Options = Options
+getgenv().Window = Window
+getgenv().Value = Value
+
+do
+
+
+local time = os.time()
+local date = os.date("*t", time)
+
+local hour = date.hour % 12
+if hour == 0 then
+    hour = 12
+end
+
+local min = string.format("%02d", date.min)
+local sec = string.format("%02d", date.sec)
+
+local ampm = date.hour >= 12 and "PM" or "AM"
+
+
+-- معلومات عن سكربت
+
+Tabs.Main:AddSection("info")
+
+Tabs.Main:AddParagraph({
+    Title = "Welcome " ..playerName.. " !"
+})
+
+Tabs.Main:AddParagraph({
+    Title = "name game: " .. GameName
+})
+
+Tabs.Main:AddParagraph({
+    Title = "id game: " .. GamePlaceId
+})
+
+Tabs.Main:AddParagraph({
+    Title = "JobId game: " .. GameJobId
+})
+
+Tabs.Main:AddParagraph({
+    Title = "Account Age: " .. AccountAge
+})
+
+Tabs.Main:AddParagraph({
+    Title = "Player Premium: " .. (hasPremium and "yes" or "no")
+})
+
+Tabs.Main:AddParagraph({
+    Title = "script run time: " .. date.day .. "/" .. date.month .. "/" .. date.year .. " " .. hour .. ":" .. min .. ":" .. sec .. " " .. ampm
+})
+
+
+Tabs.Main:AddParagraph({
+    Title = "https://github.com/7yd7/Hub"
+})
+
+-- تحديثات سكربت
+
+
+if getgenv().update then
+    local isLoaded1 = false
+
+    pcall(function()
+        Tabs.update:AddParagraph({
+            Title = "Update to ".. getgenv().GameName,
+            Content = getgenv().update()
+        })
+        isLoaded1 = true 
+    end)
+
+    while not isLoaded1 do
+        wait()
+    end
+else
+    if Tabs and Tabs.update then
+        Tabs.update:AddParagraph({
+            Title = "Update to ".. getgenv().GameName,
+            Content = "No script update :("
+        })
+    end
+end
+
+-- لا يوجد ماب
 
 if getgenv().Script then
-    getgenv().Script = nil
+    local isLoaded = false
+
+    pcall(function()
+        getgenv().Script()
+        isLoaded = true 
+    end)
+
+    while not isLoaded do
+        wait()
+    end
+else
+    if Tabs and Tabs.Gameworks then
+        Tabs.Gameworks:AddParagraph({
+            Title = "WARNING!",
+            Content = "It seems that the game you entered is either unknown or has not been added to the game script."
+        })
+    end
 end
 
-getgenv().update = function()
-    local text = [[
-Test
-    ]]
-    return text
-end
+-- سكربت جميع مابات
 
-getgenv().Script = function()
-    function checkConcreteExists()
-        if workspace.Elevator and workspace.Elevator.Ceiling and workspace.Elevator.Ceiling:FindFirstChild("Concrete") then
-            return true
-        else
-            Fluent:Notify({
-                Title = "7yd7 | Hub",
-                Content = "Concrete ceiling not found in workspace.Elevator.Ceiling!",
-                Duration = 8
-            })
-            return false
-        end
-    end
-    
-    function createAFKPart()
-        if not checkConcreteExists() then
-            return nil
-        end
-    
-        if workspace:FindFirstChild("7yd7") then
-            return workspace:FindFirstChild("7yd7")
-        end
-        
-        local concrete = workspace.Elevator.Ceiling:FindFirstChild("Concrete")
-        
-        local afkPart = Instance.new("Part")
-        afkPart.Name = "7yd7"
-        afkPart.Size = Vector3.new(21.584325790405273, 7.663055896759033, 17.89038848876953)
-        afkPart.Anchored = true
-        afkPart.CanCollide = true
-        
-        local concretePosition = concrete.Position
-        afkPart.Position = Vector3.new(concretePosition.X, concretePosition.Y + 5000, concretePosition.Z)
-        
-        afkPart.Parent = workspace
-        
-        return afkPart
-    end
-    
-    function isPlayerAbovePart(player, part)
-        if not player.Character then return false end
-        
-        local humanoidRootPart = player.Character:FindFirstChild("HumanoidRootPart")
-        if not humanoidRootPart then return false end
-        
-        local playerPos = humanoidRootPart.Position
-        
-        local partMin = Vector2.new(part.Position.X - (part.Size.X/2), part.Position.Z - (part.Size.Z/2))
-        local partMax = Vector2.new(part.Position.X + (part.Size.X/2), part.Position.Z + (part.Size.Z/2))
-        
-        if playerPos.X >= partMin.X and playerPos.X <= partMax.X and
-           playerPos.Z >= partMin.Y and playerPos.Z <= partMax.Y then
-            
-            local partTopY = part.Position.Y + (part.Size.Y/2)
-            local distanceAbove = playerPos.Y - partTopY
-            
-            if distanceAbove >= -1 and distanceAbove <= 50 then
-                return true
-            end
-        end
-        
-        return false
-    end
-    
-    function returnToElevator()
-        if not checkConcreteExists() then
-            return
-        end
-    
-        local player = game.Players.LocalPlayer
-        local character = player.Character or player.CharacterAdded:Wait()
-        local humanoidRootPart = character:WaitForChild("HumanoidRootPart")
-        
-        local concrete = workspace.Elevator.Ceiling:FindFirstChild("Concrete")
-        humanoidRootPart.CFrame = concrete.CFrame + Vector3.new(0, -10, 0)
-    end
-    
-    function teleportToAFKPart()
-        if not checkConcreteExists() then
-            return
-        end
-    
-        local player = game.Players.LocalPlayer
-        local character = player.Character or player.CharacterAdded:Wait()
-        local humanoidRootPart = character:WaitForChild("HumanoidRootPart")
-        
-        local afkPart = createAFKPart()
-        if afkPart then
-            if not isPlayerAbovePart(player, afkPart) then
-                humanoidRootPart.CFrame = afkPart.CFrame + Vector3.new(0, 10, 0) 
-            end
-        end
-    end
-    
-    function startAFKLoop()
-        if not checkConcreteExists() then
-            return
-        end
-    
-        spawn(function()
-            while getgenv().AFK do
-                teleportToAFKPart()
-                wait(5) 
-                
-                if not getgenv().AFK then
-                    break
-                end
-            end
-        end)
-    end
-    
-    local Toggle = Tabs.Gameworks:AddToggle("AFKValue", {Title = "AFK", Default = false})
-    
-    Toggle:OnChanged(function()
-        if not checkConcreteExists() and Options.AFKValue.Value then
-            Toggle:SetValue(false)
-            return
-        end
-    
-        getgenv().AFK = Options.AFKValue.Value
-    
-        if getgenv().AFK then
-            startAFKLoop()
-        else
-            returnToElevator()
-            getgenv().AFK = false
-        end
-    end)
-    
-    local AdvancedSection = Tabs.Gameworks:AddSection("Floors")
-    
-    
-    getgenv().ObbyMonitor = false
-    local selectedObbies = {}
-    local monitoringActive = false
-    
-    local values = {
-        "Intense Obby", "Rock Park", "Jeremy", "Fina The Path", "WALL OF", 
-        "Fun Flood At Squishy's", "Flood Fill Mine", "Space Dropper", 
-        "Suspiciously Long Room", "Superhighway", "Gumball Machine", 
-        "Snowy Slope", "Minefield", "Obby", "Random Maze", "Splitsville!",
-        "Slide 4 Admin", "3008", "Color our World", "Funny Maze", "Stanley Room",
-        "bugbo", "Dodge Teh Teapots"
-    }
-    
-    local ObbyDropdown = Tabs.Gameworks:AddDropdown("ObbySelector", {
-        Title = "Select Floors to Monitor",
-        Description = "You can select multiple Floors to monitor. (Not all Floor)",
-        Values = values,
-        Multi = true,
-        Default = table.clone(values),
-    })
-    
-    local obbyMappings = {
-        ["Intense Obby"] = "IntenseObby",
-        ["Rock Park"] = "THEROCK",
-        ["Jeremy"] = "Jeremy",
-        ["Fina The Path"] = "FindThePath",
-        ["WALL OF"] = "WALL_OF",
-        ["Fun Flood At Squishy's"] = "FunTimesAtSquishyFlood",
-        ["Flood Fill Mine"] = "FloodFillMine",
-        ["Space Dropper"] = "SuperDropper",
-        ["Suspiciously Long Room"] = "SuspiciouslyLongRoom",
-        ["Superhighway"] = "Superhighway",
-        ["Gumball Machine"] = "GumballMachine",
-        ["Snowy Slope"] = "SnowySlope",
-        ["Minefield"] = "Minefield",
-        ["Obby"] = "Obby",
-        ["Random Maze"] = "RandomMazeWindows",
-        ["Splitsville!"] = "Splitsville_Wipeout",
-        ["Slide 4 Admin"] = "SLIDE_9999999999_FEET_DOWN_RAINBOW",
-        ["3008"] = "3008_Room",
-        ["Color our World"] = "ColorTheTiles",
-        ["Funny Maze"] = "FunnyMaze",
-        ["Stanley Room"] = "StanelyRoom",
-        ["bugbo"] = "bugbo",
-        ["Dodge Teh Teapots"] = "TeapotDodgeball"
-    }
-    
-    local obbyActions = {
-        ["Intense Obby"] = function()
-            firetouchinterest(game.Players.LocalPlayer.Character.HumanoidRootPart, workspace.IntenseObby.ENDBLOCK, 0)
-        end,
-        ["Rock Park"] = function()
-            firetouchinterest(game.Players.LocalPlayer.Character.HumanoidRootPart, workspace.THEROCK.WinPart, 0)
-        end,
-        ["Jeremy"] = function()
-            firetouchinterest(game.Players.LocalPlayer.Character.HumanoidRootPart, workspace.MegaFunObby.FinishLine, 0)
-        end,
-        ["Fina The Path"] = function()
-            firetouchinterest(game.Players.LocalPlayer.Character.HumanoidRootPart, workspace.FindThePath.Build.End.win_zone, 0)
-        end,
-        ["WALL OF"] = function()
-            firetouchinterest(game.Players.LocalPlayer.Character.HumanoidRootPart, workspace.WALL_OF.Build.YOU_WIN, 0)
-        end,
-        ["Fun Flood At Squishy's"] = function()
-            firetouchinterest(game.Players.LocalPlayer.Character.HumanoidRootPart, workspace.FunTimesAtSquishyFlood.Build.Winparts:GetChildren()[4], 0)
-            firetouchinterest(game.Players.LocalPlayer.Character.HumanoidRootPart, workspace.FunTimesAtSquishyFlood.Build.Winparts:GetChildren()[3], 0)
-            firetouchinterest(game.Players.LocalPlayer.Character.HumanoidRootPart, workspace.FunTimesAtSquishyFlood.Build.Winparts:GetChildren()[2], 0)
-            firetouchinterest(game.Players.LocalPlayer.Character.HumanoidRootPart, workspace.FunTimesAtSquishyFlood.Build.Winparts.WinPart, 0)
-        end,
-        ["Flood Fill Mine"] = function()
-            firetouchinterest(game.Players.LocalPlayer.Character.HumanoidRootPart, workspace.FloodFillMine.Build.Shield.Bubble, 0)
-        end,
-        ["Space Dropper"] = function()
-            firetouchinterest(game.Players.LocalPlayer.Character.HumanoidRootPart, workspace.SuperDropper.Build.WinPool, 0)
-        end,
-        ["Suspiciously Long Room"] = function()
-            firetouchinterest(game.Players.LocalPlayer.Character.HumanoidRootPart, workspace.SuspiciouslyLongRoom.Build.WinPool, 0)
-        end,
-        ["Superhighway"] = function()
-            firetouchinterest(game.Players.LocalPlayer.Character.HumanoidRootPart, workspace.Superhighway.WinPoint, 0)
-        end,
-        ["Gumball Machine"] = function()
-            firetouchinterest(game.Players.LocalPlayer.Character.HumanoidRootPart, workspace.GumballMachine.Build.Generated.EndColumn.WinPart, 0)
-        end,
-        ["Snowy Slope"] = function()
-            firetouchinterest(game.Players.LocalPlayer.Character.HumanoidRootPart, workspace.SnowySlope.WinPart, 0)
-        end,
-        ["Minefield"] = function()
-            firetouchinterest(game.Players.LocalPlayer.Character.HumanoidRootPart, workspace.Minefield.Build.WinPart, 0)
-            firetouchinterest(game.Players.LocalPlayer.Character.HumanoidRootPart, workspace.Minefield.Build.Decor.etc.IceCreamTruck.Tube.IcecreamGiver, 0)
-        end,
-        ["Obby"] = function()
-            firetouchinterest(game.Players.LocalPlayer.Character.HumanoidRootPart, workspace.Obby.Build.EndPart, 0)
-        end,
-        ["Random Maze"] = function()
-            firetouchinterest(game.Players.LocalPlayer.Character.HumanoidRootPart, workspace.RandomMazeWindows.Build:GetChildren()[7], 0)
-            firetouchinterest(game.Players.LocalPlayer.Character.HumanoidRootPart, workspace.RandomMazeWindows.Build.Part, 0)
-        end,
-        ["Splitsville!"] = function()
-            firetouchinterest(game.Players.LocalPlayer.Character.HumanoidRootPart, workspace.Splitsville_Wipeout.Checkpoints.EndCheckpoint, 0)
-        end,
-        ["Slide 4 Admin"] = function()
-            firetouchinterest(game.Players.LocalPlayer.Character.HumanoidRootPart, workspace.SLIDE_9999999999_FEET_DOWN_RAINBOW.Build.Target.MiddleRing, 0)
-            firetouchinterest(game.Players.LocalPlayer.Character.HumanoidRootPart, workspace.SLIDE_9999999999_FEET_DOWN_RAINBOW.Build.TeleportBack, 0)
-        end,
-        ["3008"] = function()
-            fireclickdetector(workspace["3008_Room"].Build.Lampert.ClickDetector)
-        end,
-        ["Color our World"] = function()
-            local TilesFolder = workspace:WaitForChild("ColorTheTiles"):WaitForChild("Tiles")
-            local LocalPlayer = game:GetService("Players").LocalPlayer
-            local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
-            local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
-            
-            for _, obj in ipairs(TilesFolder:GetDescendants()) do
-                if obj:IsA("BasePart") then
-                    firetouchinterest(HumanoidRootPart, obj, 0)
-                    task.wait(0.01)
-                end
-            end
-         end,
-         ["Funny Maze"] = function()
-            local targetPath = workspace.FunnyMaze.Build.FinalNotes
-            
-            local function activateClickDetectorsInPath()
-                for _, instance in pairs(targetPath:GetDescendants()) do
-                    if instance:IsA("ClickDetector") then
-                        local path = tostring(instance:GetFullName())
-                            fireclickdetector(instance)
-                        wait(0.05)
-                    end
-                end
-            end
-            
-            activateClickDetectorsInPath()
-         end,
-         ["Stanley Room"] = function()
-            firetouchinterest(game.Players.LocalPlayer.Character.HumanoidRootPart, workspace.StanelyRoom.Build.Generated.Ending.EndTouch, 0)
-        end,
-        ["bugbo"] = function()
-            local rocks = workspace.bugbo.Build.Rocks
-    
-            local function findAllClickDetectors(parent)
-                local detectors = {}
-                
-                for _, child in ipairs(parent:GetDescendants()) do
-                    if child:IsA("ClickDetector") then
-                        table.insert(detectors, child)
-                    end
-                end
-                
-                return detectors
-            end
-            
-            local clickDetectors = findAllClickDetectors(rocks)
-            
-            for _, clickDetector in ipairs(clickDetectors) do
-                fireclickdetector(clickDetector)
-                wait(0.05) 
-            end
-        end,
-        ["Dodge Teh Teapots"] = function()
-            local Players = game:GetService("Players")
-            local player = Players.LocalPlayer
-            local character = player.Character or player.CharacterAdded:Wait()
-            
-            local destination = workspace.TeapotDodgeball.Build:WaitForChild("Finish")
-            character:MoveTo(destination.Position)        
-        end
-    }
-    
-    ObbyDropdown:OnChanged(function(Value)
-        selectedObbies = {}
-        for GameName, State in next, Value do
-            if State then
-                table.insert(selectedObbies, GameName)
-            end
-        end
-    end)
-    
-    local Toggle = Tabs.Gameworks:AddToggle("ObbyMonitorToggle", {
-        Title = "Enable Auto Monitor",
-        Default = false
-    })
-    
-    function startObbyMonitoring()
-        spawn(function()
-            while getgenv().ObbyMonitor do
-                for _, obbyName in ipairs(selectedObbies) do
-                    local internalName = obbyMappings[obbyName]
-                    if internalName then
-                        if workspace:FindFirstChild(internalName) then
-                            spawn(function()
-                                wait(3)
-                                if obbyActions[obbyName] then
-                                    pcall(obbyActions[obbyName])
-                                end
-                            end)
-                        end
-                    end
-                end
-                wait(1)
-            end
-        end)
-        
-        workspace.ChildAdded:Connect(function(child)
-            if not getgenv().ObbyMonitor then return end
-            
-            for _, obbyName in ipairs(selectedObbies) do
-                local internalName = obbyMappings[obbyName]
-                if child.Name == internalName then
-                    spawn(function()
-                        wait(3)
-                        if obbyActions[obbyName] then
-                            pcall(obbyActions[obbyName])
-                        end
-                    end)
-                end
-            end
-        end)
-    end
-    
-    Toggle:OnChanged(function()
-        getgenv().ObbyMonitor = Options.ObbyMonitorToggle.Value
-        
-        if getgenv().ObbyMonitor then
-            if not monitoringActive then
-                monitoringActive = true
-                startObbyMonitoring()
-            end
-        else
-            monitoringActive = false
-        end
-    end)
-    
-    local DelaySlider = Tabs.Gameworks:AddSlider("ActionDelay", {
-        Title = "Action Delay (seconds)",
-        Description = "Set the delay before executing action after detection",
-        Default = 3,
+		Tabs.Script:AddSection("player")
+
+
+    local Slider = Tabs.Script:AddSlider("Slider", {
+        Title = "WalkSpeed",
+        Description = "Adjust the speed of a personal player",
+        Default = 16,
         Min = 0,
-        Max = 10,
+        Max = 500,
         Rounding = 1,
         Callback = function(Value)
-            
+            game.Players.LocalPlayer.Character.Humanoid.WalkSpeed = Value
         end
     })
-    
-    local ImmediateCheckButton = Tabs.Gameworks:AddButton({
-        Title = "Immediate Check",
+
+        Tabs.Script:AddButton({
+        Title = "Reset WalkSpeed",
+        Description = "Reset WalkSpeed normal",
         Callback = function()
-            for _, obbyName in ipairs(selectedObbies) do
-                local internalName = obbyMappings[obbyName]
-                if internalName and workspace:FindFirstChild(internalName) then
-                    if obbyActions[obbyName] then
-                        pcall(obbyActions[obbyName])
-                    end
-                end
-            end
-        end
-    })
-    
-    spawn(function()
-        while wait(5) do
-            local gameInfo = "Game Info: "
-            local foundAny = false
-            
-            for _, obbyName in ipairs(selectedObbies) do
-                local internalName = obbyMappings[obbyName]
-                if internalName and workspace:FindFirstChild(internalName) then
-                    gameInfo = gameInfo .. obbyName .. " (active), "
-                    foundAny = true
-                end
-            end
-            
-            if not foundAny then
-                gameInfo = gameInfo .. "No selected games detected"
-            else
-                gameInfo = string.sub(gameInfo, 1, -3)
-            end
-        end
-    end)
-    
-    local AdvancedSection = Tabs.Gameworks:AddSection("Farm")
-    
-    local Players = game:GetService("Players")
-    local RunService = game:GetService("RunService")
-    local LocalPlayer = Players.LocalPlayer
-    local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
-    local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
-    local Humanoid = Character:WaitForChild("Humanoid")
-    
-    local coinSearchInterval = 2
-    local maxAttempts = 3
-    local interactionDelay = 0.15
-    local coinAttempts = {}
-    local isCollecting = false
-    local autoCoinFarmRunning = false
-    local originalCFrame = HumanoidRootPart.CFrame
-    
-    local function updateReferences()
-        Character = LocalPlayer.Character
-        if Character then
-            HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
-            Humanoid = Character:WaitForChild("Humanoid")
-            originalCFrame = HumanoidRootPart.CFrame
-        end
-    end
-    
-    local function isCoin(obj)
-        local function isInsideTool(object)
-            local parent = object.Parent
-            while parent do
-                if parent:IsA("Tool") then return true end
-                parent = parent.Parent
-            end
-            return false
-        end
-        if obj:IsA("Tool") or isInsideTool(obj) then return false end
-        return obj.Name:lower() == "coin"
-    end
-    
-    local function searchForCoins(parent)
-        local coins = {}
-        local function recursiveSearch(obj)
-            if isCoin(obj) then table.insert(coins, obj) end
-            for _, child in pairs(obj:GetChildren()) do
-                recursiveSearch(child)
-            end
-        end
-        for _, child in pairs(parent:GetChildren()) do
-            if not child:IsA("Tool") and child ~= LocalPlayer.Backpack then
-                recursiveSearch(child)
-            end
-        end
-        return coins
-    end
-    
-    local function saveOriginalState()
-        local camera = workspace.CurrentCamera
-        return {
-            cframe = HumanoidRootPart.CFrame,
-            walkSpeed = Humanoid.WalkSpeed,
-            jumpPower = Humanoid.JumpPower,
-            hipHeight = Humanoid.HipHeight,
-            camSubject = camera.CameraSubject,
-            camType = camera.CameraType
-        }
-    end
-    
-    local function restoreOriginalState(state)
-        if not Character or not Character.Parent then return end
-        
-        HumanoidRootPart.CFrame = state.cframe
-        Humanoid.WalkSpeed = state.walkSpeed
-        Humanoid.JumpPower = state.jumpPower
-        Humanoid.HipHeight = state.hipHeight
-        local camera = workspace.CurrentCamera
-        camera.CameraSubject = state.camSubject
-        camera.CameraType = state.camType
-    end
-    
-    local function interactWithCoin(coin)
-        if not coin or not coin.Parent or not Character or not Character.Parent then return false end
-        
-        isCollecting = true
-        local state = saveOriginalState()
-        Humanoid.WalkSpeed = 0
-        Humanoid.JumpPower = 0
-        workspace.CurrentCamera.CameraType = Enum.CameraType.Scriptable
-        HumanoidRootPart.CFrame = typeof(coin.CFrame) == "CFrame" and coin.CFrame or CFrame.new(coin.Position)
-        task.wait(interactionDelay)
-        local success = (not coin or not coin.Parent)
-        
-        if Character and Character.Parent then
-            restoreOriginalState(state)
-        end
-        
-        isCollecting = false
-        return success
-    end
-    
-    local function collectCoinWithRetry(coin)
-        if coinAttempts[coin] and coinAttempts[coin] >= maxAttempts then return false end
-        coinAttempts[coin] = (coinAttempts[coin] or 0) + 1
-        local success = interactWithCoin(coin)
-        if success then coinAttempts[coin] = nil end
-        return success
-    end
-    
-    local function collectAllCoins()
-        for coin, _ in pairs(coinAttempts) do
-            if not coin or not coin.Parent then
-                coinAttempts[coin] = nil
-            end
-        end
-        local coins = searchForCoins(game.Workspace)
-        table.sort(coins, function(a, b)
-            return (a.Position - HumanoidRootPart.Position).Magnitude < (b.Position - HumanoidRootPart.Position).Magnitude
-        end)
-        for _, coin in pairs(coins) do
-            if not isCollecting and Character and Character.Parent then
-                collectCoinWithRetry(coin)
-                task.wait(0.1)
-            end
-        end
-    end
-    
-    local function coinFarmLoop()
-        while autoCoinFarmRunning do
-            if Character and Character.Parent and HumanoidRootPart and Humanoid then
-                local success, _ = pcall(collectAllCoins)
-                if HumanoidRootPart then
-                    HumanoidRootPart.CFrame = CFrame.new(HumanoidRootPart.Position)
-                end
-            end
-            task.wait(coinSearchInterval)
-        end
-    end
-    
-    RunService.RenderStepped:Connect(function()
-        if isCollecting and Character and Character.Parent then
-            workspace.CurrentCamera.CameraType = Enum.CameraType.Scriptable
-        end
-    end)
-    
-    LocalPlayer.CharacterAdded:Connect(function(newCharacter)
-        task.wait(1)
-        updateReferences()
-        
-        if autoCoinFarmRunning then
-            task.spawn(coinFarmLoop)
-        end
-    end)
-    
-    LocalPlayer.CharacterRemoving:Connect(function()
-        isCollecting = false
-    end)
-    
-    local Toggle = Tabs.Gameworks:AddToggle("AutoCoinFarm", {
-        Title = "Auto Coin Farm",
-        Default = false
-    })
-    
-    Toggle:OnChanged(function()
-        getgenv().AutoCoinFarm = Options.AutoCoinFarm.Value
-        if getgenv().AutoCoinFarm then
-            updateReferences()
-            autoCoinFarmRunning = true
-            task.spawn(coinFarmLoop)
-        else
-            autoCoinFarmRunning = false
-            isCollecting = false
-        end
-    end)
-    
-    local Toggle = Tabs.Gameworks:AddToggle("AutoDailyChallengeValue", {Title = "Auto Daily Challenge", Default = false, Description = "Jump",})
-    
-    local originalJumpPower = 15
-    
-    Toggle:OnChanged(function()
-        getgenv().AutoDailyChallenge = Options.AutoDailyChallengeValue.Value
-        
-        local player = game:GetService("Players").LocalPlayer
-        local humanoid = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
-        
-        if getgenv().AutoDailyChallenge then
-            if humanoid then
-                originalJumpPower = humanoid.JumpPower
-            end
-            
-            startAutoDailyChallengeLoop()
-        else
-            getgenv().AutoDailyChallenge = false
-            
-            if humanoid then
-                humanoid.JumpPower = originalJumpPower
-            end
-        end
-    end)
-    
-    function startAutoDailyChallengeLoop()
-        spawn(function()
-            while getgenv().AutoDailyChallenge do
-                local player = game:GetService("Players").LocalPlayer
-                
-                if player and player.PlayerGui and player.PlayerGui:FindFirstChild("DailyChallengeUI") then
-                    local mainText = player.PlayerGui.DailyChallengeUI.TaskTab.MainText
-                    local stateText = player.PlayerGui.DailyChallengeUI.TaskTab.StateText
-                    
-                    if mainText and stateText then
-                        local taskDescription = mainText.Text
-                        local progressText = stateText.Text
-                        
-                        local currentProgress, totalRequired = progressText:match("(%d+)/(%d+)")
-                        
-                        if currentProgress and totalRequired then
-                            currentProgress = tonumber(currentProgress)
-                            totalRequired = tonumber(totalRequired)
-                            
-                            if currentProgress >= totalRequired then                            
-                                if taskDescription:find("Jump") then
-                                    local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
-                                    if humanoid then
-                                        humanoid.JumpPower = originalJumpPower
-                                    end
-                                end
-                            end
-                            
-                            if taskDescription:find("Jump") then
-                                local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
-                                if humanoid then
-                                    humanoid.JumpPower = 0
-                                    humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
-                                end
-                                
-                            elseif taskDescription:find("Speed") then
-                                local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
-                                if humanoid then
-                                    humanoid:Move(Vector3.new(0, 0, 1))
-                                end
-                            end
+            Window:Dialog({
+                Title = "Reset WalkSpeed",
+                Content = "Are you sure you want to reset the WalkSpeed?",
+                Buttons = {
+                    {
+                        Title = "Confirm",
+                        Callback = function()
+                   game.Players.LocalPlayer.Character.Humanoid.WalkSpeed = 16
                         end
-                    end
-                end
-                
-                task.wait(0.01)
-            end
-        end)
-    end
-    
-    game:GetService("Players").PlayerRemoving:Connect(function(player)
-        if player == game:GetService("Players").LocalPlayer then
-            local humanoid = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
-            if humanoid then
-                humanoid.JumpPower = originalJumpPower
-            end
+                    },
+                    {
+                        Title = "Cancel",
+                        Callback = function()
+                        end
+                    }
+                }
+            })
         end
-    end)
+    })
+
+
     
-    Tabs.Gameworks:AddSection("Event")
-    
-    local Players = game:GetService("Players")
-    local LocalPlayer = Players.LocalPlayer
-    local ReplicatedStorage = game:GetService("ReplicatedStorage")
-    
-    local function autoRespawn()
-        local character = LocalPlayer.Character
-        if character and character:FindFirstChild("Humanoid") then
-            local humanoid = character.Humanoid
-            if humanoid.Health <= 0 then
-                ReplicatedStorage.RE.Respawn:FireServer()
-            end
+    local Slider = Tabs.Script:AddSlider("Slider", {
+        Title = "JumpPower",
+        Description = "Adjust the JumpPower of a personal player",
+        Default = 50,
+        Min = 0,
+        Max = 500,
+        Rounding = 1,
+        Callback = function(Value)
+            game.Players.LocalPlayer.Character.Humanoid.JumpPower = Value
         end
-    end
-    
-    local function checkElevatorAndJoin()
-        local menuUI = LocalPlayer.PlayerGui.Menus.CenteredMenuButtons["Elevator Buttons"]
-        if menuUI and menuUI.Visible == false then
-            ReplicatedStorage.RE.PutInElevator:FireServer()
+    })
+
+        Tabs.Script:AddButton({
+        Title = "Reset JumpPower",
+        Description = "Reset JumpPower normal",
+        Callback = function()
+            Window:Dialog({
+                Title = "Reset JumpPower",
+                Content = "Are you sure you want to reset the JumpPower?",
+                Buttons = {
+                    {
+                        Title = "Confirm",
+                        Callback = function()
+                   game.Players.LocalPlayer.Character.Humanoid.JumpPower = 50
+                        end
+                    },
+                    {
+                        Title = "Cancel",
+                        Callback = function()
+                        end
+                    }
+                }
+            })
         end
-    end
-    
-    local Toggle = Tabs.Gameworks:AddToggle("AutoElevatorValue", {
-        Title = "Auto Join Elevator",
-        Default = false
     })
     
+    local Toggle = Tabs.Script:AddToggle("AntiAFKEnableds", {Title = "Anti AFK", Default = false})
+
     Toggle:OnChanged(function()
-        getgenv().AutoElevator = Options.AutoElevatorValue.Value
+        getgenv().AntiAFKEnabled = Options.AntiAFKEnableds.Value
     
-        if getgenv().AutoElevator then
-            startAutoElevatorLoop()
+        if getgenv().AntiAFKEnabled then
+            startAntiAFK()
         else
-            getgenv().AutoElevator = false
+            getgenv().AntiAFKEnabled = false
         end
     end)
     
-    function startAutoElevatorLoop()
+    function startAntiAFK()
         spawn(function()
-            while getgenv().AutoElevator do
-                autoRespawn()
-                
-                checkElevatorAndJoin()
-                
-                wait(.5)
-            end
-        end)
-    end
+            getgenv().antiAfkEnabled = true
     
-    Tabs.Gameworks:AddButton({
-        Title = "Put In Elevator",
+            local VirtualUser = game:GetService("VirtualUser")
+    
+            game:GetService("Players").LocalPlayer.Idled:connect(function()
+                while getgenv().antiAfkEnabled do
+                    VirtualUser:CaptureController()
+                    VirtualUser:ClickButton2(Vector2.new())
+                    wait(60)
+                end
+            end)
+        end)
+    end    
+    
+    Tabs.Script:AddSection("Script")
+
+
+    Tabs.Script:AddButton({
+        Title = "Infinite Yield",
         Description = "",
         Callback = function()
-            game:GetService("ReplicatedStorage").RE.PutInElevator:FireServer()
-        end
-    })
-    
-    Tabs.Gameworks:AddSection("Alert")
-    
-    local CurrentRoom = workspace:WaitForChild("Values"):WaitForChild("CurrentRoom")
-    
-    local Toggle = Tabs.Gameworks:AddToggle("CurrentRoom_Alert", {
-        Title = "Current Room Alert",
-        Default = false
-    })
-    
-    Toggle:OnChanged(function()
-        getgenv().CurrentRoomAlert = Options.CurrentRoom_Alert.Value
-    
-        if getgenv().CurrentRoomAlert then
-            startRoomAlert()
-        else
-            getgenv().CurrentRoomAlert = false
-        end
-    end)
-    
-    local lastRoomValue
-    
-    function startRoomAlert()
-        spawn(function()
-            while getgenv().CurrentRoomAlert do
-                local currentValue = CurrentRoom.Value
-    
-                if currentValue ~= lastRoomValue then
-                    lastRoomValue = currentValue
-    
-                    if currentValue then
-                        Fluent:Notify({
-                            Title = "7yd7 | Hub",
-                            Content = "The Floor has been changed to: " .. currentValue.Name,
-                            Duration = 8
-                        })
-                    else
-                        Fluent:Notify({
-                            Title = "7yd7 | Hub",
-                            Content = "Floor changed to: None",
-                            Duration = 8
-                        })
-                    end
-                end
-    
-                task.wait(0.5) 
-            end
-        end)
-    end
-    
-    Tabs.Gameworks:AddSection("Items")
-    
-    local Players = game:GetService("Players")
-    local LocalPlayer = Players.LocalPlayer
-    local ItemsFolder = LocalPlayer.Items
-    local Backpack = LocalPlayer.Backpack
-    
-    local function getItemNames()
-        local itemNames = {}
-        local itemCounts = {}
-        local itemsOnly = {}
-        
-        for _, item in pairs(ItemsFolder:GetChildren()) do
-            local itemName = item.Name
-            if not itemCounts[itemName] then
-                itemCounts[itemName] = 0
-                table.insert(itemNames, itemName)
-                itemsOnly[itemName] = true 
-            end
-            itemCounts[itemName] = itemCounts[itemName] + 1
-        end
-        
-        for _, tool in pairs(Backpack:GetChildren()) do
-            local toolName = tool.Name
-            if not itemCounts[toolName] then
-                itemCounts[toolName] = 0
-                table.insert(itemNames, toolName)
-            end
-            itemCounts[toolName] = itemCounts[toolName] + 1
-        end
-        
-        local formattedNames = {}
-        for _, name in ipairs(itemNames) do
-            if itemCounts[name] > 1 then
-                table.insert(formattedNames, name .. " x" .. itemCounts[name])
-            else
-                table.insert(formattedNames, name)
-            end
-        end
-        
-        return formattedNames, itemNames, itemsOnly
-    end
-    
-    local formattedItemNames, originalItemNames, itemsOnly = getItemNames()
-    
-    local selectedItem = nil
-    local duplicateAmount = 1
-    local isDuplicating = false
-    
-    local Dropdown = Tabs.Gameworks:AddDropdown("ItemsDropdown", {
-        Title = "Select Items to duplicate/use",
-        Values = formattedItemNames,
-        Multi = false,
-        Default = 1,
-    })
-    
-    Dropdown:OnChanged(function(Value)
-        local baseItemName = string.match(Value, "^(.+)%sx%d+$") or Value
-        selectedItem = baseItemName
-    end)
-    
-    local Input = Tabs.Gameworks:AddInput("DuplicateAmount", {
-        Title = "Number of Duplications",
-        Default = "1",
-        Placeholder = "Enter amount",
-        Numeric = true, 
-        Finished = false, 
-        Callback = function(Value)
-            duplicateAmount = tonumber(Value) or 1
-        end
-    })
-    
-    local DuplicateButton = Tabs.Gameworks:AddButton({
-        Title = "Duplicate Selected Item",
-        Description = "Duplicates the selected item the specified number of times",
-        Callback = function()
-            if isDuplicating then
-                Fluent:Notify({
-                    Title = "7yd7 | Hub",
-                    Content = "Already duplicating items! Please wait...",
-                    Duration = 8
-                })
-                return
-            end
-            
-            if not selectedItem then
-                Fluent:Notify({
-                    Title = "7yd7 | Hub",
-                    Content = "Please select an item first!",
-                    Duration = 8
-                })
-                return
-            end
-            
-            local _, _, currentItemsOnly = getItemNames()
-            if not currentItemsOnly[selectedItem] then
-                Fluent:Notify({
-                    Title = "7yd7 | Hub",
-                    Content = "Must be purchased in 'Shop' at least",
-                    Duration = 8
-                })
-                return
-            end
-            
-            isDuplicating = true
-            
-            local duplicationsCompleted = 0
-            
-            local function doNextDuplication()
-                if duplicationsCompleted < duplicateAmount then
-                    game:GetService("ReplicatedStorage").RE.Items.Equip:FireServer(selectedItem)
-                    duplicationsCompleted = duplicationsCompleted + 1
-                    
-                    wait(0.1)
-                    doNextDuplication()
-                else
-                    print("Duplication completed!")
-                    Fluent:Notify({
-                        Title = "7yd7 | Hub",
-                        Content = "Duplication completed! (Probably not well dubbed)",
-                        Duration = 8
-                    })
-                    isDuplicating = false
-                    
-                    wait(1)
-                    local newFormattedNames = getItemNames()
-                    Dropdown:SetValues(newFormattedNames)
-                end
-            end
-            
-            doNextDuplication()
-        end
-    })
-    
-    local UseItemButton = Tabs.Gameworks:AddButton({
-        Title = "Use Selected Item",
-        Description = "Equips and uses the selected item",
-        Callback = function()
-            if not selectedItem then
-                Fluent:Notify({
-                    Title = "7yd7 | Hub",
-                    Content = "Please select an item first!",
-                    Duration = 8
-                })
-                return
-            end
-            
-            local character = LocalPlayer.Character
-            if character and character:FindFirstChildOfClass("Tool") then
-                Fluent:Notify({
-                    Title = "7yd7 | Hub",
-                    Content = "You are already holding a tool! Please unequip it first.",
-                    Duration = 8
-                })
-                return
-            end
-            
-            local tool = nil
-            for _, item in pairs(Backpack:GetChildren()) do
-                if item.Name == selectedItem then
-                    tool = item
-                    break
-                end
-            end
-            
-            if not tool then
-                game:GetService("ReplicatedStorage").RE.Items.Equip:FireServer(selectedItem)
-                wait(0.5)
-                
-                for _, item in pairs(Backpack:GetChildren()) do
-                    if item.Name == selectedItem then
-                        tool = item
-                        break
-                    end
-                end
-                
-                if not tool then
-                    Fluent:Notify({
-                        Title = "7yd7 | Hub",
-                        Content = "Failed to find or equip the tool!",
-                        Duration = 8
-                    })
-                    return
-                end
-            end
-            
-            tool.Parent = character
-            Fluent:Notify({
-                Title = "7yd7 | Hub",
-                Content = "Item equipped: " .. selectedItem,
-                Duration = 8
-            })
-        end
-    })
-    
-    ItemsFolder.ChildAdded:Connect(function()
-        wait(0.5)
-        local newFormattedNames = getItemNames()
-        Dropdown:SetValues(newFormattedNames)
-    end)
-    
-    ItemsFolder.ChildRemoved:Connect(function()
-        wait(0.5)
-        local newFormattedNames = getItemNames()
-        Dropdown:SetValues(newFormattedNames)
-    end)
-    
-    Backpack.ChildAdded:Connect(function()
-        wait(0.5)
-        local newFormattedNames = getItemNames()
-        Dropdown:SetValues(newFormattedNames)
-    end)
-    
-    Backpack.ChildRemoved:Connect(function()
-        wait(0.5)
-        local newFormattedNames = getItemNames()
-        Dropdown:SetValues(newFormattedNames)
-    end)
-    
-    Tabs.Gameworks:AddSection("Emote")
-    
-    Tabs.Gameworks:AddParagraph({
-        Title = "How does it work?",
-        Content = "step 1: Add Name Emote Enter the name of the Emote you want [If you don't know, just search the browser for 'Regretevator Wiki Emotes']\nstep 2: Just click on Add Cosmetic emote, your game data will be modified, so rejoin and the emote you want will be added."
-    })
-    
-    local player = game:GetService("Players").LocalPlayer
-    local guiText = player.PlayerGui.RadialMenu.Misc.Top.center
-    
-    local positionOrder = {
-        [1] = Vector2.new(0, 0),
-        [2] = Vector2.new(0.146446615, 0),
-        [3] = Vector2.new(0.5, 0),
-        [4] = Vector2.new(0.853553414, 0),
-        [5] = Vector2.new(1, 0),
-        [6] = Vector2.new(0.853553414, 0),
-        [7] = Vector2.new(0.5, 0),
-        [8] = Vector2.new(0.146446615, 0),
-    }
-    
-    local holder = player.PlayerGui.RadialMenu.Holder
-    local templates = {}
-    
-    for _, child in pairs(holder:GetChildren()) do
-        if child:IsA("Frame") and child.Name == "sideTemplate" then
-            local name = nil
-            for _, inner in ipairs(child:GetChildren()) do
-                if inner.Name ~= "UIAspectRatioConstraint" then
-                    if inner.Name == "bg" or inner.Name == "" then
-                        name = nil
-                    else
-                        name = inner.Name
-                    end
-                    break
-                end
-            end
-            table.insert(templates, {
-                name = name,
-                position = Vector2.new(child.Position.X.Scale, child.Position.Y.Scale),
-                instance = child
-            })
-        end
-    end
-    
-    local function getClosestIndex(pos)
-        local closestIndex = 1
-        local closestDist = math.huge
-        for i, refPos in pairs(positionOrder) do
-            local dist = (refPos - pos).Magnitude
-            if dist < closestDist then
-                closestDist = dist
-                closestIndex = i
-            end
-        end
-        return closestIndex
-    end
-    
-    local ordered = {}
-    for _, item in pairs(templates) do
-        if item.name and item.name ~= "" then
-            local index = getClosestIndex(item.position)
-            while ordered[index] ~= nil do
-                index = index + 1
-                if index > 8 then break end
-            end
-            if index <= 8 then
-                ordered[index] = item.name
-            end
-        end
-    end
-    
-    local Input = Tabs.Gameworks:AddInput("Input", {
-        Title = "Add Name Emote",
-        Default = "",
-        Placeholder = "Enter cosmetic name",
-        Numeric = false,
-        Finished = false,
-        Callback = function(Value)
-        end
-    })
-    
-    local userInputs = {}
-    local function updateAndFire()
-        local index = #userInputs + 1
-        if index > 8 then
-            Fluent:Notify({
-                Title = "7yd7 | Hub",
-                Content = "Cannot add more than 8 cosmetics. Please rejoin or Reset.",
-                Duration = 8
-            })
-            return
-        end
-        table.insert(userInputs, Input.Value)
-    
-        for i = 1, 8 do
-            if not ordered[i] then
-                ordered[i] = Input.Value
-                break
-            end
-        end
-    
-        local newOhTable = {}
-        for i = 1, 8 do
-            if ordered[i] then
-                newOhTable[i] = {
-                    [1] = "emote",
-                    [2] = ordered[i]
+            Window:Dialog({
+                Title = "Infinite Yield",
+                Content = "Are you sure you want to activate the script?",
+                Buttons = {
+                    {
+                        Title = "Yes",
+                        Callback = function()
+
+                            loadstring(game:HttpGet('https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source'))()
+                                end
+                    },
+                    {
+                        Title = "No",
+                        Callback = function()
+                        end
+                    }
                 }
-            end
-        end
-        game:GetService("ReplicatedStorage").RE.Cosmetics.UpdateEquippedCosmetics:FireServer(newOhTable)
-    end
-    
-    Tabs.Gameworks:AddButton({
-        Title = "Add Cosmetic emote",
-        Description = "Adds cosmetic emote to the slot",
-        Callback = updateAndFire
-    })
-    
-    Tabs.Gameworks:AddButton({
-        Title = "Check Equipped emote",
-        Description = "Show cosmetic emote check status",
-        Callback = function()
-            if guiText.Text ~= "Equipped Cosmetics" then
-                Fluent:Notify({
-                    Title = "7yd7 | Hub",
-                    Content = "You must set Equipped Cosmetics for this to work.",
-                    Duration = 8
-                })
-            else
-                print("Equipped Cosmetics is set correctly.")
-                Fluent:Notify({
-                    Title = "7yd7 | Hub",
-                    Content = "Equipped Cosmetics is set correctly. [Open F9]",
-                    Duration = 8
-                })
-            end
-    
-            print("--- Equipped Slots Overview ---")
-            for i = 1, 8 do
-                local val = ordered[i] or "[Empty]"
-                print(string.format("- %d | %s", i, val))
-            end
-            print("-------------------------------")
-        end
-    })
-    
-    Tabs.Gameworks:AddButton({
-        Title = "Reset Cosmetics emote",
-        Description = "Clear all saved cosmetics emote",
-        Callback = function()
-            userInputs = {}
-            for i = 1, 8 do
-                ordered[i] = nil
-            end
-            Fluent:Notify({
-                Title = "7yd7 | Hub",
-                Content = "Cosmetics list reset.",
-                Duration = 8
             })
         end
     })
+
+    Tabs.Script:AddButton({
+        Title = "fates admin",
+        Description = "",
+        Callback = function()
+            Window:Dialog({
+                Title = "fates admin",
+                Content = "Are you sure you want to activate the script?",
+                Buttons = {
+                    {
+                        Title = "Yes",
+                        Callback = function()
+
+                            loadstring(game:HttpGet("https://raw.githubusercontent.com/fatesc/fates-admin/main/main.lua"))()
+                                        end
+                    },
+                    {
+                        Title = "No",
+                        Callback = function()
+                        end
+                    }
+                }
+            })
+        end
+    })
+
+    Tabs.Script:AddButton({
+        Title = "Hydroxide",
+        Description = "",
+        Callback = function()
+            Window:Dialog({
+                Title = "Hydroxide",
+                Content = "Are you sure you want to activate the script?",
+                Buttons = {
+                    {
+                        Title = "Yes",
+                        Callback = function()
+
+ local owner = "Upbolt"
+local branch = "revision"
+
+local function webImport(file)
+    return loadstring(game:HttpGetAsync(("https://raw.githubusercontent.com/%s/Hydroxide/%s/%s.lua"):format(owner, branch, file)), file .. '.lua')()
 end
 
-loadstring(game:HttpGet("https://raw.githubusercontent.com/7yd7/Hub/refs/heads/Branch/NoGame.lua"))()
+webImport("init")
+webImport("ui/main")
+                                        end
+                    },
+                    {
+                        Title = "No",
+                        Callback = function()
+                        end
+                    }
+                }
+            })
+        end
+    })
+
+    Tabs.Script:AddButton({
+        Title = "SimpleSpy",
+        Description = "",
+        Callback = function()
+            Window:Dialog({
+                Title = "SimpleSpy",
+                Content = "Are you sure you want to activate the script?",
+                Buttons = {
+                    {
+                        Title = "Yes",
+                        Callback = function()
+
+                            loadstring(game:HttpGet("https://github.com/exxtremestuffs/SimpleSpySource/raw/master/SimpleSpy.lua"))()
+                                        end
+                    },
+                    {
+                        Title = "No",
+                        Callback = function()
+                        end
+                    }
+                }
+            })
+        end
+    })
+
+    Tabs.Script:AddButton({
+        Title = "Dex V4",
+        Description = "",
+        Callback = function()
+            Window:Dialog({
+                Title = "Dex V4",
+                Content = "Are you sure you want to activate the script?",
+                Buttons = {
+                    {
+                        Title = "Yes",
+                        Callback = function()
+
+                            loadstring(game:HttpGet("https://raw.githubusercontent.com/infyiff/backup/main/dex.lua"))()
+                                        end
+                    },
+                    {
+                        Title = "No",
+                        Callback = function()
+                        end
+                    }
+                }
+            })
+        end
+    })
+
+    Tabs.Script:AddButton({
+        Title = "Dex V3",
+        Description = "",
+        Callback = function()
+            Window:Dialog({
+                Title = "Dex V3",
+                Content = "Are you sure you want to activate the script?",
+                Buttons = {
+                    {
+                        Title = "Yes",
+                        Callback = function()
+
+                            loadstring(game:HttpGet("https://raw.githubusercontent.com/Babyhamsta/RBLX_Scripts/main/Universal/BypassedDarkDexV3.lua", true))()
+                                                end
+                    },
+                    {
+                        Title = "No",
+                        Callback = function()
+                        end
+                    }
+                }
+            })
+        end
+    })
+
+-- سكربت لذي موجوده العاب
+
+
+		Tabs.game:AddSection("Game Works Script")
+
+        Tabs.game:AddParagraph({
+            Title = "Important Warning",
+            Content = "There are three different status levels for the map:\n🟢 Fully Functional (100%): The script operates perfectly within the map.\n🟠 Partially Functional (50%): The script has a 50% success rate; some commands may or may not work as intended.\n🔴 Non-Functional (0%): The script is not operational; commands are either not executed at all or have an extremely low chance of functioning correctly."
+        })
+
+        local api_url = "https://api.github.com/repos/7yd7/Hub/contents/Script?ref=Branch"
+
+        local success, response = pcall(function()
+            return request({
+                Url = api_url,
+                Method = "GET",
+                Headers = {
+                    ["Content-Type"] = "application/json"
+                }
+            })
+        end)
+        
+        if success and response.StatusCode == 200 then
+            local http = game:GetService("HttpService")
+            local data = http:JSONDecode(response.Body)
+        
+            for _, file in pairs(data) do
+                local fullName = file.name
+                
+                local mapName, mapId, status = fullName:match("^(.-)|(%d+)|(.+)$")
+                
+                if mapName and mapId and status then
+                    mapId = tonumber(mapId)
+        
+                    Tabs.game:AddButton({
+                        Title = mapName .. " | " .. status,
+                        Description = "Game Script",
+                        Callback = function()
+                            Window:Dialog({
+                                Title = "Teleport",
+                                Content = "Teleport to game " .. mapName,
+                                Buttons = {
+                                    {
+                                        Title = "Confirm",
+                                        Callback = function()
+                                            game:GetService("TeleportService"):Teleport(mapId, game:GetService("Players").LocalPlayer)
+                                        end
+                                    },
+                                    {
+                                        Title = "Cancel",
+                                        Callback = function() end
+                                    }
+                                }
+                            })
+                        end
+                    })
+                else
+                    print("Invalid format for file: " .. fullName)
+                end
+            end
+        else
+            print("Error fetching data: " .. (response and response.StatusMessage or "Unknown error"))
+        end
+        
+
+-- نهايه
+
+SaveManager:SetLibrary(Fluent)
+InterfaceManager:SetLibrary(Fluent)
+
+
+SaveManager:IgnoreThemeSettings()
+
+SaveManager:SetIgnoreIndexes({})
+
+Window:SelectTab(1)
+
+
+SaveManager:LoadAutoloadConfig()
+
+
+InterfaceManager:SetFolder("FluentScriptHub")
+SaveManager:SetFolder("FluentScriptHub/specific-game")
+
+InterfaceManager:BuildInterfaceSection(Tabs.Settings)
+SaveManager:BuildConfigSection(Tabs.Settings)
+
+
+Window:SelectTab(1)
+
+SaveManager:LoadAutoloadConfig()
+
+    end
