@@ -111,7 +111,7 @@ if getgenv().update then
     local isLoaded1 = false
 
     pcall(function()
-        Tabs.update:AddParagraph({
+        Tabs.Update:AddParagraph({
             Title = "Update to ".. getgenv().GameName,
             Content = getgenv().update()
         })
@@ -122,7 +122,7 @@ if getgenv().update then
         wait()
     end
 else
-    if Tabs and Tabs.update then
+    if Tabs and Tabs.Update then
         Tabs.update:AddParagraph({
             Title = "Update to ".. getgenv().GameName,
             Content = "No script update :("
