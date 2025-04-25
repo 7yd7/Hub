@@ -106,9 +106,16 @@ Tabs.Main:AddParagraph({
 -- لا يوجد ماب
 
 if getgenv().Script then
-    pcall(function() 
-        getgenv().Script() 
+    local isLoaded = false
+
+    pcall(function()
+        getgenv().Script()
+        isLoaded = true 
     end)
+
+    while not isLoaded do
+        wait()
+    end
 else
     if Tabs and Tabs.Gameworks then
         Tabs.Gameworks:AddParagraph({
@@ -478,5 +485,4 @@ Window:SelectTab(1)
 
 SaveManager:LoadAutoloadConfig()
 
-	wait(3)
     end
