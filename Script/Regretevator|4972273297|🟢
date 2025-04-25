@@ -151,7 +151,8 @@ getgenv().Script = function()
         "Fun Flood At Squishy's", "Flood Fill Mine", "Space Dropper", 
         "Suspiciously Long Room", "Superhighway", "Gumball Machine", 
         "Snowy Slope", "Minefield", "Obby", "Random Maze", "Splitsville!",
-        "Slide 4 Admin", "3008", "Color our World", "Funny Maze", "Stanley Room"
+        "Slide 4 Admin", "3008", "Color our World", "Funny Maze", "Stanley Room",
+        "bugbo", "Dodge Teh Teapots"
     }
     
     local ObbyDropdown = Tabs.Gameworks:AddDropdown("ObbySelector", {
@@ -183,7 +184,9 @@ getgenv().Script = function()
         ["3008"] = "3008_Room",
         ["Color our World"] = "ColorTheTiles",
         ["Funny Maze"] = "FunnyMaze",
-        ["Stanley Room"] = "StanelyRoom"
+        ["Stanley Room"] = "StanelyRoom",
+        ["bugbo"] = "bugbo",
+        ["Dodge Teh Teapots"] = "TeapotDodgeball"
     }
     
     local obbyActions = {
@@ -256,7 +259,7 @@ getgenv().Script = function()
             for _, obj in ipairs(TilesFolder:GetDescendants()) do
                 if obj:IsA("BasePart") then
                     firetouchinterest(HumanoidRootPart, obj, 0)
-                    task.wait(0.05)
+                    task.wait(0.01)
                 end
             end
          end,
@@ -268,7 +271,7 @@ getgenv().Script = function()
                     if instance:IsA("ClickDetector") then
                         local path = tostring(instance:GetFullName())
                             fireclickdetector(instance)
-                        wait(0.1)
+                        wait(0.05)
                     end
                 end
             end
@@ -277,6 +280,36 @@ getgenv().Script = function()
          end,
          ["Stanley Room"] = function()
             firetouchinterest(game.Players.LocalPlayer.Character.HumanoidRootPart, workspace.StanelyRoom.Build.Generated.Ending.EndTouch, 0)
+        end,
+        ["bugbo"] = function()
+            local rocks = workspace.bugbo.Build.Rocks
+    
+            local function findAllClickDetectors(parent)
+                local detectors = {}
+                
+                for _, child in ipairs(parent:GetDescendants()) do
+                    if child:IsA("ClickDetector") then
+                        table.insert(detectors, child)
+                    end
+                end
+                
+                return detectors
+            end
+            
+            local clickDetectors = findAllClickDetectors(rocks)
+            
+            for _, clickDetector in ipairs(clickDetectors) do
+                fireclickdetector(clickDetector)
+                wait(0.05) 
+            end
+        end,
+        ["Dodge Teh Teapots"] = function()
+            local Players = game:GetService("Players")
+            local player = Players.LocalPlayer
+            local character = player.Character or player.CharacterAdded:Wait()
+            
+            local destination = workspace.TeapotDodgeball.Build:WaitForChild("Finish")
+            character:MoveTo(destination.Position)        
         end
     }
     
@@ -706,6 +739,274 @@ getgenv().Script = function()
         end
     })
     
+    Tabs.Gameworks:AddSection("Alert")
+    
+    local CurrentRoom = workspace:WaitForChild("Values"):WaitForChild("CurrentRoom")
+    
+    local Toggle = Tabs.Gameworks:AddToggle("CurrentRoom_Alert", {
+        Title = "Current Room Alert",
+        Default = false
+    })
+    
+    Toggle:OnChanged(function()
+        getgenv().CurrentRoomAlert = Options.CurrentRoom_Alert.Value
+    
+        if getgenv().CurrentRoomAlert then
+            startRoomAlert()
+        else
+            getgenv().CurrentRoomAlert = false
+        end
+    end)
+    
+    local lastRoomValue
+    
+    function startRoomAlert()
+        spawn(function()
+            while getgenv().CurrentRoomAlert do
+                local currentValue = CurrentRoom.Value
+    
+                if currentValue ~= lastRoomValue then
+                    lastRoomValue = currentValue
+    
+                    if currentValue then
+                        Fluent:Notify({
+                            Title = "7yd7 | Hub",
+                            Content = "The Floor has been changed to: " .. currentValue.Name,
+                            Duration = 8
+                        })
+                    else
+                        Fluent:Notify({
+                            Title = "7yd7 | Hub",
+                            Content = "Floor changed to: None",
+                            Duration = 8
+                        })
+                    end
+                end
+    
+                task.wait(0.5) 
+            end
+        end)
+    end
+    
+    Tabs.Gameworks:AddSection("Items")
+    
+    local Players = game:GetService("Players")
+    local LocalPlayer = Players.LocalPlayer
+    local ItemsFolder = LocalPlayer.Items
+    local Backpack = LocalPlayer.Backpack
+    
+    local function getItemNames()
+        local itemNames = {}
+        local itemCounts = {}
+        local itemsOnly = {}
+        
+        for _, item in pairs(ItemsFolder:GetChildren()) do
+            local itemName = item.Name
+            if not itemCounts[itemName] then
+                itemCounts[itemName] = 0
+                table.insert(itemNames, itemName)
+                itemsOnly[itemName] = true 
+            end
+            itemCounts[itemName] = itemCounts[itemName] + 1
+        end
+        
+        for _, tool in pairs(Backpack:GetChildren()) do
+            local toolName = tool.Name
+            if not itemCounts[toolName] then
+                itemCounts[toolName] = 0
+                table.insert(itemNames, toolName)
+            end
+            itemCounts[toolName] = itemCounts[toolName] + 1
+        end
+        
+        local formattedNames = {}
+        for _, name in ipairs(itemNames) do
+            if itemCounts[name] > 1 then
+                table.insert(formattedNames, name .. " x" .. itemCounts[name])
+            else
+                table.insert(formattedNames, name)
+            end
+        end
+        
+        return formattedNames, itemNames, itemsOnly
+    end
+    
+    local formattedItemNames, originalItemNames, itemsOnly = getItemNames()
+    
+    local selectedItem = nil
+    local duplicateAmount = 1
+    local isDuplicating = false
+    
+    local Dropdown = Tabs.Gameworks:AddDropdown("ItemsDropdown", {
+        Title = "Select Items to duplicate/use",
+        Values = formattedItemNames,
+        Multi = false,
+        Default = 1,
+    })
+    
+    Dropdown:OnChanged(function(Value)
+        local baseItemName = string.match(Value, "^(.+)%sx%d+$") or Value
+        selectedItem = baseItemName
+    end)
+    
+    local Input = Tabs.Gameworks:AddInput("DuplicateAmount", {
+        Title = "Number of Duplications",
+        Default = "1",
+        Placeholder = "Enter amount",
+        Numeric = true, 
+        Finished = false, 
+        Callback = function(Value)
+            duplicateAmount = tonumber(Value) or 1
+        end
+    })
+    
+    local DuplicateButton = Tabs.Gameworks:AddButton({
+        Title = "Duplicate Selected Item",
+        Description = "Duplicates the selected item the specified number of times",
+        Callback = function()
+            if isDuplicating then
+                Fluent:Notify({
+                    Title = "7yd7 | Hub",
+                    Content = "Already duplicating items! Please wait...",
+                    Duration = 8
+                })
+                return
+            end
+            
+            if not selectedItem then
+                Fluent:Notify({
+                    Title = "7yd7 | Hub",
+                    Content = "Please select an item first!",
+                    Duration = 8
+                })
+                return
+            end
+            
+            local _, _, currentItemsOnly = getItemNames()
+            if not currentItemsOnly[selectedItem] then
+                Fluent:Notify({
+                    Title = "7yd7 | Hub",
+                    Content = "Must be purchased in 'Shop' at least",
+                    Duration = 8
+                })
+                return
+            end
+            
+            isDuplicating = true
+            
+            local duplicationsCompleted = 0
+            
+            local function doNextDuplication()
+                if duplicationsCompleted < duplicateAmount then
+                    game:GetService("ReplicatedStorage").RE.Items.Equip:FireServer(selectedItem)
+                    duplicationsCompleted = duplicationsCompleted + 1
+                    
+                    wait(0.1)
+                    doNextDuplication()
+                else
+                    print("Duplication completed!")
+                    Fluent:Notify({
+                        Title = "7yd7 | Hub",
+                        Content = "Duplication completed! (Probably not well dubbed)",
+                        Duration = 8
+                    })
+                    isDuplicating = false
+                    
+                    wait(1)
+                    local newFormattedNames = getItemNames()
+                    Dropdown:SetValues(newFormattedNames)
+                end
+            end
+            
+            doNextDuplication()
+        end
+    })
+    
+    local UseItemButton = Tabs.Gameworks:AddButton({
+        Title = "Use Selected Item",
+        Description = "Equips and uses the selected item",
+        Callback = function()
+            if not selectedItem then
+                Fluent:Notify({
+                    Title = "7yd7 | Hub",
+                    Content = "Please select an item first!",
+                    Duration = 8
+                })
+                return
+            end
+            
+            local character = LocalPlayer.Character
+            if character and character:FindFirstChildOfClass("Tool") then
+                Fluent:Notify({
+                    Title = "7yd7 | Hub",
+                    Content = "You are already holding a tool! Please unequip it first.",
+                    Duration = 8
+                })
+                return
+            end
+            
+            local tool = nil
+            for _, item in pairs(Backpack:GetChildren()) do
+                if item.Name == selectedItem then
+                    tool = item
+                    break
+                end
+            end
+            
+            if not tool then
+                game:GetService("ReplicatedStorage").RE.Items.Equip:FireServer(selectedItem)
+                wait(0.5)
+                
+                for _, item in pairs(Backpack:GetChildren()) do
+                    if item.Name == selectedItem then
+                        tool = item
+                        break
+                    end
+                end
+                
+                if not tool then
+                    Fluent:Notify({
+                        Title = "7yd7 | Hub",
+                        Content = "Failed to find or equip the tool!",
+                        Duration = 8
+                    })
+                    return
+                end
+            end
+            
+            tool.Parent = character
+            Fluent:Notify({
+                Title = "7yd7 | Hub",
+                Content = "Item equipped: " .. selectedItem,
+                Duration = 8
+            })
+        end
+    })
+    
+    ItemsFolder.ChildAdded:Connect(function()
+        wait(0.5)
+        local newFormattedNames = getItemNames()
+        Dropdown:SetValues(newFormattedNames)
+    end)
+    
+    ItemsFolder.ChildRemoved:Connect(function()
+        wait(0.5)
+        local newFormattedNames = getItemNames()
+        Dropdown:SetValues(newFormattedNames)
+    end)
+    
+    Backpack.ChildAdded:Connect(function()
+        wait(0.5)
+        local newFormattedNames = getItemNames()
+        Dropdown:SetValues(newFormattedNames)
+    end)
+    
+    Backpack.ChildRemoved:Connect(function()
+        wait(0.5)
+        local newFormattedNames = getItemNames()
+        Dropdown:SetValues(newFormattedNames)
+    end)
+    
     Tabs.Gameworks:AddSection("Emote")
     
     Tabs.Gameworks:AddParagraph({
@@ -869,7 +1170,6 @@ getgenv().Script = function()
             })
         end
     })
-
 end
 
 loadstring(game:HttpGet("https://raw.githubusercontent.com/7yd7/Hub/refs/heads/Branch/NoGame.lua"))()
