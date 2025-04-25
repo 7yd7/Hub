@@ -16,7 +16,15 @@ end
 
 getgenv().update = function()
     local text = [[
-Test
+1.0.1
+
++ add Alert
+  * Current Room Alert
++ add Items duplicate
++ add Get Emote anything
++ add Auto Join Elevator
++ add Auto Daily Challenge
+* Fix Auto Coin Farm 70% (Not fully repaired)
     ]]
     return text
 end
