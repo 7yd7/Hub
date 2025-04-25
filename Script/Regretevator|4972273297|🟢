@@ -151,7 +151,7 @@ getgenv().Script = function()
         "Fun Flood At Squishy's", "Flood Fill Mine", "Space Dropper", 
         "Suspiciously Long Room", "Superhighway", "Gumball Machine", 
         "Snowy Slope", "Minefield", "Obby", "Random Maze", "Splitsville!",
-        "Slide 4 Admin", "3008", "Color our World"
+        "Slide 4 Admin", "3008", "Color our World", "Funny Maze", "Stanley Room"
     }
     
     local ObbyDropdown = Tabs.Gameworks:AddDropdown("ObbySelector", {
@@ -181,7 +181,9 @@ getgenv().Script = function()
         ["Splitsville!"] = "Splitsville_Wipeout",
         ["Slide 4 Admin"] = "SLIDE_9999999999_FEET_DOWN_RAINBOW",
         ["3008"] = "3008_Room",
-        ["Color our World"] = "ColorTheTiles"
+        ["Color our World"] = "ColorTheTiles",
+        ["Funny Maze"] = "FunnyMaze",
+        ["Stanley Room"] = "StanelyRoom"
     }
     
     local obbyActions = {
@@ -257,7 +259,25 @@ getgenv().Script = function()
                     task.wait(0.05)
                 end
             end
-         end
+         end,
+         ["Funny Maze"] = function()
+            local targetPath = workspace.FunnyMaze.Build.FinalNotes
+            
+            local function activateClickDetectorsInPath()
+                for _, instance in pairs(targetPath:GetDescendants()) do
+                    if instance:IsA("ClickDetector") then
+                        local path = tostring(instance:GetFullName())
+                            fireclickdetector(instance)
+                        wait(0.1)
+                    end
+                end
+            end
+            
+            activateClickDetectorsInPath()
+         end,
+         ["Stanley Room"] = function()
+            firetouchinterest(game.Players.LocalPlayer.Character.HumanoidRootPart, workspace.StanelyRoom.Build.Generated.Ending.EndTouch, 0)
+        end
     }
     
     ObbyDropdown:OnChanged(function(Value)
@@ -541,6 +561,90 @@ getgenv().Script = function()
         else
             autoCoinFarmRunning = false
             isCollecting = false
+        end
+    end)
+    
+    local Toggle = Tabs.Gameworks:AddToggle("AutoDailyChallengeValue", {Title = "Auto Daily Challenge", Default = false, Description = "Jump",})
+    
+    local originalJumpPower = 15
+    
+    Toggle:OnChanged(function()
+        getgenv().AutoDailyChallenge = Options.AutoDailyChallengeValue.Value
+        
+        local player = game:GetService("Players").LocalPlayer
+        local humanoid = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+        
+        if getgenv().AutoDailyChallenge then
+            if humanoid then
+                originalJumpPower = humanoid.JumpPower
+            end
+            
+            startAutoDailyChallengeLoop()
+        else
+            getgenv().AutoDailyChallenge = false
+            
+            if humanoid then
+                humanoid.JumpPower = originalJumpPower
+            end
+        end
+    end)
+    
+    function startAutoDailyChallengeLoop()
+        spawn(function()
+            while getgenv().AutoDailyChallenge do
+                local player = game:GetService("Players").LocalPlayer
+                
+                if player and player.PlayerGui and player.PlayerGui:FindFirstChild("DailyChallengeUI") then
+                    local mainText = player.PlayerGui.DailyChallengeUI.TaskTab.MainText
+                    local stateText = player.PlayerGui.DailyChallengeUI.TaskTab.StateText
+                    
+                    if mainText and stateText then
+                        local taskDescription = mainText.Text
+                        local progressText = stateText.Text
+                        
+                        local currentProgress, totalRequired = progressText:match("(%d+)/(%d+)")
+                        
+                        if currentProgress and totalRequired then
+                            currentProgress = tonumber(currentProgress)
+                            totalRequired = tonumber(totalRequired)
+                            
+                            if currentProgress >= totalRequired then                            
+                                if taskDescription:find("Jump") then
+                                    local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
+                                    if humanoid then
+                                        humanoid.JumpPower = originalJumpPower
+                                    end
+                                end
+                            end
+                            
+                            if taskDescription:find("Jump") then
+                                local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
+                                if humanoid then
+                                    humanoid.JumpPower = 0
+                                    humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+                                end
+                                
+                            elseif taskDescription:find("Speed") then
+                                local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
+                                if humanoid then
+                                    humanoid:Move(Vector3.new(0, 0, 1))
+                                end
+                            end
+                        end
+                    end
+                end
+                
+                task.wait(0.01)
+            end
+        end)
+    end
+    
+    game:GetService("Players").PlayerRemoving:Connect(function(player)
+        if player == game:GetService("Players").LocalPlayer then
+            local humanoid = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+            if humanoid then
+                humanoid.JumpPower = originalJumpPower
+            end
         end
     end)
     
