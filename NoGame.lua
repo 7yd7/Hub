@@ -478,4 +478,5 @@ Window:SelectTab(1)
 
 SaveManager:LoadAutoloadConfig()
 
+	wait(3)
     end
