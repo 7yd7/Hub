@@ -132,11 +132,11 @@ end
 
 -- لا يوجد ماب
 
-if getgenv().Script then
+if getgenv().ScriptGe then
     local isLoaded = false
 
     pcall(function()
-        getgenv().Script()
+        getgenv().ScriptGe()
         isLoaded = true 
     end)
 
