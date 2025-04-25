@@ -6,8 +6,8 @@ getgenv().Value = nil
 
 getgenv().GameName = "Regretevator"
 
-if getgenv().Script then
-    getgenv().Script = nil
+if getgenv().ScriptGe then
+    getgenv().ScriptGe = nil
 end
 
 if getgenv().update then
@@ -29,7 +29,7 @@ getgenv().update = function()
     return text
 end
 
-getgenv().Script = function()
+getgenv().ScriptGe = function()
     function checkConcreteExists()
         if workspace.Elevator and workspace.Elevator.Ceiling and workspace.Elevator.Ceiling:FindFirstChild("Concrete") then
             return true
