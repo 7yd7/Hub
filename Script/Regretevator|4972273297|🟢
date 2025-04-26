@@ -16,6 +16,9 @@ end
 
 getgenv().update = function()
     local text = [[
+1.0.2
++ add Auto Use Selected Items
+
 1.0.1
 
 + add Alert
@@ -1001,6 +1004,58 @@ getgenv().ScriptGe = function()
             })
         end
     })
+    
+    local AutoUseToggle = Tabs.Gameworks:AddToggle("AutoUseItem", {
+        Title = "Auto Use Selected Items",
+        Description = "Auto Equips and uses the selected item",
+        Default = false
+    })
+    
+    AutoUseToggle:OnChanged(function()
+        getgenv().AutoUseItems = Options.AutoUseItem.Value
+        if getgenv().AutoUseItems then
+            startAutoUseItemLoop()
+        else
+            getgenv().AutoUseItems = false
+        end
+    end)
+    
+    function startAutoUseItemLoop()
+        spawn(function()
+            while getgenv().AutoUseItems do
+                if selectedItem then
+                    local character = LocalPlayer.Character
+                    
+                    if character and not character:FindFirstChildOfClass("Tool") then
+                        local tool = nil
+                        for _, item in pairs(Backpack:GetChildren()) do
+                            if item.Name == selectedItem then
+                                tool = item
+                                break
+                            end
+                        end
+                        
+                        if not tool then
+                            game:GetService("ReplicatedStorage").RE.Items.Equip:FireServer(selectedItem)
+                            wait(0.1)
+                            
+                            for _, item in pairs(Backpack:GetChildren()) do
+                                if item.Name == selectedItem then
+                                    tool = item
+                                    break
+                                end
+                            end
+                        end
+                        
+                        if tool then
+                            tool.Parent = character
+                        end
+                    end
+                end
+                wait(0.1)
+            end
+        end)
+    end
     
     ItemsFolder.ChildAdded:Connect(function()
         wait(0.5)
