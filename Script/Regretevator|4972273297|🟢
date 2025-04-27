@@ -16,11 +16,13 @@ end
 
 getgenv().update = function()
     local text = [[
+1.0.3
++ add Health Monitor
+
 1.0.2
 + add Auto Use Selected Items
 
 1.0.1
-
 + add Alert
   * Current Room Alert
 + add Items duplicate
@@ -760,6 +762,54 @@ getgenv().ScriptGe = function()
             game:GetService("ReplicatedStorage").RE.PutInElevator:FireServer()
         end
     })
+    
+    local HealthSlider = Tabs.Gameworks:AddSlider("HealthThreshold", {
+        Title = "Critical Health Level",
+        Description = "Set the health level that will be considered dangerous",
+        Default = 50,
+        Min = 1,
+        Max = 50,
+        Rounding = 0,
+        Callback = function(Value)
+            getgenv().HealthThreshold = Value
+            print("Health threshold updated to:", Value)
+        end
+    })
+    
+    HealthSlider:SetValue(50)
+    
+    local HealthToggle = Tabs.Gameworks:AddToggle("HealthMonitorValue", {
+        Title = "Health Monitor", 
+        Description = "Will automatically 'Put In Elevator' when health falls below the threshold",
+        Default = false
+    })
+    
+    HealthToggle:OnChanged(function()
+        getgenv().HealthMonitor = Options.HealthMonitorValue.Value
+        if getgenv().HealthMonitor then
+            startHealthMonitorLoop()
+        else
+            getgenv().HealthMonitor = false
+        end
+    end)
+    
+    function startHealthMonitorLoop()
+        spawn(function()
+            while getgenv().HealthMonitor do
+                local player = game.Players.LocalPlayer
+                if player and player.Character and player.Character:FindFirstChild("Humanoid") then
+                    local humanoid = player.Character:FindFirstChild("Humanoid")
+                    local currentHealth = humanoid.Health
+                    local threshold = getgenv().HealthThreshold or 50
+                    
+                    if currentHealth < threshold then
+                        game:GetService("ReplicatedStorage").RE.PutInElevator:FireServer()
+                    end
+                end
+                wait(0.3)
+            end
+        end)
+    end
     
     Tabs.Gameworks:AddSection("Alert")
     
