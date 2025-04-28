@@ -16,6 +16,9 @@ end
 
 getgenv().update = function()
     local text = [[
+1.0.4
+* Fix "AFK" 
+
 1.0.3
 + add Health Monitor
 
@@ -111,7 +114,13 @@ getgenv().ScriptGe = function()
         humanoidRootPart.CFrame = concrete.CFrame + Vector3.new(0, -10, 0)
     end
     
+    local LocalPlayer = Players.LocalPlayer
+    local menuUI = LocalPlayer.PlayerGui.Menus.CenteredMenuButtons["Elevator Buttons"]
+    
+    
     function teleportToAFKPart()
+        if menuUI and menuUI.Visible == true then
+    
         if not checkConcreteExists() then
             return
         end
@@ -125,6 +134,7 @@ getgenv().ScriptGe = function()
             if not isPlayerAbovePart(player, afkPart) then
                 humanoidRootPart.CFrame = afkPart.CFrame + Vector3.new(0, 10, 0) 
             end
+            end
         end
     end
     
@@ -136,8 +146,7 @@ getgenv().ScriptGe = function()
         spawn(function()
             while getgenv().AFK do
                 teleportToAFKPart()
-                wait(5) 
-                
+                wait(2) 
                 if not getgenv().AFK then
                     break
                 end
@@ -146,6 +155,7 @@ getgenv().ScriptGe = function()
     end
     
     local Toggle = Tabs.Gameworks:AddToggle("AFKValue", {Title = "AFK", Default = false})
+    
     
     Toggle:OnChanged(function()
         if not checkConcreteExists() and Options.AFKValue.Value then
@@ -158,7 +168,9 @@ getgenv().ScriptGe = function()
         if getgenv().AFK then
             startAFKLoop()
         else
+            if menuUI and menuUI.Visible == true then
             returnToElevator()
+        end
             getgenv().AFK = false
         end
     end)
@@ -772,7 +784,6 @@ getgenv().ScriptGe = function()
         Rounding = 0,
         Callback = function(Value)
             getgenv().HealthThreshold = Value
-            print("Health threshold updated to:", Value)
         end
     })
     
@@ -976,7 +987,6 @@ getgenv().ScriptGe = function()
                     wait(0.1)
                     doNextDuplication()
                 else
-                    print("Duplication completed!")
                     Fluent:Notify({
                         Title = "7yd7 | Hub",
                         Content = "Duplication completed! (Probably not well dubbed)",
@@ -1262,7 +1272,6 @@ getgenv().ScriptGe = function()
                     Duration = 8
                 })
             else
-                print("Equipped Cosmetics is set correctly.")
                 Fluent:Notify({
                     Title = "7yd7 | Hub",
                     Content = "Equipped Cosmetics is set correctly. [Open F9]",
