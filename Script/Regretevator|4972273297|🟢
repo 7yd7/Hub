@@ -17,7 +17,7 @@ end
 getgenv().update = function()
     local text = [[
 1.0.4
-* Fix "AFK" 
+* Fix "AFK"
 
 1.0.3
 + add Health Monitor
@@ -105,20 +105,23 @@ getgenv().ScriptGe = function()
         if not checkConcreteExists() then
             return
         end
-    
+        local Players = game:GetService("Players")
+        local LocalPlayer = Players.LocalPlayer
+        local menuUI = LocalPlayer.PlayerGui.Menus.CenteredMenuButtons["Elevator Buttons"]     
+        if menuUI and menuUI.Visible == true then
         local player = game.Players.LocalPlayer
         local character = player.Character or player.CharacterAdded:Wait()
         local humanoidRootPart = character:WaitForChild("HumanoidRootPart")
         
         local concrete = workspace.Elevator.Ceiling:FindFirstChild("Concrete")
         humanoidRootPart.CFrame = concrete.CFrame + Vector3.new(0, -10, 0)
+        end
     end
     
-    local LocalPlayer = Players.LocalPlayer
-    local menuUI = LocalPlayer.PlayerGui.Menus.CenteredMenuButtons["Elevator Buttons"]
-    
-    
     function teleportToAFKPart()
+        local Players = game:GetService("Players")
+        local LocalPlayer = Players.LocalPlayer
+        local menuUI = LocalPlayer.PlayerGui.Menus.CenteredMenuButtons["Elevator Buttons"]    
         if menuUI and menuUI.Visible == true then
     
         if not checkConcreteExists() then
@@ -133,7 +136,7 @@ getgenv().ScriptGe = function()
         if afkPart then
             if not isPlayerAbovePart(player, afkPart) then
                 humanoidRootPart.CFrame = afkPart.CFrame + Vector3.new(0, 10, 0) 
-            end
+               end
             end
         end
     end
@@ -167,10 +170,8 @@ getgenv().ScriptGe = function()
     
         if getgenv().AFK then
             startAFKLoop()
-        else
-            if menuUI and menuUI.Visible == true then
+        else   
             returnToElevator()
-        end
             getgenv().AFK = false
         end
     end)
