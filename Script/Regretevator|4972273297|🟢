@@ -16,6 +16,9 @@ end
 
 getgenv().update = function()
     local text = [[
+1.0.5
++ add more "Auto Daily Challenge"
+  * Sit | Jump (More will be added soon.)
 1.0.4
 * Fix "AFK"
 
@@ -105,23 +108,20 @@ getgenv().ScriptGe = function()
         if not checkConcreteExists() then
             return
         end
-        local Players = game:GetService("Players")
-        local LocalPlayer = Players.LocalPlayer
-        local menuUI = LocalPlayer.PlayerGui.Menus.CenteredMenuButtons["Elevator Buttons"]     
-        if menuUI and menuUI.Visible == true then
+    
         local player = game.Players.LocalPlayer
         local character = player.Character or player.CharacterAdded:Wait()
         local humanoidRootPart = character:WaitForChild("HumanoidRootPart")
         
         local concrete = workspace.Elevator.Ceiling:FindFirstChild("Concrete")
         humanoidRootPart.CFrame = concrete.CFrame + Vector3.new(0, -10, 0)
-        end
     end
     
+    local LocalPlayer = Players.LocalPlayer
+    local menuUI = LocalPlayer.PlayerGui.Menus.CenteredMenuButtons["Elevator Buttons"]
+    
+    
     function teleportToAFKPart()
-        local Players = game:GetService("Players")
-        local LocalPlayer = Players.LocalPlayer
-        local menuUI = LocalPlayer.PlayerGui.Menus.CenteredMenuButtons["Elevator Buttons"]    
         if menuUI and menuUI.Visible == true then
     
         if not checkConcreteExists() then
@@ -136,7 +136,7 @@ getgenv().ScriptGe = function()
         if afkPart then
             if not isPlayerAbovePart(player, afkPart) then
                 humanoidRootPart.CFrame = afkPart.CFrame + Vector3.new(0, 10, 0) 
-               end
+            end
             end
         end
     end
@@ -170,8 +170,10 @@ getgenv().ScriptGe = function()
     
         if getgenv().AFK then
             startAFKLoop()
-        else   
+        else
+            if menuUI and menuUI.Visible == true then
             returnToElevator()
+        end
             getgenv().AFK = false
         end
     end)
@@ -634,7 +636,7 @@ getgenv().ScriptGe = function()
         end
     end)
     
-    local Toggle = Tabs.Gameworks:AddToggle("AutoDailyChallengeValue", {Title = "Auto Daily Challenge", Default = false, Description = "Jump",})
+    local Toggle = Tabs.Gameworks:AddToggle("AutoDailyChallengeValue", {Title = "Auto Daily Challenge", Default = false, Description = "Jump | Sit",})
     
     local originalJumpPower = 15
     
@@ -694,11 +696,133 @@ getgenv().ScriptGe = function()
                                     humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
                                 end
                                 
-                            elseif taskDescription:find("Speed") then
-                                local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
-                                if humanoid then
-                                    humanoid:Move(Vector3.new(0, 0, 1))
+                            elseif taskDescription:find("Sit") then
+                                local Players = game:GetService("Players")
+                                local LocalPlayer = Players.LocalPlayer
+                                local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+                                local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
+                                local Humanoid = Character:WaitForChild("Humanoid")
+                                
+                                if not getgenv().usedSeatPaths then
+                                    getgenv().usedSeatPaths = {}
                                 end
+                                
+                                local function isElevatorMenuOpen()
+                                    if LocalPlayer.PlayerGui and 
+                                       LocalPlayer.PlayerGui:FindFirstChild("Menus") and 
+                                       LocalPlayer.PlayerGui.Menus:FindFirstChild("CenteredMenuButtons") and 
+                                       LocalPlayer.PlayerGui.Menus.CenteredMenuButtons:FindFirstChild("Elevator Buttons") then
+                                        return LocalPlayer.PlayerGui.Menus.CenteredMenuButtons["Elevator Buttons"].Visible
+                                    end
+                                    return false
+                                end
+                                
+                                local function isSeatUsed(seat)
+                                    local seatPath = seat:GetFullName()
+                                    
+                                    for _, usedPath in pairs(getgenv().usedSeatPaths) do
+                                        if usedPath == seatPath then
+                                            return true
+                                        end
+                                    end
+                                    
+                                    if string.match(seat.Name, "%-Y$") then
+                                        return true
+                                    end
+                                    
+                                    return false
+                                end
+                                
+                                local function findSeatsInModel(model, fromReplicatedStorage)
+                                    local foundSeats = {}
+                                    
+                                    local function searchInInstance(instance)
+                                        for _, child in pairs(instance:GetChildren()) do
+                                            if child:IsA("Seat") and child.ClassName == "Seat" then
+                                                if not isSeatUsed(child) then
+                                                    table.insert(foundSeats, {
+                                                        seat = child,
+                                                        fromReplicatedStorage = fromReplicatedStorage,
+                                                        path = child:GetFullName()
+                                                    })
+                                                end
+                                            end
+                                            
+                                            searchInInstance(child)
+                                        end
+                                    end
+                                    
+                                    searchInInstance(model)
+                                    
+                                    return foundSeats
+                                end
+                                
+                                local function goToSeatAndUse()
+                                    if isElevatorMenuOpen() then
+                                    else
+                                        return
+                                    end
+                                    
+                                    local seatsInWorkspace = findSeatsInModel(workspace, false)
+                                    
+                                    local seatsInReplicatedStorage = {}
+                                    if #seatsInWorkspace == 0 then
+                                        seatsInReplicatedStorage = findSeatsInModel(game:GetService("ReplicatedStorage"), true)
+                                    end
+                                    
+                                    local allSeats = {}
+                                    for _, seatInfo in pairs(seatsInWorkspace) do
+                                        table.insert(allSeats, seatInfo)
+                                    end
+                                    for _, seatInfo in pairs(seatsInReplicatedStorage) do
+                                        table.insert(allSeats, seatInfo)
+                                    end
+                                    
+                                    if #allSeats == 0 then
+                                        return
+                                    end
+                                    
+                                    local selectedSeatInfo = allSeats[1]
+                                    local selectedSeat = selectedSeatInfo.seat
+                                    
+                                    local originalCFrame = selectedSeat.CFrame
+                                    local originalName = selectedSeat.Name
+                                    local originalParent = selectedSeat.Parent
+                                    
+                                    if selectedSeatInfo.fromReplicatedStorage then
+                                        selectedSeat.Parent = workspace
+                                    end
+                                    
+                                    selectedSeat.Name = originalName .. "-Y"
+                                    
+                                    table.insert(getgenv().usedSeatPaths, selectedSeatInfo.path)
+                                    
+                                    local originalPlayerCFrame = HumanoidRootPart.CFrame
+                                    
+                                    local offsetCFrame = selectedSeat.CFrame * CFrame.new(0, 2, 0) 
+                                    HumanoidRootPart.CFrame = offsetCFrame
+                                    
+                                    local connection
+                                    connection = Humanoid:GetPropertyChangedSignal("Sit"):Connect(function()
+                                        if Humanoid.Sit then
+                                            wait(0.1) 
+                                            Humanoid.Sit = false
+                                            
+                                            wait(0.1)
+                                            HumanoidRootPart.CFrame = originalPlayerCFrame
+                                            
+                                            if selectedSeatInfo.fromReplicatedStorage then
+                                                selectedSeat.Parent = originalParent
+                                            end
+                                            
+                                            connection:Disconnect()
+                                        end
+                                    end)
+                                    
+                                    wait(0.5)
+                                end
+                                
+                                goToSeatAndUse()
                             end
                         end
                     end
