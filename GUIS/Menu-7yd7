@@ -335,88 +335,151 @@ searchFrame.BackgroundTransparency = 1
 
 local isVisible = false
 
-local function toggleGUI()
-	isVisible = not isVisible
 
-	local targetTransparency = isVisible and 0 or 1
-	local shadowTargetTransparency = isVisible and 0.6 or 1
+local function makeDraggable(frame)
+	local dragging = false
+	local dragInput
+	local dragStart
+	local startPos
 
-	local tweens = {
-		TweenService:Create(taskbar, tweenInfo, {
-			BackgroundTransparency = targetTransparency,
-			Position = isVisible and 
-				UDim2.new(0.5, 0, 1, -80) or 
-				UDim2.new(0.5, 0, 1, 20)
-		}),
-		TweenService:Create(title, tweenInfo, {
-			TextTransparency = targetTransparency
-		}),
-		TweenService:Create(underline, tweenInfo, {
-			BackgroundTransparency = targetTransparency
-		}),
-		TweenService:Create(scrollFrame, tweenInfo, {
-			ScrollBarImageTransparency = targetTransparency
-		}),
-		TweenService:Create(searchIcon, tweenInfo, {
-			ImageTransparency = targetTransparency
-		}),
-		TweenService:Create(searchBox, tweenInfo, {
-			TextStrokeTransparency = targetTransparency,
-			TextTransparency = targetTransparency,
-			Interactable = true
-		}),
-		TweenService:Create(searchFrame, tweenInfo, {
-			BackgroundTransparency = targetTransparency,
-		})
-
-
-	}
-
-	for _, tween in ipairs(tweens) do
-		tween:Play()
+	local function update(input)
+		local delta = input.Position - dragStart
+		frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, 
+			startPos.Y.Scale, startPos.Y.Offset + delta.Y)
 	end
 
-	task.spawn(function()
-		for i, button in ipairs(scrollFrame:GetChildren()) do
-			if button:IsA("Frame") then
-				local delay = isVisible and (i * 0.05) or (0.05 * (#scrollFrame:GetChildren() - i))
+	frame.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or 
+			input.UserInputType == Enum.UserInputType.Touch then
+			dragging = true
+			dragStart = input.Position
+			startPos = frame.Position
 
-				task.wait(delay)
-
-				TweenService:Create(button, tweenInfo, {
-					BackgroundTransparency = targetTransparency,
-					Position = UDim2.new(
-						0, 
-						isVisible and 0 or (button.Position.X.Offset + 50),
-						0,
-						button.Position.Y.Offset
-					)
-				}):Play()
-
-				for _, child in ipairs(button:GetChildren()) do
-					if child:IsA("TextLabel") then
-						TweenService:Create(child, tweenInfo, {
-							TextTransparency = targetTransparency,
-							Position = UDim2.new(
-								0,
-								isVisible and 15 or 30,
-								child.Position.Y.Scale,
-								child.Position.Y.Offset
-							)
-						}):Play()
-					elseif child:IsA("TextButton") then
-						TweenService:Create(child, tweenInfo, {
-							BackgroundTransparency = targetTransparency,
-							TextTransparency = targetTransparency
-						}):Play()
-					end
+			input.Changed:Connect(function()
+				if input.UserInputState == Enum.UserInputState.End then
+					dragging = false
 				end
-			end
+			end)
+		end
+	end)
+
+	frame.InputChanged:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseMovement or 
+			input.UserInputType == Enum.UserInputType.Touch then
+			dragInput = input
+		end
+	end)
+
+	UIS.InputChanged:Connect(function(input)
+		if input == dragInput and dragging then
+			update(input)
 		end
 	end)
 end
 
 
+
+local function toggleGUI()
+    isVisible = not isVisible
+    local targetTransparency = isVisible and 0 or 1
+    local shadowTargetTransparency = isVisible and 0.6 or 1
+    
+    if isVisible then
+        taskbar.Visible = true
+        for _, child in ipairs(taskbar:GetDescendants()) do
+            if child:IsA("GuiObject") then
+                child.Visible = true
+            end
+        end
+    end
+    
+    local tweens = {
+        TweenService:Create(taskbar, tweenInfo, {
+            BackgroundTransparency = targetTransparency,
+            Position = isVisible and
+                UDim2.new(0.5, 0, 1, -80) or
+                UDim2.new(0.5, 0, 1, 20)
+        }),
+        TweenService:Create(title, tweenInfo, {
+            TextTransparency = targetTransparency
+        }),
+        TweenService:Create(underline, tweenInfo, {
+            BackgroundTransparency = targetTransparency
+        }),
+        TweenService:Create(scrollFrame, tweenInfo, {
+            ScrollBarImageTransparency = targetTransparency
+        }),
+        TweenService:Create(searchIcon, tweenInfo, {
+            ImageTransparency = targetTransparency
+        }),
+        TweenService:Create(searchBox, tweenInfo, {
+            TextStrokeTransparency = targetTransparency,
+            TextTransparency = targetTransparency,
+            Interactable = isVisible
+        }),
+        TweenService:Create(searchFrame, tweenInfo, {
+            BackgroundTransparency = targetTransparency,
+        })
+    }
+    
+    for _, tween in ipairs(tweens) do
+        tween:Play()
+    end
+    
+    local mainTween = tweens[1]
+    
+    task.spawn(function()
+        for i, button in ipairs(scrollFrame:GetChildren()) do
+            if button:IsA("Frame") then
+                local delay = isVisible and (i * 0.05) or (0.05 * (#scrollFrame:GetChildren() - i))
+                task.wait(delay)
+                
+                local buttonTween = TweenService:Create(button, tweenInfo, {
+                    BackgroundTransparency = targetTransparency,
+                    Position = UDim2.new(
+                        0,
+                        isVisible and 0 or (button.Position.X.Offset + 50),
+                        0,
+                        button.Position.Y.Offset
+                    )
+                })
+                buttonTween:Play()
+                
+                for _, child in ipairs(button:GetChildren()) do
+                    if child:IsA("TextLabel") then
+                        TweenService:Create(child, tweenInfo, {
+                            TextTransparency = targetTransparency,
+                            Position = UDim2.new(
+                                0,
+                                isVisible and 15 or 30,
+                                child.Position.Y.Scale,
+                                child.Position.Y.Offset
+                            )
+                        }):Play()
+                    elseif child:IsA("TextButton") then
+                        TweenService:Create(child, tweenInfo, {
+                            BackgroundTransparency = targetTransparency,
+                            TextTransparency = targetTransparency
+                        }):Play()
+                    end
+                end
+            end
+        end
+    end)
+    
+    if not isVisible then
+        mainTween.Completed:Connect(function()
+            taskbar.Visible = false
+            for _, child in ipairs(taskbar:GetDescendants()) do
+                if child:IsA("GuiObject") then
+                    child.Visible = false
+                end
+            end
+        end)
+    end
+end
+
+makeDraggable(taskbar)
 
 
 
