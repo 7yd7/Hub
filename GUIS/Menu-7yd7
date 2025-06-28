@@ -55,7 +55,7 @@ local TextService = game:GetService("TextService")
 
 local gui = Instance.new("ScreenGui")
 gui.Name = "Taskbar"
-gui.Parent = (pcall(game.CoreGui) and game.CoreGui) or Players.LocalPlayer:WaitForChild("PlayerGui")
+gui.Parent = game.CoreGui
 gui.ZIndexBehavior = Enum.ZIndexBehavior.Global
 gui.DisplayOrder = 9999
 
@@ -1825,7 +1825,7 @@ local function createTooltip()
 	tooltip.Text = ""
 	tooltip.Visible = false
 	tooltip.ZIndex = 2
-	tooltip.Parent = Players.LocalPlayer:WaitForChild("PlayerGui")
+	tooltip.Parent = game.CoreGui
 	return tooltip
 end
 
