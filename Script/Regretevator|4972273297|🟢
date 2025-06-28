@@ -16,6 +16,13 @@ end
 
 getgenv().update = function()
     local text = [[
+1.0.6 | 2025/6/28 | It is likely that the latest game script update
++ add PET CAPTURE DELUXE
+* Fix "AFK"
+! removal Items
+! removal Emote
+  * It is no longer working now :(
+
 1.0.5
 + add more "Auto Daily Challenge"
   * Sit | Jump (More will be added soon.)
@@ -42,7 +49,7 @@ getgenv().update = function()
 end
 
 getgenv().ScriptGe = function()
-    function checkConcreteExists()
+function checkConcreteExists()
         if workspace.Elevator and workspace.Elevator.Ceiling and workspace.Elevator.Ceiling:FindFirstChild("Concrete") then
             return true
         else
@@ -104,14 +111,16 @@ getgenv().ScriptGe = function()
         
         return false
     end
-    
+
+       local Players = game:GetService("Players")
+        local LocalPlayer = Players.LocalPlayer
+        local menuUI = LocalPlayer.PlayerGui.Menus.CenteredMenuButtons["Elevator Buttons"]     
+
     function returnToElevator()
         if not checkConcreteExists() then
             return
         end
-        local Players = game:GetService("Players")
-        local LocalPlayer = Players.LocalPlayer
-        local menuUI = LocalPlayer.PlayerGui.Menus.CenteredMenuButtons["Elevator Buttons"]     
+     
         if menuUI and menuUI.Visible == true then
         local player = game.Players.LocalPlayer
         local character = player.Character or player.CharacterAdded:Wait()
@@ -195,7 +204,7 @@ getgenv().ScriptGe = function()
         "Suspiciously Long Room", "Superhighway", "Gumball Machine", 
         "Snowy Slope", "Minefield", "Obby", "Random Maze", "Splitsville!",
         "Slide 4 Admin", "3008", "Color our World", "Funny Maze", "Stanley Room",
-        "bugbo", "Dodge Teh Teapots"
+        "bugbo", "Dodge Teh Teapots", "PET CAPTURE DELUXE", --"Button Comp."
     }
     
     local ObbyDropdown = Tabs.Gameworks:AddDropdown("ObbySelector", {
@@ -229,7 +238,9 @@ getgenv().ScriptGe = function()
         ["Funny Maze"] = "FunnyMaze",
         ["Stanley Room"] = "StanelyRoom",
         ["bugbo"] = "bugbo",
-        ["Dodge Teh Teapots"] = "TeapotDodgeball"
+        ["Dodge Teh Teapots"] = "TeapotDodgeball",
+        ["PET CAPTURE DELUXE"] = "PetCaptureDeluxe",
+        --["Button Comp."] = "ButtonCompetition"
     }
     
     local obbyActions = {
@@ -306,6 +317,25 @@ getgenv().ScriptGe = function()
                 end
             end
          end,
+        ["PET CAPTURE DELUXE"] = function()
+        firetouchinterest(game.Players.LocalPlayer.Character.HumanoidRootPart, workspace.PetCaptureDeluxe.Build.ICOSAHEDRON, 0)
+        firetouchinterest(game.Players.LocalPlayer.Character.HumanoidRootPart, workspace.PetCaptureDeluxe.Build.CONE, 0)
+        firetouchinterest(game.Players.LocalPlayer.Character.HumanoidRootPart, workspace.PetCaptureDeluxe.Build.QUARTZ, 0)
+        local targetPath = workspace.PetCaptureDeluxe.Build.ActiveMonsters
+
+local function activateProximityPromptsInPath()
+    for _, instance in pairs(targetPath:GetDescendants()) do
+        if instance:IsA("ProximityPrompt") then
+            local path = tostring(instance:GetFullName())
+            fireproximityprompt(instance)
+            wait(0.05)
+        end
+    end
+end
+
+activateProximityPromptsInPath()
+       
+         end,
          ["Funny Maze"] = function()
             local targetPath = workspace.FunnyMaze.Build.FinalNotes
             
@@ -318,7 +348,6 @@ getgenv().ScriptGe = function()
                     end
                 end
             end
-            
             activateClickDetectorsInPath()
          end,
          ["Stanley Room"] = function()
@@ -353,7 +382,27 @@ getgenv().ScriptGe = function()
             
             local destination = workspace.TeapotDodgeball.Build:WaitForChild("Finish")
             character:MoveTo(destination.Position)        
+        end,
+        --[[
+        ["Button Comp."] = function()
+local targetPath = workspace.ButtonCompetition.Build.Buttons
+
+local function activateButtonsInPath()
+    for _, instance in pairs(targetPath:GetChildren()) do
+        local buttonPath = instance:FindFirstChild("Button")
+        if buttonPath then
+            local finalButton = buttonPath:FindFirstChild("Button")
+            if finalButton and finalButton:IsA("ClickDetector") then
+                local path = tostring(finalButton:GetFullName())
+                fireclickdetector(finalButton.ClickDetector)
+                wait(0.05)
+            end
         end
+    end
+end
+activateButtonsInPath()   
+        end
+]]
     }
     
     ObbyDropdown:OnChanged(function(Value)
@@ -995,11 +1044,13 @@ getgenv().ScriptGe = function()
                     end
                 end
     
-                task.wait(0.5) 
+                task.wait(0.5)
             end
         end)
     end
-    
+end
+
+    --[[
     Tabs.Gameworks:AddSection("Items")
     
     local Players = game:GetService("Players")
@@ -1269,6 +1320,7 @@ getgenv().ScriptGe = function()
         local newFormattedNames = getItemNames()
         Dropdown:SetValues(newFormattedNames)
     end)
+
     
     Tabs.Gameworks:AddSection("Emote")
     
@@ -1416,7 +1468,6 @@ getgenv().ScriptGe = function()
             print("-------------------------------")
         end
     })
-    
     Tabs.Gameworks:AddButton({
         Title = "Reset Cosmetics emote",
         Description = "Clear all saved cosmetics emote",
@@ -1433,5 +1484,7 @@ getgenv().ScriptGe = function()
         end
     })
 end
+
+]]
 
 loadstring(game:HttpGet("https://raw.githubusercontent.com/7yd7/Hub/refs/heads/Branch/NoGame.lua"))()
