@@ -23,6 +23,7 @@ getgenv().update = function()
 end
 
 getgenv().ScriptGe = function()
+
 Tabs.Gameworks:AddSection("Auto")
 
 local Slider = Tabs.Gameworks:AddSlider("Slider", {
@@ -104,6 +105,28 @@ function updateDropdownValues()
     end
 end
 
+function getInitialResourcesList()
+    local Players = game:GetService("Players")
+    local localPlayer = Players.LocalPlayer
+    local plotName = localPlayer.Name
+    local plot = workspace:FindFirstChild("Plots"):FindFirstChild(plotName)
+    
+    local initialResourcesList = {"All"}
+    local resourceNames = {} 
+    resourceNames["All"] = true 
+    
+    if plot and plot:FindFirstChild("Resources") then
+        for _, resource in ipairs(plot.Resources:GetChildren()) do
+            if resource.Name and not resourceNames[resource.Name] then
+                table.insert(initialResourcesList, resource.Name)
+                resourceNames[resource.Name] = true
+            end
+        end
+    end
+    
+    return initialResourcesList
+end
+
 local Toggle = Tabs.Gameworks:AddToggle("AutoHitResource", {
     Title = "Auto Hit Resource", 
     Default = false
@@ -119,10 +142,13 @@ Toggle:OnChanged(function()
     end
 end)
 
+local initialValues = getInitialResourcesList()
+getgenv().ResourcesList = initialValues
+
 getgenv().ResourcesDropdown = Tabs.Gameworks:AddDropdown("ResourcesSelection", {
     Title = "Select Resources to Hit",
     Description = "Choose which resources to automatically hit. 'All' will hit everything.",
-    Values = {"All"},
+    Values = initialValues, 
     Multi = true,
     Default = {"All"},
 })
@@ -284,9 +310,6 @@ end
     end)
 end
 
-
-
-
 getgenv().AutoCrafterAutoA = false
 getgenv().SelectedCrafts = {"All"}
 getgenv().CraftsList = {"All"}
@@ -386,11 +409,60 @@ function updateDropdownValues()
         end
         
         getgenv().CrafterDropdown:SetValue(validSelections)
-        
-        print("Crafts updated:", table.concat(getgenv().CraftsList, ", "))
-    else
-        print("CrafterDropdown not found!")
     end
+end
+
+function getInitialCraftsList()
+    local Players = game:GetService("Players")
+    local localPlayer = Players.LocalPlayer
+    local plotName = localPlayer.Name
+    
+    if not workspace:FindFirstChild("Plots") then
+        return {"All"}
+    end
+    
+    local plot = workspace.Plots:FindFirstChild(plotName)
+    if not plot then
+        return {"All"}
+    end
+    
+    local landFolder = plot:FindFirstChild("Land")
+    if not landFolder then
+        return {"All"}
+    end
+    
+    local initialCraftsList = {"All"}
+    local craftNames = {}
+    craftNames["All"] = true
+    
+    for _, descendant in ipairs(landFolder:GetDescendants()) do
+        if descendant:IsA("Attachment") and descendant:FindFirstAncestor("Crafter") then
+            local item1 = descendant:GetAttribute("item1")
+            local item2 = descendant:GetAttribute("item2")
+            local output = descendant:GetAttribute("Output")
+            
+            local craftName = ""
+            
+            if output then
+                if item1 and item2 then
+                    craftName = item1 .. " + " .. item2 .. " > " .. output
+                elseif item1 then
+                    craftName = item1 .. " > " .. output
+                end
+            else
+                if item1 and item2 then
+                    craftName = item1 .. " > " .. item2
+                end
+            end
+            
+            if craftName ~= "" and not craftNames[craftName] then
+                table.insert(initialCraftsList, craftName)
+                craftNames[craftName] = true
+            end
+        end
+    end
+    
+    return initialCraftsList
 end
 
 function shouldCraftItem(attachment)
@@ -437,10 +509,13 @@ Toggle:OnChanged(function()
     end
 end)
 
+local initialCrafts = getInitialCraftsList()
+getgenv().CraftsList = initialCrafts
+
 getgenv().CrafterDropdown = Tabs.Gameworks:AddDropdown("CrafterSelection", {
     Title = "Select Crafts",
     Description = "Choose which items to craft automatically.",
-    Values = {"All"},
+    Values = initialCrafts,
     Multi = true,
     Default = {"All"},
 })
@@ -503,8 +578,7 @@ spawn(function()
     updateCraftsList()
 end)
 
-
-Tabs.Gameworks:AddSection("Buy/Sell")
+Tabs.Gameworks:AddSection("Other")
 
 local Toggle = Tabs.Gameworks:AddToggle("SellAllAuto", {Title = "Auto Sell All", Default = false})
 
@@ -521,11 +595,184 @@ end)
 function SellAllAutoLoop()
     spawn(function()
         while getgenv().AutoSellAllA do 
-            wait(2)
+            wait(.3)
             local ReplicatedStorage = game:GetService("ReplicatedStorage")
   local ohBoolean1 = true
         ReplicatedStorage.Communication.SellToMerchant:FireServer(ohBoolean1)
 
+        end
+    end)
+end
+
+local Toggle = Tabs.Gameworks:AddToggle("FishAuto", {Title = "Auto Fish", Default = false})
+
+Toggle:OnChanged(function()
+    getgenv().AutoFishA = Options.FishAuto.Value
+
+    if getgenv().AutoFishA then
+        FishAutoLoop()
+    else
+        getgenv().AutoFishA = false
+    end
+end)
+
+function FishAutoLoop()
+    spawn(function()
+        while getgenv().AutoFishA do 
+            wait(.05)
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local localPlayer = Players.LocalPlayer
+local character = localPlayer.Character or localPlayer.CharacterAdded:Wait()
+local rootPart = character:WaitForChild("HumanoidRootPart")
+
+local ohVector31 = rootPart.Position
+local ohNumber2 = math.huge
+
+ReplicatedStorage.Communication.Fish:InvokeServer(ohVector31, ohNumber2)
+
+        end
+    end)
+end
+
+local function getUpgradeNames()
+    local player = game:GetService("Players").LocalPlayer
+    local upgradePath = player.PlayerGui.Main.Menus.GoldUpgrades.Inner.ScrollingFrame.Hold
+    local upgradeNames = {}
+    
+    local excludeNames = {
+        "UIAspectRatioConstraint",
+        "UIListLayout", 
+        "UIPadding",
+        "Example"
+    }
+    
+    for _, child in pairs(upgradePath:GetChildren()) do
+        local shouldExclude = false
+        for _, excludeName in pairs(excludeNames) do
+            if child.Name == excludeName then
+                shouldExclude = true
+                break
+            end
+        end
+        
+        if not shouldExclude then
+            table.insert(upgradeNames, child.Name)
+        end
+    end
+    
+    return upgradeNames
+end
+
+local upgradeNames = getUpgradeNames()
+local MultiDropdown = Tabs.Gameworks:AddDropdown("MultiDropdown", {
+    Title = "Gold Upgrades", 
+    Description = "Select upgrades to auto-purchase.", 
+    Values = upgradeNames, 
+    Multi = true, 
+    Default = table.clone(upgradeNames),
+})
+
+MultiDropdown:OnChanged(function(Value)
+    local Values = {}
+    for Value, State in next, Value do
+        if State then
+            table.insert(Values, Value)
+        end
+    end
+    getgenv().SelectedUpgrades = Values
+end)
+
+getgenv().SelectedUpgrades = upgradeNames
+
+local function parseGoldAmount(text)
+    if not text then return 0 end
+    
+    text = text:gsub("Gold", ""):gsub("%s+", "")
+    
+    local number = text:match("([%d%.]+)")
+    if not number then return 0 end
+    
+    number = tonumber(number)
+    if not number then return 0 end
+    
+    if text:lower():find("k") then
+        number = number * 1000
+    elseif text:lower():find("m") then
+        number = number * 1000000
+    elseif text:lower():find("b") then
+        number = number * 1000000000
+    end
+    
+    return math.floor(number)
+end
+
+local function getUpgradeCost(upgradeName)
+    local player = game:GetService("Players").LocalPlayer
+    local upgradeButton = player.PlayerGui.Main.Menus.GoldUpgrades.Inner.ScrollingFrame.Hold:FindFirstChild(upgradeName)
+    
+    if upgradeButton and upgradeButton:FindFirstChild("Button") and upgradeButton.Button:FindFirstChild("TextLabel") then
+        local costText = upgradeButton.Button.TextLabel.Text
+        return parseGoldAmount(costText)
+    end
+    
+    return math.huge 
+end
+
+local function getCurrentGold()
+    local player = game:GetService("Players").LocalPlayer
+    if player.leaderstats and player.leaderstats:FindFirstChild("Gold") then
+        return player.leaderstats.Gold.Value
+    end
+    return 0
+end
+
+local function findCheapestAffordableUpgrade()
+    local currentGold = getCurrentGold()
+    local cheapestUpgrade = nil
+    local cheapestCost = math.huge
+    
+    for _, upgradeName in pairs(getgenv().SelectedUpgrades or {}) do
+        local cost = getUpgradeCost(upgradeName)
+        
+        if cost <= currentGold and cost < cheapestCost then
+            cheapestUpgrade = upgradeName
+            cheapestCost = cost
+        end
+    end
+    
+    return cheapestUpgrade, cheapestCost
+end
+
+local Toggle = Tabs.Gameworks:AddToggle("DoGoldUpgradeAuto", {
+    Title = "Auto Upgrade", 
+    Default = false
+})
+
+Toggle:OnChanged(function()
+    getgenv().AutoDoGoldUpgradeA = Options.DoGoldUpgradeAuto.Value
+
+    if getgenv().AutoDoGoldUpgradeA then
+        AutoDoGoldUpgradeALoop()
+    else
+        getgenv().AutoDoGoldUpgradeA = false
+    end
+end)
+
+function AutoDoGoldUpgradeALoop()
+    spawn(function()
+        while getgenv().AutoDoGoldUpgradeA do 
+            wait(0.1) 
+            
+            local upgradeToUse, cost = findCheapestAffordableUpgrade()
+            
+            if upgradeToUse then
+                game:GetService("ReplicatedStorage").Communication.DoGoldUpgrade:FireServer(upgradeToUse)
+                wait(0.5) 
+            else
+                wait(1)
+            end
         end
     end)
 end
