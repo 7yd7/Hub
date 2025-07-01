@@ -23,7 +23,6 @@ getgenv().update = function()
 end
 
 getgenv().ScriptGe = function()
-
 Tabs.Gameworks:AddSection("Auto")
 
 local Slider = Tabs.Gameworks:AddSlider("Slider", {
@@ -202,6 +201,7 @@ spawn(function()
     updateResourcesList()
 end)
 
+
 local Toggle = Tabs.Gameworks:AddToggle("ContributeToExpandAuto", {Title = "Auto Contribute To Expand", Default = false})
 
 Toggle:OnChanged(function()
@@ -214,49 +214,80 @@ Toggle:OnChanged(function()
     end
 end)
 
+
 function ContributeToExpandAutoLoop()
     spawn(function()
         while getgenv().AutoContributeToExpandA do 
             wait(SpeedAutoHitResource)
-local Players = game:GetService("Players")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local localPlayer = Players.LocalPlayer
-local plotName = localPlayer.Name
+            local Players = game:GetService("Players")
+            local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local expandFolder = workspace:WaitForChild("Plots"):FindFirstChild(plotName):FindFirstChild("Expand")
+            local localPlayer = Players.LocalPlayer
+            local plotName = localPlayer.Name
 
-local currenciesFolder = localPlayer:WaitForChild("PlayerGui"):WaitForChild("Main")
-    :WaitForChild("Left"):WaitForChild("Currencies")
+            local expandFolder = workspace:WaitForChild("Plots"):FindFirstChild(plotName):FindFirstChild("Expand")
+            local currenciesFolder = localPlayer:WaitForChild("PlayerGui"):WaitForChild("Main")
+                :WaitForChild("Left"):WaitForChild("Currencies")
 
-for _, expandItem in ipairs(expandFolder:GetChildren()) do
-    local ohString1 = expandItem.Name
+            for _, expandItem in ipairs(expandFolder:GetChildren()) do
+                local ohString1 = expandItem.Name
 
-    local billboardGui = expandItem:FindFirstChild("Top") and expandItem.Top:FindFirstChild("BillboardGui")
-    if billboardGui then
-        for _, guiElement in ipairs(billboardGui:GetChildren()) do
-            if guiElement.Name ~= "UIListLayout" and guiElement.Name ~= "Example" then
-                local ohString2 = guiElement.Name
-                local ohNumber3 = 1
+                local billboardGui = expandItem:FindFirstChild("Top") and expandItem.Top:FindFirstChild("BillboardGui")
+                if billboardGui then
+                    for _, guiElement in ipairs(billboardGui:GetChildren()) do
+                        if guiElement:IsA("Frame") and guiElement.Name ~= "UIListLayout" and guiElement.Name ~= "Example" then
+                            local ohString2 = guiElement.Name
+                            local ohNumber3 = 1
 
-                local currencyItem = currenciesFolder:FindFirstChild(ohString2)
-                if currencyItem and currencyItem:FindFirstChild("Display") then
-                    local displayText = currencyItem.Display.Text
-                    local amount = tonumber(displayText)
+                            -- تحقق من الموارد الموجودة
+                            local currencyItem = currenciesFolder:FindFirstChild(ohString2)
+                            if currencyItem and currencyItem:FindFirstChild("Display") then
 
-                    if amount and amount > 1 then
-                        ReplicatedStorage.Communication.ContributeToExpand:FireServer(ohString1, ohString2, ohNumber3)
+
+                                local function parseShortNumber(text)
+    text = string.lower(text)
+    local number = tonumber(text)
+    if number then
+        return number
+    end
+
+    local value = tonumber(string.match(text, "[%d%.]+"))
+    local suffix = string.match(text, "[a-z]+")
+
+    if value and suffix then
+        if suffix == "k" then
+            return value * 1_000
+        elseif suffix == "m" then
+            return value * 1_000_000
+        elseif suffix == "b" then
+            return value * 1_000_000_000
+        elseif suffix == "t" then
+            return value * 1_000_000_000_000
+        end
+    end
+    return nil
+end
+
+
+                                local displayText = currencyItem.Display.Text
+                                local amount = parseShortNumber(displayText)
+
+                                if amount and amount > 1 then
+                                    -- إطلاق لكل عنصر مهم
+                                    ReplicatedStorage.Communication.ContributeToExpand:FireServer(ohString1, ohString2, ohNumber3)
+                                    task.wait(0.05)
+                                end
+                            end
+                        end
                     end
                 end
             end
         end
-    end
-end
-
-
-        end
     end)
 end
+
+
 
 
 getgenv().AutoCrafterAutoA = false
@@ -494,38 +525,14 @@ function SellAllAutoLoop()
     spawn(function()
         while getgenv().AutoSellAllA do 
             wait(2)
-
-local Players = game:GetService("Players")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-
-local localPlayer = Players.LocalPlayer
-local holdFolder = localPlayer:WaitForChild("PlayerGui")
-    :WaitForChild("Main")
-    :WaitForChild("Menus")
-    :WaitForChild("Sell")
-    :WaitForChild("Inner")
-    :WaitForChild("Stuff")
-    :WaitForChild("Hold")
-
-local ignoreNames = {
-    UIPadding = true,
-    UIGridLayout = true,
-    UIAspectRatioConstraint = true,
-    Example = true,
-}
-
-for _, item in ipairs(holdFolder:GetChildren()) do
-    if not ignoreNames[item.Name] then
-        local ohBoolean1 = true
+            local ReplicatedStorage = game:GetService("ReplicatedStorage")
+  local ohBoolean1 = true
         ReplicatedStorage.Communication.SellToMerchant:FireServer(ohBoolean1)
-        break
-    end
-end
-
 
         end
     end)
 end
+
 
 end
 
