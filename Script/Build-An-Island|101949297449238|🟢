@@ -409,6 +409,7 @@ function updateDropdownValues()
         end
         
         getgenv().CrafterDropdown:SetValue(validSelections)
+        
     end
 end
 
@@ -509,34 +510,16 @@ Toggle:OnChanged(function()
     end
 end)
 
-if not getgenv().CrafterDropdown then
-    getgenv().CrafterDropdown = Tabs.Gameworks:AddDropdown("CrafterSelection", {
-        Title = "Select Crafts",
-        Description = "Choose which items to craft automatically.",
-        Values = getgenv().CraftsList,
-        Multi = true,
-        Default = getgenv().CraftsList,
-    })
+local initialCrafts = getInitialCraftsList()
+getgenv().CraftsList = initialCrafts
 
-    local selectedValues = {}
-    for _, name in ipairs(getgenv().CraftsList) do
-        selectedValues[name] = true
-    end
-
-    getgenv().CrafterDropdown:SetValue(selectedValues)
-    getgenv().SelectedCrafts = getgenv().CraftsList
-
-    getgenv().CrafterDropdown:OnChanged(function(Value)
-        local selected = {}
-        for craftName, isSelected in pairs(Value) do
-            if isSelected then
-                table.insert(selected, craftName)
-            end
-        end
-        getgenv().SelectedCrafts = selected
-    end)
-end
-
+getgenv().CrafterDropdown = Tabs.Gameworks:AddDropdown("CrafterSelection", {
+    Title = "Select Crafts",
+    Description = "Choose which items to craft automatically. [soon]",
+    Values = getgenv().CraftsList,
+    Multi = true,
+    Default = {"All"},
+})
 
 getgenv().CrafterDropdown:OnChanged(function(Value)
     local selectedValues = {}
@@ -596,6 +579,7 @@ spawn(function()
     updateCraftsList()
 end)
 
+
 Tabs.Gameworks:AddSection("Fish")
 
 local Slider = Tabs.Gameworks:AddSlider("Slider", {
@@ -643,8 +627,7 @@ end)
 function FishAutoLoop()
     spawn(function()
         while getgenv().AutoFishA do 
-            wait(.05)
-            for i = 1, SpeedAutodoubleFishrepeat do
+            wait()
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -656,7 +639,6 @@ local ohVector31 = rootPart.Position
 local ohNumber2 = math.huge
 
 ReplicatedStorage.Communication.Fish:InvokeServer(ohVector31, ohNumber2)
-            end
         end
     end)
 end
@@ -829,6 +811,7 @@ function AutoDoGoldUpgradeALoop()
         end
     end)
 end
+
 
 end
 
