@@ -509,16 +509,34 @@ Toggle:OnChanged(function()
     end
 end)
 
-local initialCrafts = getInitialCraftsList()
-getgenv().CraftsList = initialCrafts
+if not getgenv().CrafterDropdown then
+    getgenv().CrafterDropdown = Tabs.Gameworks:AddDropdown("CrafterSelection", {
+        Title = "Select Crafts",
+        Description = "Choose which items to craft automatically.",
+        Values = getgenv().CraftsList,
+        Multi = true,
+        Default = getgenv().CraftsList,
+    })
 
-getgenv().CrafterDropdown = Tabs.Gameworks:AddDropdown("CrafterSelection", {
-    Title = "Select Crafts",
-    Description = "Choose which items to craft automatically.",
-    Values = initialCrafts,
-    Multi = true,
-    Default = {"All"},
-})
+    local selectedValues = {}
+    for _, name in ipairs(getgenv().CraftsList) do
+        selectedValues[name] = true
+    end
+
+    getgenv().CrafterDropdown:SetValue(selectedValues)
+    getgenv().SelectedCrafts = getgenv().CraftsList
+
+    getgenv().CrafterDropdown:OnChanged(function(Value)
+        local selected = {}
+        for craftName, isSelected in pairs(Value) do
+            if isSelected then
+                table.insert(selected, craftName)
+            end
+        end
+        getgenv().SelectedCrafts = selected
+    end)
+end
+
 
 getgenv().CrafterDropdown:OnChanged(function(Value)
     local selectedValues = {}
@@ -578,6 +596,72 @@ spawn(function()
     updateCraftsList()
 end)
 
+Tabs.Gameworks:AddSection("Fish")
+
+local Slider = Tabs.Gameworks:AddSlider("Slider", {
+    Title = "double Fish repeat",
+    Default = 0.3, 
+    Min = 1,    
+    Max = 100,  
+    Rounding = 1, 
+    Callback = function(Value)
+        getgenv().SpeedAutodoubleFishrepeat = Value
+    end
+})
+
+    local ImmediateCheckButton = Tabs.Gameworks:AddButton({
+        Title = "Fish Check",
+        Callback = function()
+            for i = 1, SpeedAutodoubleFishrepeat do
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local localPlayer = Players.LocalPlayer
+local character = localPlayer.Character or localPlayer.CharacterAdded:Wait()
+local rootPart = character:WaitForChild("HumanoidRootPart")
+
+local ohVector31 = rootPart.Position
+local ohNumber2 = math.huge
+
+ReplicatedStorage.Communication.Fish:InvokeServer(ohVector31, ohNumber2)
+            end
+        end
+    })
+
+local Toggle = Tabs.Gameworks:AddToggle("FishAuto", {Title = "Auto Fish", Default = false})
+
+Toggle:OnChanged(function()
+    getgenv().AutoFishA = Options.FishAuto.Value
+
+    if getgenv().AutoFishA then
+        FishAutoLoop()
+    else
+        getgenv().AutoFishA = false
+    end
+end)
+
+function FishAutoLoop()
+    spawn(function()
+        while getgenv().AutoFishA do 
+            wait(.05)
+            for i = 1, SpeedAutodoubleFishrepeat do
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local localPlayer = Players.LocalPlayer
+local character = localPlayer.Character or localPlayer.CharacterAdded:Wait()
+local rootPart = character:WaitForChild("HumanoidRootPart")
+
+local ohVector31 = rootPart.Position
+local ohNumber2 = math.huge
+
+ReplicatedStorage.Communication.Fish:InvokeServer(ohVector31, ohNumber2)
+            end
+        end
+    end)
+end
+
+
 Tabs.Gameworks:AddSection("Other")
 
 local Toggle = Tabs.Gameworks:AddToggle("SellAllAuto", {Title = "Auto Sell All", Default = false})
@@ -604,37 +688,6 @@ function SellAllAutoLoop()
     end)
 end
 
-local Toggle = Tabs.Gameworks:AddToggle("FishAuto", {Title = "Auto Fish", Default = false})
-
-Toggle:OnChanged(function()
-    getgenv().AutoFishA = Options.FishAuto.Value
-
-    if getgenv().AutoFishA then
-        FishAutoLoop()
-    else
-        getgenv().AutoFishA = false
-    end
-end)
-
-function FishAutoLoop()
-    spawn(function()
-        while getgenv().AutoFishA do 
-            wait(.05)
-local Players = game:GetService("Players")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-
-local localPlayer = Players.LocalPlayer
-local character = localPlayer.Character or localPlayer.CharacterAdded:Wait()
-local rootPart = character:WaitForChild("HumanoidRootPart")
-
-local ohVector31 = rootPart.Position
-local ohNumber2 = math.huge
-
-ReplicatedStorage.Communication.Fish:InvokeServer(ohVector31, ohNumber2)
-
-        end
-    end)
-end
 
 local function getUpgradeNames()
     local player = game:GetService("Players").LocalPlayer
@@ -776,7 +829,6 @@ function AutoDoGoldUpgradeALoop()
         end
     end)
 end
-
 
 end
 
