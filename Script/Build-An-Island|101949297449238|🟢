@@ -240,7 +240,6 @@ function ContributeToExpandAutoLoop()
                             local ohString2 = guiElement.Name
                             local ohNumber3 = 1
 
-                            -- تحقق من الموارد الموجودة
                             local currencyItem = currenciesFolder:FindFirstChild(ohString2)
                             if currencyItem and currencyItem:FindFirstChild("Display") then
 
@@ -274,7 +273,6 @@ end
                                 local amount = parseShortNumber(displayText)
 
                                 if amount and amount > 1 then
-                                    -- إطلاق لكل عنصر مهم
                                     ReplicatedStorage.Communication.ContributeToExpand:FireServer(ohString1, ohString2, ohNumber3)
                                     task.wait(0.05)
                                 end
