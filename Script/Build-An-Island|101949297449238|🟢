@@ -692,7 +692,7 @@ local nameToRealName = {}
 local Dropdown = Tabs.Gameworks:AddDropdown("MerchantDropdown", {
     Title = "Select Item Buys",
     Values = {"All"},
-    Multi = false,
+    Multi = true,
     Default = 1,
 })
 
