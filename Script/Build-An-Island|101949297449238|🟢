@@ -1,4 +1,3 @@
-print("test")
 getgenv().Tabs = nil
 getgenv().Options = nil
 getgenv().Window = nil
