@@ -16,6 +16,10 @@ end
 
 getgenv().update = function()
     local text = [[
+1.0.1 | 2025/7/2
+  + add Select Crafts
+  + Auto Buy From Merchant
+
 1.0.0 | 2025/7/1
   + add Script Build An Island! 🏝️
     ]]
@@ -310,6 +314,7 @@ end
     end)
 end
 
+
 getgenv().AutoCrafterAutoA = false
 getgenv().SelectedCrafts = {"All"}
 getgenv().CraftsList = {"All"}
@@ -338,29 +343,33 @@ function updateCraftsList()
     local craftNames = {}
     craftNames["All"] = true
     
-    for _, descendant in ipairs(landFolder:GetDescendants()) do
-        if descendant:IsA("Attachment") and descendant:FindFirstAncestor("Crafter") then
-            local item1 = descendant:GetAttribute("item1")
-            local item2 = descendant:GetAttribute("item2")
-            local output = descendant:GetAttribute("Output")
-            
-            local craftName = ""
-            
-            if output then
-                if item1 and item2 then
-                    craftName = item1 .. " + " .. item2 .. " > " .. output
-                elseif item1 then
-                    craftName = item1 .. " > " .. output
+    for _, item in ipairs(landFolder:GetChildren()) do
+        local crafter = item:FindFirstChild("Crafter")
+        if crafter then
+            local attachment = crafter:FindFirstChild("Attachment")
+            if attachment then
+                local item1 = attachment:GetAttribute("Item1") or attachment:GetAttribute("item1")
+                local item2 = attachment:GetAttribute("Item2") or attachment:GetAttribute("item2")
+                local output = attachment:GetAttribute("Output") or attachment:GetAttribute("output")
+                
+                local craftName = ""
+                
+                if output then
+                    if item1 and item2 then
+                        craftName = item1 .. " + " .. item2 .. " > " .. output
+                    elseif item1 then
+                        craftName = item1 .. " > " .. output
+                    end
+                else
+                    if item1 and item2 then
+                        craftName = item1 .. " > " .. item2
+                    end
                 end
-            else
-                if item1 and item2 then
-                    craftName = item1 .. " > " .. item2
+                
+                if craftName ~= "" and not craftNames[craftName] then
+                    table.insert(newCraftsList, craftName)
+                    craftNames[craftName] = true
                 end
-            end
-            
-            if craftName ~= "" and not craftNames[craftName] then
-                table.insert(newCraftsList, craftName)
-                craftNames[craftName] = true
             end
         end
     end
@@ -409,7 +418,6 @@ function updateDropdownValues()
         end
         
         getgenv().CrafterDropdown:SetValue(validSelections)
-        
     end
 end
 
@@ -418,47 +426,54 @@ function getInitialCraftsList()
     local localPlayer = Players.LocalPlayer
     local plotName = localPlayer.Name
     
-    if not workspace:FindFirstChild("Plots") then
+    local plots = workspace:WaitForChild("Plots", 10)
+    if not plots then
         return {"All"}
     end
     
-    local plot = workspace.Plots:FindFirstChild(plotName)
+    local plot = plots:WaitForChild(plotName, 10)
     if not plot then
         return {"All"}
     end
     
-    local landFolder = plot:FindFirstChild("Land")
+    local landFolder = plot:WaitForChild("Land", 10)
     if not landFolder then
         return {"All"}
     end
+    
+    wait(2)
     
     local initialCraftsList = {"All"}
     local craftNames = {}
     craftNames["All"] = true
     
-    for _, descendant in ipairs(landFolder:GetDescendants()) do
-        if descendant:IsA("Attachment") and descendant:FindFirstAncestor("Crafter") then
-            local item1 = descendant:GetAttribute("item1")
-            local item2 = descendant:GetAttribute("item2")
-            local output = descendant:GetAttribute("Output")
-            
-            local craftName = ""
-            
-            if output then
-                if item1 and item2 then
-                    craftName = item1 .. " + " .. item2 .. " > " .. output
-                elseif item1 then
-                    craftName = item1 .. " > " .. output
+    for _, item in ipairs(landFolder:GetChildren()) do
+        local crafter = item:FindFirstChild("Crafter")
+        if crafter then
+            local attachment = crafter:FindFirstChild("Attachment")
+            if attachment then
+                local item1 = attachment:GetAttribute("Item1") or attachment:GetAttribute("item1")
+                local item2 = attachment:GetAttribute("Item2") or attachment:GetAttribute("item2")
+                local output = attachment:GetAttribute("Output") or attachment:GetAttribute("output")
+                
+                local craftName = ""
+                
+                if output then
+                    if item1 and item2 then
+                        craftName = item1 .. " + " .. item2 .. " > " .. output
+                    elseif item1 then
+                        craftName = item1 .. " > " .. output
+                    end
+                else
+                    if item1 and item2 then
+                        craftName = item1 .. " > " .. item2
+                    end
                 end
-            else
-                if item1 and item2 then
-                    craftName = item1 .. " > " .. item2
+                
+                if craftName ~= "" and not craftNames[craftName] then
+                    table.insert(initialCraftsList, craftName)
+                    craftNames[craftName] = true
                 end
-            end
-            
-            if craftName ~= "" and not craftNames[craftName] then
-                table.insert(initialCraftsList, craftName)
-                craftNames[craftName] = true
             end
         end
     end
@@ -473,9 +488,9 @@ function shouldCraftItem(attachment)
         end
     end
     
-    local item1 = attachment:GetAttribute("item1")
-    local item2 = attachment:GetAttribute("item2")
-    local output = attachment:GetAttribute("Output")
+    local item1 = attachment:GetAttribute("Item1") or attachment:GetAttribute("item1")
+    local item2 = attachment:GetAttribute("Item2") or attachment:GetAttribute("item2")
+    local output = attachment:GetAttribute("Output") or attachment:GetAttribute("output")
     
     local craftName = ""
     
@@ -510,13 +525,10 @@ Toggle:OnChanged(function()
     end
 end)
 
-local initialCrafts = getInitialCraftsList()
-getgenv().CraftsList = initialCrafts
-
 getgenv().CrafterDropdown = Tabs.Gameworks:AddDropdown("CrafterSelection", {
     Title = "Select Crafts",
-    Description = "Choose which items to craft automatically. [soon]",
-    Values = getgenv().CraftsList,
+    Description = "Choose which items to craft automatically.",
+    Values = {"All"},
     Multi = true,
     Default = {"All"},
 })
@@ -532,6 +544,24 @@ getgenv().CrafterDropdown:OnChanged(function(Value)
     getgenv().SelectedCrafts = selectedValues
 end)
 
+spawn(function()
+    wait(3)
+    local initialCrafts = getInitialCraftsList()
+    getgenv().CraftsList = initialCrafts
+    
+    if getgenv().CrafterDropdown then
+        if getgenv().CrafterDropdown.Description then
+            getgenv().CrafterDropdown.Description = "Choose which items to craft automatically."
+        end
+        
+        if getgenv().CrafterDropdown.SetValues then
+            getgenv().CrafterDropdown:SetValues(getgenv().CraftsList)
+        elseif getgenv().CrafterDropdown.Values then
+            getgenv().CrafterDropdown.Values = getgenv().CraftsList
+        end
+    end
+end)
+
 function CrafterAutoLoop()
     spawn(function()
         while getgenv().AutoCrafterAutoA do
@@ -540,20 +570,27 @@ function CrafterAutoLoop()
             local ReplicatedStorage = game:GetService("ReplicatedStorage")
             local localPlayer = Players.LocalPlayer
             local plotName = localPlayer.Name
-            local landFolder = workspace:WaitForChild("Plots"):FindFirstChild(plotName):FindFirstChild("Land")
+            local plots = workspace:FindFirstChild("Plots")
             
-            if landFolder then
-                for _, descendant in ipairs(landFolder:GetDescendants()) do
-                    if descendant:IsA("Attachment") and descendant:FindFirstAncestor("Crafter") then
-                        if shouldCraftItem(descendant) then
-                            if descendant and descendant.Parent then
-                                local success, errorMsg = pcall(function()
-                                    if descendant:GetAttribute("Output") ~= nil then
-                                        ReplicatedStorage.Communication.DoubleCraft:FireServer(descendant)
-                                    else
-                                        ReplicatedStorage.Communication.Craft:FireServer(descendant)
-                                    end
-                                end)
+            if plots then
+                local plot = plots:FindFirstChild(plotName)
+                if plot then
+                    local landFolder = plot:FindFirstChild("Land")
+                    if landFolder then
+                        for _, item in ipairs(landFolder:GetChildren()) do
+                            local crafter = item:FindFirstChild("Crafter")
+                            if crafter then
+                                local attachment = crafter:FindFirstChild("Attachment")
+                                if attachment and shouldCraftItem(attachment) then
+                                    local success, errorMsg = pcall(function()
+                                        local output = attachment:GetAttribute("Output") or attachment:GetAttribute("output")
+                                        if output then
+                                            ReplicatedStorage.Communication.DoubleCraft:FireServer(attachment)
+                                        else
+                                            ReplicatedStorage.Communication.Craft:FireServer(attachment)
+                                        end
+                                    end)
+                                end
                             end
                         end
                     end
@@ -566,7 +603,7 @@ end
 function startCraftsUpdateLoop()
     spawn(function()
         while true do
-            wait(1)
+            wait(2)
             updateCraftsList()
         end
     end)
@@ -575,10 +612,9 @@ end
 startCraftsUpdateLoop()
 
 spawn(function()
-    wait(2)
+    wait(5)
     updateCraftsList()
 end)
-
 
 Tabs.Gameworks:AddSection("Fish")
 
@@ -645,6 +681,209 @@ end
 
 
 Tabs.Gameworks:AddSection("Other")
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local LocalPlayer = Players.LocalPlayer
+local merchantPath = LocalPlayer:WaitForChild("PlayerGui"):WaitForChild("Main")
+    .Menus.Merchant.Inner.ScrollingFrame.Hold
+local nameToRealName = {} 
+
+local Dropdown = Tabs.Gameworks:AddDropdown("MerchantDropdown", {
+    Title = "Select Item Buys",
+    Values = {"All"},
+    Multi = false,
+    Default = 1,
+})
+
+local lastUpdateTime = 0
+local cachedValues = {}
+local isUpdating = false
+
+local function UpdateMerchantDropdown()
+    if isUpdating then return end 
+    isUpdating = true
+    
+    local currentTime = tick()
+    local rawItems = {}
+    
+    local success, result = pcall(function()
+        local children = merchantPath:GetChildren()
+        
+        for i = 1, #children do
+            local child = children[i]
+            local className = child.ClassName
+            
+            if className ~= "UIAspectRatioConstraint" and
+               className ~= "UIGridLayout" and
+               className ~= "UIPadding" and
+               child.Name ~= "Example" then
+                
+                local count = 0
+                local isVisible = child.Visible
+                
+                if isVisible then
+                    local countObj = child:FindFirstChild("Count")
+                    
+                    if countObj and countObj.ClassName == "TextLabel" and countObj.Visible then
+                        local text = countObj.Text
+                        if text and text ~= "" then
+                            local match = string.match(text, "x(%d+)")
+                            count = match and tonumber(match) or 0
+                        end
+                    end
+                else
+                    count = 0 
+                end
+                
+                rawItems[#rawItems + 1] = {
+                    Name = child.Name,
+                    Count = count,
+                    Visible = isVisible
+                }
+            end
+        end
+        
+        -- ترتيب سريع
+        table.sort(rawItems, function(a, b)
+            return a.Count > b.Count
+        end)
+        
+        return rawItems
+    end)
+    
+    if success and result then
+        local dropdownValues = {"All"}
+        local newNameToRealName = {}
+        
+        for i = 1, #result do
+            local item = result[i]
+            local display = item.Name
+            
+            if item.Count > 0 and item.Visible then
+                display = display .. " | x" .. item.Count
+            elseif not item.Visible then
+                display = display
+            else
+                display = display .. " | x0"
+            end
+            
+            dropdownValues[#dropdownValues + 1] = display
+            newNameToRealName[display] = item.Name
+        end
+        
+        local hasChanged = false
+        if #cachedValues ~= #dropdownValues then
+            hasChanged = true
+        else
+            for i = 1, #dropdownValues do
+                if cachedValues[i] ~= dropdownValues[i] then
+                    hasChanged = true
+                    break
+                end
+            end
+        end
+        
+        if hasChanged then
+            cachedValues = dropdownValues
+            nameToRealName = newNameToRealName
+            
+            task.defer(function()
+                Dropdown:SetValues(dropdownValues)
+            end)
+        end
+    end
+    
+    lastUpdateTime = currentTime
+    isUpdating = false
+end
+
+local RunService = game:GetService("RunService")
+local updateConnection
+
+updateConnection = RunService.Heartbeat:Connect(function()
+    local currentTime = tick()
+    
+    if currentTime - lastUpdateTime >= 3 then
+        task.spawn(UpdateMerchantDropdown)
+    end
+end)
+
+local Toggle = Tabs.Gameworks:AddToggle("BuyFromMerchantAuto", {
+    Title = "Auto Buy From Merchant",
+    Default = false
+})
+
+Toggle:OnChanged(function()
+    getgenv().AutoBuyFromMerchantA = Options.BuyFromMerchantAuto.Value
+    if getgenv().AutoBuyFromMerchantA then
+        BuyFromMerchantAutoLoop()
+    else
+        getgenv().AutoBuyFromMerchantA = false
+    end
+end)
+
+function BuyFromMerchantAutoLoop()
+    task.spawn(function()
+        while getgenv().AutoBuyFromMerchantA do
+            task.wait(0.1) 
+            
+            local selected = Options.MerchantDropdown.Value
+            if not selected then continue end
+            
+            local function fire(name)
+                if name and name ~= "" then
+                    pcall(function()
+                        ReplicatedStorage.Communication.BuyFromMerchant:FireServer(name, false)
+                    end)
+                end
+            end
+            
+            if selected == "All" then
+                local itemsToFire = {}
+                for display, realName in pairs(nameToRealName) do
+                    local countMatch = string.match(display, "| x(%d+)")
+                    if countMatch and not string.find(display, "Hidden") then
+                        local count = tonumber(countMatch)
+                        if count and count > 0 then
+                            table.insert(itemsToFire, realName)
+                        end
+                    end
+                end
+                
+                for i = 1, #itemsToFire do
+                    if not getgenv().AutoBuyFromMerchantA then break end
+                    fire(itemsToFire[i])
+                    if i < #itemsToFire then
+                        task.wait(0.05)
+                    end
+                end
+            else
+                local realName = nameToRealName[selected]
+                if realName and not string.find(selected, "Hidden") then
+                    local countMatch = string.match(selected, "| x(%d+)")
+                    if countMatch then
+                        local count = tonumber(countMatch)
+                        if count and count > 0 then
+                            fire(realName)
+                        end
+                    elseif not string.find(selected, "| x") then
+                        fire(realName)
+                    end
+                end
+            end
+        end
+    end)
+end
+
+game:GetService("Players").PlayerRemoving:Connect(function(player)
+    if player == LocalPlayer then
+        if updateConnection then
+            updateConnection:Disconnect()
+        end
+        getgenv().AutoBuyFromMerchantA = false
+    end
+end)
 
 local Toggle = Tabs.Gameworks:AddToggle("SellAllAuto", {Title = "Auto Sell All", Default = false})
 
@@ -811,7 +1050,6 @@ function AutoDoGoldUpgradeALoop()
         end
     end)
 end
-
 
 end
 
