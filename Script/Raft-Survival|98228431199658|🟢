@@ -1,0 +1,296 @@
+getgenv().Tabs = nil
+getgenv().Options = nil
+getgenv().Window = nil
+getgenv().Toggle = nil
+getgenv().Value = nil
+
+getgenv().GameName = "Raft Survival! 🚣"
+
+if getgenv().ScriptGe then
+    getgenv().ScriptGe = nil
+end
+
+if getgenv().update then
+    getgenv().update = nil
+end
+
+getgenv().update = function()
+    local text = [[
+1.0.0 | 2025/7/3
+  + add Script Raft Survival! 🚣
+    ]]
+    return text
+end
+
+getgenv().ScriptGe = function()
+
+local Slider = Tabs.Gameworks:AddSlider("Slider", {
+    Title = "Auto speed adjustment",
+    Description = "Auto speed adjustment (All of them)",
+    Default = 0.3, 
+    Min = 0,    
+    Max = 10,  
+    Rounding = 1, 
+    Callback = function(Value)
+        getgenv().AutoSpeed = Value
+    end
+})
+
+
+getgenv().AutoMineHarvests = false
+getgenv().SelectedBuildings = {}
+getgenv().AvailableBuildings = {}
+
+local Toggle = Tabs.Gameworks:AddToggle("AutoMineHarvest", {
+    Title = "Auto Mine Harvest", 
+    Default = false
+})
+
+local MultiDropdown = Tabs.Gameworks:AddDropdown("BuildingSelection", {
+    Title = "Select Buildings",
+    Description = "Choose which buildings to auto harvest",
+    Values = {"All"},
+    Multi = true,
+    Default = {"All"}
+})
+
+function CleanBuildingName(buildingName)
+    local cleanName = buildingName:gsub("%d+$", ""):gsub("%s+$", "")
+    return cleanName
+end
+
+function GetAvailableBuildings()
+    local Players = game:GetService("Players")
+    local ReplicatedStorage = game:GetService("ReplicatedStorage")
+    local LocalPlayer = Players.LocalPlayer
+    
+    local playerBuildings = LocalPlayer:WaitForChild("Buildings")
+    local worldBuildings = workspace.Main.Plot.Buildings:GetChildren()
+    
+    local availableBuildings = {}
+    local cleanNames = {}
+    
+    for _, building in ipairs(playerBuildings:GetChildren()) do
+        local buildingName = building.Name
+        
+        for _, worldBuilding in ipairs(worldBuildings) do
+            if worldBuilding.Name == buildingName then
+                if worldBuilding:GetAttribute("Growing") ~= nil then
+                    local cleanName = CleanBuildingName(buildingName)
+                    
+                    table.insert(availableBuildings, buildingName)
+                    
+                    if not table.find(cleanNames, cleanName) then
+                        table.insert(cleanNames, cleanName)
+                    end
+                end
+            end
+        end
+    end
+    
+    table.sort(cleanNames)
+    table.insert(cleanNames, 1, "All")
+    
+    getgenv().AvailableBuildings = availableBuildings
+    return cleanNames
+end
+
+function UpdateBuildingsList()
+    spawn(function()
+        while true do
+            wait(2)
+            local newBuildings = GetAvailableBuildings()
+            
+            local currentValues = {}
+            for _, value in ipairs(MultiDropdown.Values or {}) do
+                table.insert(currentValues, value)
+            end
+            
+            if #newBuildings ~= #currentValues then
+                MultiDropdown:SetValues(newBuildings)
+            else
+                local isDifferent = false
+                for i, building in ipairs(newBuildings) do
+                    if building ~= currentValues[i] then
+                        isDifferent = true
+                        break
+                    end
+                end
+                
+                if isDifferent then
+                    MultiDropdown:SetValues(newBuildings)
+                end
+            end
+        end
+    end)
+end
+
+function AutoMineHarvestLoop()
+    spawn(function()
+        while getgenv().AutoMineHarvests do
+            wait(AutoSpeed)
+            
+            local Players = game:GetService("Players")
+            local ReplicatedStorage = game:GetService("ReplicatedStorage")
+            local LocalPlayer = Players.LocalPlayer
+            
+            local KnitServices = ReplicatedStorage.Packages._Index["sleitnick_knit@1.7.0"].knit.Services
+            local EventService = KnitServices.EventService
+            
+            local playerBuildings = LocalPlayer:WaitForChild("Buildings")
+            local worldBuildings = workspace.Main.Plot.Buildings:GetChildren()
+            
+            for _, building in ipairs(playerBuildings:GetChildren()) do
+                local buildingName = building.Name
+                
+                local shouldHarvest = false
+                
+                if table.find(getgenv().SelectedBuildings, "All") then
+                    shouldHarvest = true
+                else
+                    local cleanName = CleanBuildingName(buildingName)
+                    if table.find(getgenv().SelectedBuildings, cleanName) then
+                        shouldHarvest = true
+                    end
+                end
+                
+                if shouldHarvest then
+                    for _, worldBuilding in ipairs(worldBuildings) do
+                        if worldBuilding.Name == buildingName then
+                            if worldBuilding:GetAttribute("Growing") ~= nil then
+                                local ohString1 = buildingName
+                                EventService.RF.MineHarvestable:InvokeServer(ohString1)
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end)
+end
+
+Toggle:OnChanged(function()
+    getgenv().AutoMineHarvests = Options.AutoMineHarvest.Value
+    
+    if getgenv().AutoMineHarvests then
+        AutoMineHarvestLoop()
+    else
+        getgenv().AutoMineHarvests = false
+    end
+end)
+
+MultiDropdown:OnChanged(function(Value)
+    local Values = {}
+    for Value, State in next, Value do
+        if State then
+            table.insert(Values, Value)
+        end
+    end
+    
+    getgenv().SelectedBuildings = Values
+end)
+
+local initialBuildings = GetAvailableBuildings()
+MultiDropdown:SetValues(initialBuildings)
+MultiDropdown:SetValue({All = true})
+getgenv().SelectedBuildings = {"All"}
+
+UpdateBuildingsList()
+
+local Toggle = Tabs.Gameworks:AddToggle("AutoBuyBuilding", {Title = "Auto Buy Building", Description = "If you don't see the Building you purchased, rejoin the game. You don't need to rejoin to buy them—only to see them (except for Quests).", Default = false})
+
+Toggle:OnChanged(function()
+    getgenv().AutoBuyBuildings = Options.AutoBuyBuilding.Value
+
+    if getgenv().AutoBuyBuildings then
+        AutoBuyBuildingsLoop()
+    else
+        getgenv().AutoBuyBuildings = false
+    end
+end)
+
+function AutoBuyBuildingsLoop()
+    spawn(function()
+        while getgenv().AutoBuyBuildings do 
+            wait(AutoSpeed)
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local LocalPlayer = Players.LocalPlayer
+
+local KnitServices = ReplicatedStorage.Packages._Index["sleitnick_knit@1.7.0"].knit.Services
+local EventService = KnitServices.EventService
+
+local PricesFolder = LocalPlayer:WaitForChild("Prices")
+local Coins = LocalPlayer:WaitForChild("leaderstats"):WaitForChild("Coins").Value
+
+local purchasable = {}
+
+for _, priceObj in ipairs(PricesFolder:GetChildren()) do
+    if priceObj:IsA("NumberValue") then
+        local itemName = priceObj.Name
+        local itemPrice = priceObj.Value
+
+        if itemPrice <= Coins then
+            table.insert(purchasable, {Name = itemName, Value = itemPrice})
+        end
+    end
+end
+
+table.sort(purchasable, function(a, b)
+    return a.Value < b.Value
+end)
+
+for _, item in ipairs(purchasable) do
+    local ohString1 = item.Name
+    local ohNumber2 = item.Value
+
+    EventService.RF.AddToBuildingPrice:InvokeServer(ohString1, ohNumber2)
+end
+        end
+    end)
+end
+
+
+local Toggle = Tabs.Gameworks:AddToggle("AutoSellAll", {Title = "Auto Sell All", Default = false})
+
+Toggle:OnChanged(function()
+    getgenv().AutoSellAlls = Options.AutoSellAll.Value
+
+    if getgenv().AutoSellAlls then
+        AutoSellAllsLoop()
+    else
+        getgenv().AutoSellAlls = false
+    end
+end)
+
+function AutoSellAllsLoop()
+    spawn(function()
+        while getgenv().AutoSellAlls do 
+            wait(AutoSpeed)
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local LocalPlayer = Players.LocalPlayer
+
+local KnitServices = ReplicatedStorage.Packages._Index["sleitnick_knit@1.7.0"].knit.Services
+local EventService = KnitServices.EventService
+
+local Inventory = LocalPlayer:WaitForChild("Inventory")
+
+for _, item in ipairs(Inventory:GetChildren()) do
+    local itemName = item.Name
+
+    local ohTable1 = {
+        [itemName] = itemName
+    }
+
+    EventService.RF.Sell:InvokeServer(ohTable1)
+end
+
+        end
+    end)
+end
+
+
+end
+
+loadstring(game:HttpGet("https://raw.githubusercontent.com/7yd7/Hub/refs/heads/Branch/NoGame.lua"))()
