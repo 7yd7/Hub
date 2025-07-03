@@ -65,7 +65,7 @@ local function addTermsToScrollingFrame(frame, terms)
 				local progressBar = Instance.new("Frame")
 
 				notif.Name = "ModernNotification"
-				notif.Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui")
+				notif.Parent = game.CoreGui
 				notif.IgnoreGuiInset = true
 
 				container.Size = UDim2.new(0, 380, 0, 120)
@@ -234,7 +234,7 @@ blur.Parent = game.Lighting
 
 screenGui.Name = "Setup-7yd7"
 screenGui.ResetOnSpawn = false
-screenGui.Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui")
+screenGui.Parent = game.CoreGui
 
 mainFrame.Name = "MainFrame"
 mainFrame.Size = UDim2.new(0, 500, 0, 400)
