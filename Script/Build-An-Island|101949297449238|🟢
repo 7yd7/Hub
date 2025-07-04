@@ -16,6 +16,9 @@ end
 
 getgenv().update = function()
     local text = [[
+1.0.2 | 2025/7/4
+  * Fixed Item Buys
+
 1.0.1 | 2025/7/2
   + add Select Crafts
   + Auto Buy From Merchant
@@ -682,6 +685,7 @@ end
 
 Tabs.Gameworks:AddSection("Other")
 
+
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local LocalPlayer = Players.LocalPlayer
@@ -744,7 +748,6 @@ local function UpdateMerchantDropdown()
             end
         end
         
-        -- ترتيب سريع
         table.sort(rawItems, function(a, b)
             return a.Count > b.Count
         end)
@@ -828,8 +831,10 @@ function BuyFromMerchantAutoLoop()
         while getgenv().AutoBuyFromMerchantA do
             task.wait(0.1) 
             
-            local selected = Options.MerchantDropdown.Value
-            if not selected then continue end
+            local selectedValues = Options.MerchantDropdown.Value
+            if not selectedValues or (type(selectedValues) == "table" and #selectedValues == 0) then 
+                continue 
+            end
             
             local function fire(name)
                 if name and name ~= "" then
@@ -839,7 +844,19 @@ function BuyFromMerchantAutoLoop()
                 end
             end
             
-            if selected == "All" then
+            local buyAll = false
+            if type(selectedValues) == "table" then
+                for _, value in pairs(selectedValues) do
+                    if value == "All" then
+                        buyAll = true
+                        break
+                    end
+                end
+            elseif selectedValues == "All" then
+                buyAll = true
+            end
+            
+            if buyAll then
                 local itemsToFire = {}
                 for display, realName in pairs(nameToRealName) do
                     local countMatch = string.match(display, "| x(%d+)")
@@ -859,16 +876,28 @@ function BuyFromMerchantAutoLoop()
                     end
                 end
             else
-                local realName = nameToRealName[selected]
-                if realName and not string.find(selected, "Hidden") then
-                    local countMatch = string.match(selected, "| x(%d+)")
-                    if countMatch then
-                        local count = tonumber(countMatch)
-                        if count and count > 0 then
-                            fire(realName)
+                local itemsToProcess = {}
+                
+                if type(selectedValues) == "table" then
+                    itemsToProcess = selectedValues
+                else
+                    itemsToProcess = {selectedValues}
+                end
+                
+                for _, selected in pairs(itemsToProcess) do
+                    if selected ~= "All" then
+                        local realName = nameToRealName[selected]
+                        if realName and not string.find(selected, "Hidden") then
+                            local countMatch = string.match(selected, "| x(%d+)")
+                            if countMatch then
+                                local count = tonumber(countMatch)
+                                if count and count > 0 then
+                                    fire(realName)
+                                end
+                            elseif not string.find(selected, "| x") then
+                                fire(realName)
+                            end
                         end
-                    elseif not string.find(selected, "| x") then
-                        fire(realName)
                     end
                 end
             end
@@ -1050,6 +1079,7 @@ function AutoDoGoldUpgradeALoop()
         end
     end)
 end
+
 
 end
 
