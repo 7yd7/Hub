@@ -693,7 +693,7 @@ local Dropdown = Tabs.Gameworks:AddDropdown("MerchantDropdown", {
     Title = "Select Item Buys",
     Values = {"All"},
     Multi = true,
-    Default = 1,
+    Default = {"All"},
 })
 
 local lastUpdateTime = 0
