@@ -16,6 +16,9 @@ end
 
 getgenv().update = function()
     local text = [[
+1.0.3 | 2025/7/5
+  * improvement Contribute To Expand
+
 1.0.2 | 2025/7/4
   * Fixed Item Buys
 
@@ -253,67 +256,66 @@ function ContributeToExpandAutoLoop()
         while getgenv().AutoContributeToExpandA do 
             wait(SpeedAutoHitResource)
 
-            local Players = game:GetService("Players")
-            local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local localPlayer = Players.LocalPlayer
+local plotName = localPlayer.Name
+local expandFolder = workspace:WaitForChild("Plots"):FindFirstChild(plotName):FindFirstChild("Expand")
+local currenciesFolder = localPlayer:WaitForChild("PlayerGui"):WaitForChild("Main")
+    :WaitForChild("Left"):WaitForChild("Currencies")
 
-            local localPlayer = Players.LocalPlayer
-            local plotName = localPlayer.Name
-
-            local expandFolder = workspace:WaitForChild("Plots"):FindFirstChild(plotName):FindFirstChild("Expand")
-            local currenciesFolder = localPlayer:WaitForChild("PlayerGui"):WaitForChild("Main")
-                :WaitForChild("Left"):WaitForChild("Currencies")
-
-            for _, expandItem in ipairs(expandFolder:GetChildren()) do
-                local ohString1 = expandItem.Name
-
-                local billboardGui = expandItem:FindFirstChild("Top") and expandItem.Top:FindFirstChild("BillboardGui")
-                if billboardGui then
-                    for _, guiElement in ipairs(billboardGui:GetChildren()) do
-                        if guiElement:IsA("Frame") and guiElement.Name ~= "UIListLayout" and guiElement.Name ~= "Example" then
-                            local ohString2 = guiElement.Name
-                            local ohNumber3 = 1
-
-                            local currencyItem = currenciesFolder:FindFirstChild(ohString2)
-                            if currencyItem and currencyItem:FindFirstChild("Display") then
-
-
-                                local function parseShortNumber(text)
-    text = string.lower(text)
-    local number = tonumber(text)
-    if number then
-        return number
-    end
-
-    local value = tonumber(string.match(text, "[%d%.]+"))
-    local suffix = string.match(text, "[a-z]+")
-
-    if value and suffix then
-        if suffix == "k" then
-            return value * 1_000
-        elseif suffix == "m" then
-            return value * 1_000_000
-        elseif suffix == "b" then
-            return value * 1_000_000_000
-        elseif suffix == "t" then
-            return value * 1_000_000_000_000
-        end
-    end
-    return nil
-end
-
-
-                                local displayText = currencyItem.Display.Text
-                                local amount = parseShortNumber(displayText)
-
-                                if amount and amount > 1 then
-                                    ReplicatedStorage.Communication.ContributeToExpand:FireServer(ohString1, ohString2, ohNumber3)
-                                end
+for _, expandItem in ipairs(expandFolder:GetChildren()) do
+    local ohString1 = expandItem.Name
+    local billboardGui = expandItem:FindFirstChild("Top") and expandItem.Top:FindFirstChild("BillboardGui")
+    if billboardGui then
+        for _, guiElement in ipairs(billboardGui:GetChildren()) do
+            if guiElement:IsA("Frame") and guiElement.Name ~= "UIListLayout" and guiElement.Name ~= "Example" then
+                local ohString2 = guiElement.Name
+                local ohNumber3 = 1
+                
+                if guiElement:FindFirstChild("Amount") then
+                    local amountText = guiElement.Amount.Text
+                    local maxAmount = string.match(amountText, "/(%d+)")
+                    if maxAmount then
+                        ohNumber3 = tonumber(maxAmount)
+                    end
+                end
+                
+                local currencyItem = currenciesFolder:FindFirstChild(ohString2)
+                if currencyItem and currencyItem:FindFirstChild("Display") then
+                    local function parseShortNumber(text)
+                        text = string.lower(text)
+                        local number = tonumber(text)
+                        if number then
+                            return number
+                        end
+                        local value = tonumber(string.match(text, "[%d%.]+"))
+                        local suffix = string.match(text, "[a-z]+")
+                        if value and suffix then
+                            if suffix == "k" then
+                                return value * 1_000
+                            elseif suffix == "m" then
+                                return value * 1_000_000
+                            elseif suffix == "b" then
+                                return value * 1_000_000_000
+                            elseif suffix == "t" then
+                                return value * 1_000_000_000_000
                             end
                         end
+                        return nil
+                    end
+                    
+                    local displayText = currencyItem.Display.Text
+                    local amount = parseShortNumber(displayText)
+                    if amount and amount > 1 then
+                        ReplicatedStorage.Communication.ContributeToExpand:FireServer(ohString1, ohString2, ohNumber3)
                     end
                 end
             end
         end
+    end
+end
+end
     end)
 end
 
@@ -1079,6 +1081,7 @@ function AutoDoGoldUpgradeALoop()
         end
     end)
 end
+
 
 
 end
