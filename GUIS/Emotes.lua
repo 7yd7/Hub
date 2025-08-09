@@ -258,6 +258,18 @@ local function updateEmotes()
     humanoidDescription:SetEquippedEmotes(equippedEmotes)
 end
 
+local function updatePagesWhileLoading()
+    if #emotesData > 0 then
+        filteredEmotes = emotesData
+        totalPages = math.ceil(#filteredEmotes / itemsPerPage)
+        if totalPages == 0 then
+            totalPages = 1
+        end
+        updatePageDisplay()
+        updateEmotes()
+    end
+end
+
 local function fetchSinglePage(cursor)
     local alternativeUrls = {"https://raw.githubusercontent.com/7yd7/Hub/refs/heads/Branch/GUIS/EmoteSniper.json"}
     for i, url in ipairs(alternativeUrls) do
@@ -323,11 +335,14 @@ local function fetchAllEmotes()
                 if emoteData.id and emoteData.id > 0 then
                     table.insert(emotesData, emoteData)
                     totalEmotesLoaded = totalEmotesLoaded + 1
-                    if totalEmotesLoaded % 10 == 0 then
+                    
+                    if totalEmotesLoaded % 50 == 0 then
+                        updatePagesWhileLoading()
                         wait(0.1)
                     end
                 end
             end
+            updatePagesWhileLoading()
             cursor = response.nextPageCursor
         else
             cursor = nil
@@ -397,10 +412,6 @@ local function searchEmotes(searchTerm)
 end
 
 local function goToPage(pageNumber)
-    if isLoading then
-        return
-    end
-
     if pageNumber < 1 then
         currentPage = 1
     elseif pageNumber > totalPages then
@@ -413,10 +424,6 @@ local function goToPage(pageNumber)
 end
 
 local function previousPage()
-    if isLoading then
-        return
-    end
-
     if currentPage <= 1 then
         currentPage = totalPages
     else
@@ -427,10 +434,6 @@ local function previousPage()
 end
 
 local function nextPage()
-    if isLoading then
-        return
-    end
-
     if currentPage >= totalPages then
         currentPage = 1
     else
@@ -451,10 +454,6 @@ function connectEvents()
     
     if _2Routenumber then
         _2Routenumber.FocusLost:Connect(function(enterPressed)
-            if isLoading then
-                return
-            end
-
             local pageNum = tonumber(_2Routenumber.Text)
             if pageNum then
                 goToPage(pageNum)
