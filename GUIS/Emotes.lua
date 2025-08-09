@@ -1,7 +1,6 @@
 --[[ 
 Source script taken from: https://github.com/Roblox/creator-docs/blob/main/content/en-us/characters/emotes.md
 If you want to set an emote, I recommend using a source script that was taken from for ease of use only.
-Also, UGC emote does not work. It uses an API (apparently old) with this script.
 Also other scripts, there is no difference them. I just created it if you want from the Roblox coregui menu, emote Easily (almost..).
 ]]
 
@@ -201,11 +200,8 @@ local function updateEmotes()
 end
 
 local function fetchSinglePage(cursor)
-    local alternativeUrls = {"https://catalog.roblox.com/v1/search/items?category=12&subcategory=39&limit=30" ..
-        (cursor and ("&cursor=" .. cursor) or "")}
-
+    local alternativeUrls = {"https://raw.githubusercontent.com/7yd7/Hub/refs/heads/Branch/GUIS/EmoteSniper.json"}
     for i, url in ipairs(alternativeUrls) do
-
         local success, result = pcall(function()
             local response = syn and syn.request or request
             local requestData = {
@@ -216,14 +212,12 @@ local function fetchSinglePage(cursor)
                     ["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
                 }
             }
-
             local apiResponse = response(requestData)
-
             if apiResponse.StatusCode == 200 then
                 local data = HttpService:JSONDecode(apiResponse.Body)
                 return {
-                    data = data.data or data.Results or {},
-                    nextPageCursor = data.nextPageCursor or data.NextPageCursor
+                    data = data.data or {},
+                    nextPageCursor = nil
                 }
             else
                 getgenv().Notify({
@@ -234,7 +228,6 @@ local function fetchSinglePage(cursor)
                 return nil
             end
         end)
-
         if success and result then
             return result
         else
@@ -245,7 +238,6 @@ local function fetchSinglePage(cursor)
             })
         end
     end
-
     return nil
 end
 
@@ -256,44 +248,34 @@ local function fetchAllEmotes()
     isLoading = true
     emotesData = {}
     totalEmotesLoaded = 0
-
     local cursor = nil
     local pageCount = 0
-    local maxPages = 100
-
+    local maxPages = 1 
+    
     repeat
         pageCount = pageCount + 1
-
         local response = fetchSinglePage(cursor)
-
         if response and response.data then
             for _, item in pairs(response.data) do
                 local emoteData = {
-                    id = tonumber(item.id) or tonumber(item.assetId) or tonumber(item.AssetId),
-                    name = item.name or item.Name or item.displayName or item.DisplayName or
-                        ("Emote_" .. (item.id or item.assetId or "Unknown"))
+                    id = tonumber(item.id),
+                    name = item.name or ("Emote_" .. (item.id or "Unknown"))
                 }
-
                 if emoteData.id and emoteData.id > 0 then
                     table.insert(emotesData, emoteData)
                     totalEmotesLoaded = totalEmotesLoaded + 1
-
                     if totalEmotesLoaded % 10 == 0 then
                         wait(0.1)
                     end
                 end
             end
-
             cursor = response.nextPageCursor
         else
-
             cursor = nil
         end
-
         wait(0.1)
-
     until not cursor or pageCount >= maxPages
-
+    
     if #emotesData == 0 then
         emotesData = {{
             id = 3360686498,
@@ -310,20 +292,17 @@ local function fetchAllEmotes()
         }}
         totalEmotesLoaded = #emotesData
     end
-
+    
     filteredEmotes = emotesData
     totalPages = math.ceil(#filteredEmotes / itemsPerPage)
     currentPage = 1
-
     updatePageDisplay()
     updateEmotes()
-
     getgenv().Notify({
         Title = '7yd7 | Emote',
         Content = "🎉 Loaded Successfully! Total Emotes: " .. totalEmotesLoaded,
         Duration = 5
     })
-
     isLoading = false
 end
 
