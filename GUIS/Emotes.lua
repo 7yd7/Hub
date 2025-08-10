@@ -71,6 +71,58 @@ local function checkEmotesMenuExists()
     return true, emotesWheel
 end
 
+local function getBackgroundOverlay()
+    local success, result = pcall(function()
+        return game:GetService("CoreGui").RobloxGui.EmotesMenu.Children.Main.EmotesWheel.Back.Background.BackgroundCircleOverlay
+    end)
+    if success then
+        return result
+    end
+    return nil
+end
+
+local function updateGUIColors()
+    local backgroundOverlay = getBackgroundOverlay()
+    if not backgroundOverlay then return end
+    
+    local bgColor = backgroundOverlay.BackgroundColor3
+    local bgTransparency = backgroundOverlay.BackgroundTransparency
+    
+    if _1left then
+        _1left.ImageColor3 = bgColor
+        _1left.ImageTransparency = bgTransparency
+    end
+    
+    if _9right then
+        _9right.ImageColor3 = bgColor
+        _9right.ImageTransparency = bgTransparency
+    end
+    
+    if _4pages then
+        _4pages.TextColor3 = bgColor
+        _4pages.TextTransparency = bgTransparency
+    end
+    
+    if _3TextLabel then
+        _3TextLabel.TextColor3 = bgColor
+        _3TextLabel.TextTransparency = bgTransparency
+    end
+    
+    if _2Routenumber then
+        _2Routenumber.TextColor3 = bgColor
+        _2Routenumber.TextTransparency = bgTransparency
+    end
+    
+    if Top then
+        Top.BackgroundColor3 = bgColor
+        Top.BackgroundTransparency = bgTransparency
+    end
+    
+    if Search then
+        Search.TextColor3 = bgColor
+    end
+end
+
 local function createGUIElements()
     local exists, emotesWheel = checkEmotesMenuExists()
     if not exists then
@@ -222,6 +274,7 @@ local function createGUIElements()
     
     connectEvents()
     isGUICreated = true
+    updateGUIColors()
     return true
 end
 
@@ -508,6 +561,8 @@ local heartbeatConnection
 heartbeatConnection = RunService.Heartbeat:Connect(function()
     if not isGUICreated then
         checkAndRecreateGUI()
+    else
+        updateGUIColors()
     end
 end)
 
