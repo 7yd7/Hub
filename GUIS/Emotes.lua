@@ -512,11 +512,30 @@ local function isDancing(character, animationTrack)
 end
 
 local function stopCurrentEmote()
-	if currentEmoteTrack then
-		currentEmoteTrack:Stop()
-		currentEmoteTrack:Destroy()
-		currentEmoteTrack = nil
-	end
+    if currentEmoteTrack then
+        currentEmoteTrack:Stop()
+        currentEmoteTrack = nil
+    end
+end
+
+
+local function playEmote(humanoid, emoteId)
+    stopCurrentEmote() 
+
+    local animation = Instance.new("Animation")
+    animation.AnimationId = "rbxassetid://" .. emoteId
+
+    local success, animTrack = pcall(function()
+        return humanoid:LoadAnimation(animation)
+    end)
+
+    if success and animTrack then
+        currentEmoteTrack = animTrack
+        currentEmoteTrack.Priority = Enum.AnimationPriority.Action
+        currentEmoteTrack.Looped = true
+        wait(.5)
+        currentEmoteTrack:Play()
+    end
 end
 
 local function onCharacterAdded(character)
@@ -541,14 +560,8 @@ local function onCharacterAdded(character)
 			end
 			
 			
-			local animation = Instance.new("Animation")
-			animation.AnimationId = "rbxassetid://" .. emoteId
-			
-			currentEmoteTrack = humanoid:LoadAnimation(animation)
-			currentEmoteTrack.Priority = Enum.AnimationPriority.Action
-			currentEmoteTrack.Looped = true
-			currentEmoteTrack:Play()
-			currentEmoteTrack:AdjustSpeed(1)
+         playEmote(humanoid, emoteId)
+
 			
 			currentEmoteTrack.Ended:Connect(function()
 				if currentEmoteTrack == animationTrack then
@@ -572,14 +585,20 @@ local function toggleEmoteWalk()
 	
 	if emotesWalkEnabled then
          getgenv().Notify({
-                Title = '7yd7 | Emote',
-                Content = '🔒 Emote freeze ON',
-                Duration = 3
+                Title = '7yd7 | Emote [Beta]',
+                Content = "🔒 Emote freeze ON",
+                Duration = 10
+            })
+
+         getgenv().Notify({
+                Title = '7yd7 | Emote [Beta]',
+                Content = "Warning: Some emotes appear frozen on the client \n players don't see the freeze due \n to server delay in loading emotes.",
+                Duration = 10
             })
         EmoteWalkButton.Image = enabledButtonImage
 	else
 		  getgenv().Notify({
-                Title = '7yd7 | Emote',
+                Title = '7yd7 | Emote [Beta]',
                 Content = '🔓 Emote freeze OFF',
                 Duration = 3
             })
