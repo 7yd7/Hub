@@ -360,7 +360,7 @@ local function fetchAllEmotes()
 	local success, result = pcall(function()
 		local response = syn and syn.request or request
 		local requestData = {
-			Url = "https://raw.githubusercontent.com/7yd7/Hub/refs/heads/Branch/GUIS/EmoteSniper.json",
+			Url = "https://raw.githubusercontent.com/7yd7/sniper-Emote/refs/heads/test/EmoteSniper.json",
 			Method = "GET",
 			Headers = {
 				["content-type"] = "application/json",
