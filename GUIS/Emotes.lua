@@ -585,20 +585,20 @@ local function toggleEmoteWalk()
 	
 	if emotesWalkEnabled then
          getgenv().Notify({
-                Title = '7yd7 | Emote [Beta]',
+                Title = '7yd7 | Emote Freeze [Beta]',
                 Content = "🔒 Emote freeze ON",
                 Duration = 10
             })
 
          getgenv().Notify({
-                Title = '7yd7 | Emote [Beta]',
+                Title = '7yd7 | Emote Freeze [Beta]',
                 Content = "Warning: Some emotes appear frozen on the client \n players don't see the freeze due \n to server delay in loading emotes.",
                 Duration = 10
             })
         EmoteWalkButton.Image = enabledButtonImage
 	else
 		  getgenv().Notify({
-                Title = '7yd7 | Emote [Beta]',
+                Title = '7yd7 | Emote Freeze [Beta]',
                 Content = '🔓 Emote freeze OFF',
                 Duration = 3
             })
