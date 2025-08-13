@@ -843,6 +843,8 @@ end
                     Content = "🔒 Emote freeze ON",
                     Duration = 5
                 })
+
+            EmoteWalkButton.Image = enabledButtonImage
         else
             getgenv().Notify({
                     Title = '7yd7 | Emote Freeze',
