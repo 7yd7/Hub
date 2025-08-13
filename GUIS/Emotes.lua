@@ -4,6 +4,7 @@
     Also other scripts, there is no difference them. I just created it if you want from the Roblox coregui menu, emote Easily (almost..).
     ]]
 
+
     if _G.EmotesGUIRunning then
         getgenv().Notify({
             Title = '7yd7 | Emote',
@@ -722,7 +723,8 @@ end
     end
 
     local function playEmote(humanoid, emoteId)
-        stopCurrentEmote() 
+        stopCurrentEmote()
+        stopEmotes()
 
         local animation = Instance.new("Animation")
         animation.AnimationId = "rbxassetid://" .. emoteId
@@ -735,7 +737,6 @@ end
             currentEmoteTrack = animTrack
             currentEmoteTrack.Priority = Enum.AnimationPriority.Action
             currentEmoteTrack.Looped = true
-            wait(0.5)
             currentEmoteTrack:Play()
         end
     end
@@ -838,22 +839,15 @@ end
         
         if emotesWalkEnabled then
             getgenv().Notify({
-                    Title = '7yd7 | Emote Freeze [Beta]',
+                    Title = '7yd7 | Emote Freeze',
                     Content = "🔒 Emote freeze ON",
-                    Duration = 10
+                    Duration = 5
                 })
-
-            getgenv().Notify({
-                    Title = '7yd7 | Emote Freeze [Beta]',
-                    Content = "Warning: Some emotes appear frozen on the client \n players don't see the freeze due \n to server delay in loading emotes.",
-                    Duration = 10
-                })
-            EmoteWalkButton.Image = enabledButtonImage
         else
             getgenv().Notify({
-                    Title = '7yd7 | Emote Freeze [Beta]',
+                    Title = '7yd7 | Emote Freeze',
                     Content = '🔓 Emote freeze OFF',
-                    Duration = 3
+                    Duration = 5
                 })
             EmoteWalkButton.Image = defaultButtonImage
             stopCurrentEmote()
