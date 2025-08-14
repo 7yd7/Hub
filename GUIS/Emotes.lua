@@ -29,6 +29,7 @@
     local player = Players.LocalPlayer
     local character = player.Character or player.CharacterAdded:Wait()
     local humanoid = character:WaitForChild("Humanoid")
+    local UserInputService = game:GetService("UserInputService")
 
     local function stopEmotes()
         for _, track in ipairs(humanoid:GetPlayingAnimationTracks()) do
@@ -973,3 +974,12 @@ end
             fetchAllEmotes()
         end
     end)
+
+    if UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled and not UserInputService.MouseEnabled then
+	   loadstring(game:HttpGet("https://raw.githubusercontent.com/7yd7/Hub/refs/heads/Branch/GUIS/OpenEmote.lua"))()
+        getgenv().Notify({
+            Title = '7yd7 | Emote Mobile',
+            Content = '📱 Added emote open button for ease of use',
+            Duration = 5
+        })
+    end
