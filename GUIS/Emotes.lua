@@ -738,6 +738,7 @@ end
             currentEmoteTrack = animTrack
             currentEmoteTrack.Priority = Enum.AnimationPriority.Action
             currentEmoteTrack.Looped = true
+            wait(0.1)
             currentEmoteTrack:Play()
         end
     end
@@ -974,6 +975,43 @@ end
             fetchAllEmotes()
         end
     end)
+
+
+    task.spawn(function()
+    local StarterGui = game:GetService("StarterGui")
+    local CoreGui = game:GetService("CoreGui")
+
+    while true do
+        local robloxGui = CoreGui:FindFirstChild("RobloxGui")
+        local emotesMenu = robloxGui and robloxGui:FindFirstChild("EmotesMenu")
+
+        if not emotesMenu then
+            StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.EmotesMenu, true)
+
+        else
+            local exists = emotesMenu:FindFirstChild("Children")
+                and emotesMenu.Children:FindFirstChild("Main")
+                and emotesMenu.Children.Main:FindFirstChild("EmotesWheel")
+
+            if exists then
+                local emotesWheel = emotesMenu.Children.Main.EmotesWheel
+                if not emotesWheel:FindFirstChild("Under") or not emotesWheel:FindFirstChild("Top") then
+                    if createGUIElements then
+                        createGUIElements()
+                    end
+
+                if updateGUIColors then
+                    updateGUIColors()
+                    updatePageDisplay()
+                    loadFavorites()
+                end
+            end
+        end
+    end
+
+        task.wait(.3)
+    end
+end)
 
     if UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled and not UserInputService.MouseEnabled then
 	   loadstring(game:HttpGet("https://raw.githubusercontent.com/7yd7/Hub/refs/heads/Branch/GUIS/OpenEmote.lua"))()
