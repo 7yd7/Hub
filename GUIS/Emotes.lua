@@ -609,7 +609,7 @@ local function createGUIElements()
     SpeedBox.TextScaled = true
     SpeedBox.TextWrapped = true
     SpeedBox:GetPropertyChangedSignal("Text"):Connect(function()
-        SpeedBox.Text = SpeedBox.Text:gsub("%D+", "")
+       SpeedBox.Text = SpeedBox.Text:gsub("[^%d.]", "")
     end)
     SpeedBox.ZIndex = 2
 
