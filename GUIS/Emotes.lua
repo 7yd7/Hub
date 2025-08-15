@@ -1,247 +1,305 @@
-    --[[ 
+--[[ 
     Source script taken from: https://github.com/Roblox/creator-docs/blob/main/content/en-us/characters/emotes.md
     If you want to set an emote, I recommend using a source script that was taken from for ease of use only.
     Also other scripts, there is no difference them. I just created it if you want from the Roblox coregui menu, emote Easily (almost..).
-    ]]
+]]
 
 
-    if _G.EmotesGUIRunning then
-        getgenv().Notify({
-            Title = '7yd7 | Emote',
-            Content = '⚠️ It works It actually works',
-            Duration = 5
-        })
-        return
-    end
-    _G.EmotesGUIRunning = true
-
-    loadstring(game:HttpGet("https://raw.githubusercontent.com/7yd7/Menu-7yd7/refs/heads/Script/GUIS/Off-site/Notify.lua"))()
-
+if _G.EmotesGUIRunning then
     getgenv().Notify({
         Title = '7yd7 | Emote',
-        Content = '⚠️ Script loading...',
+        Content = '⚠️ It works It actually works',
         Duration = 5
     })
+    return
+end
+_G.EmotesGUIRunning = true
 
-    local Players = game:GetService("Players")
-    local HttpService = game:GetService("HttpService")
-    local RunService = game:GetService("RunService")
-    local player = Players.LocalPlayer
-    local character = player.Character or player.CharacterAdded:Wait()
-    local humanoid = character:WaitForChild("Humanoid")
-    local UserInputService = game:GetService("UserInputService")
+loadstring(game:HttpGet("https://raw.githubusercontent.com/7yd7/Menu-7yd7/refs/heads/Script/GUIS/Off-site/Notify.lua"))()
 
-    local function stopEmotes()
-        for _, track in ipairs(humanoid:GetPlayingAnimationTracks()) do
-            track:Stop()
-        end
+getgenv().Notify({
+    Title = '7yd7 | Emote',
+    Content = '⚠️ Script loading...',
+    Duration = 5
+})
+
+local Players = game:GetService("Players")
+local HttpService = game:GetService("HttpService")
+local RunService = game:GetService("RunService")
+local player = Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+local humanoid = character:WaitForChild("Humanoid")
+local UserInputService = game:GetService("UserInputService")
+
+local function stopEmotes()
+    for _, track in ipairs(humanoid:GetPlayingAnimationTracks()) do
+        track:Stop()
     end
+end
 
-    local emotesData = {}
-    local currentPage = 1
-    local itemsPerPage = 8
-    local totalPages = 1
-    local filteredEmotes = {}
-    local isLoading = false
-    local originalEmotesData = {}
-    local totalEmotesLoaded = 0
-    local scannedEmotes = {}
-    local favoriteEmotes = {}
-    local favoriteEnabled = false
-    local favoriteFileName = "FavoriteEmotes.json"
-    local emotesWalkEnabled = false
-    local currentEmoteTrack = nil
-    local currentCharacter = nil
-    local isGUICreated = false
+local emotesData = {}
+local currentPage = 1
+local itemsPerPage = 8
+local totalPages = 1
+local filteredEmotes = {}
+local isLoading = false
+local originalEmotesData = {}
+local totalEmotesLoaded = 0
+local scannedEmotes = {}
+local favoriteEmotes = {}
+local favoriteEnabled = false
+local favoriteFileName = "FavoriteEmotes.json"
+local emotesWalkEnabled = false
+local currentEmoteTrack = nil
+local currentCharacter = nil
+local isGUICreated = false
+local speedEmoteEnabled = false
+local speedEmoteConfigFile = "SpeedEmoteConfig.json"
 
-    local Under, UIListLayout, _1left, _9right, _4pages, _3TextLabel, _2Routenumber, Top, EmoteWalkButton, UICorner1, UIListLayout_2, UICorner, Search, Favorite, UICorner2
+local Under, UIListLayout, _1left, _9right, _4pages, _3TextLabel, _2Routenumber, Top, EmoteWalkButton, UICorner1,
+    UIListLayout_2, UICorner, Search, Favorite, UICorner2, UICorner_2, SpeedEmote, UICorner_4, SpeedBox
 
-    local defaultButtonImage = "rbxassetid://71408678974152"
-    local enabledButtonImage = "rbxassetid://106798555684020"
+local defaultButtonImage = "rbxassetid://71408678974152"
+local enabledButtonImage = "rbxassetid://106798555684020"
 
-    local function getCharacterAndHumanoid()
-        local character = player.Character
-        if not character then return nil, nil end
-        local humanoid = character:FindFirstChild("Humanoid")
-        if not humanoid then return nil, nil end
-        return character, humanoid
+local function getCharacterAndHumanoid()
+    local character = player.Character
+    if not character then
+        return nil, nil
     end
-
-    local function checkEmotesMenuExists()
-        local coreGui = game:GetService("CoreGui")
-        local robloxGui = coreGui:FindFirstChild("RobloxGui")
-        if not robloxGui then return false end
-        
-        local emotesMenu = robloxGui:FindFirstChild("EmotesMenu")
-        if not emotesMenu then return false end
-        
-        local children = emotesMenu:FindFirstChild("Children")
-        if not children then return false end
-        
-        local main = children:FindFirstChild("Main")
-        if not main then return false end
-        
-        local emotesWheel = main:FindFirstChild("EmotesWheel")
-        if not emotesWheel then return false end
-        
-        return true, emotesWheel
+    local humanoid = character:FindFirstChild("Humanoid")
+    if not humanoid then
+        return nil, nil
     end
+    return character, humanoid
+end
 
-    local function getBackgroundOverlay()
-        local success, result = pcall(function()
-            return game:GetService("CoreGui").RobloxGui.EmotesMenu.Children.Main.EmotesWheel.Back.Background.BackgroundCircleOverlay
-        end)
-        if success then return result end
-        return nil
-    end
-
-    local function updateGUIColors()
-        local backgroundOverlay = getBackgroundOverlay()
-        if not backgroundOverlay then return end
-        
-        local bgColor = backgroundOverlay.BackgroundColor3
-        local bgTransparency = backgroundOverlay.BackgroundTransparency
-        
-        if _1left then
-            _1left.ImageColor3 = bgColor
-            _1left.ImageTransparency = bgTransparency
-        end
-        
-        if _9right then
-            _9right.ImageColor3 = bgColor
-            _9right.ImageTransparency = bgTransparency
-        end
-        
-        if _4pages then
-            _4pages.TextColor3 = bgColor
-            _4pages.TextTransparency = bgTransparency
-        end
-        
-        if _3TextLabel then
-            _3TextLabel.TextColor3 = bgColor
-            _3TextLabel.TextTransparency = bgTransparency
-        end
-        
-        if _2Routenumber then
-            _2Routenumber.TextColor3 = bgColor
-            _2Routenumber.TextTransparency = bgTransparency
-        end
-        
-        if Top then
-            Top.BackgroundColor3 = bgColor
-            Top.BackgroundTransparency = bgTransparency
-        end
-        
-        if EmoteWalkButton then
-            EmoteWalkButton.BackgroundColor3 = bgColor
-            EmoteWalkButton.BackgroundTransparency = bgTransparency
-        end
-
-        if Favorite then
-            Favorite.BackgroundColor3 = bgColor
-            Favorite.BackgroundTransparency = bgTransparency
-        end
-    end
-
-    local function urlToId(animationId)
-        animationId = string.gsub(animationId, "http://www%.roblox%.com/asset/%?id=", "")
-        animationId = string.gsub(animationId, "rbxassetid://", "")
-        return animationId
-    end
-
-    local function saveFavorites()
-        if writefile then
-            local jsonData = HttpService:JSONEncode(favoriteEmotes)
-            writefile(favoriteFileName, jsonData)
-        end
-    end
-
-    local function loadFavorites()
-        if readfile and isfile and isfile(favoriteFileName) then
-            local success, result = pcall(function()
-                local fileContent = readfile(favoriteFileName)
-                return HttpService:JSONDecode(fileContent)
-            end)
-            if success and result then
-                favoriteEmotes = result
-            end
-        end
-    end
-
-    local function scanCurrentEmotes()
-        if not favoriteEnabled then return {} end
-
-        local success, frontFrame = pcall(function()
-            return game:GetService("CoreGui").RobloxGui.EmotesMenu.Children.Main.EmotesWheel.Front.EmotesButtons
-        end)
-        
-        if not success then return {} end
-        
-        scannedEmotes = {}
-        
-        for _, child in pairs(frontFrame:GetChildren()) do
-            if child:IsA("ImageLabel") then
-                local imageId = child.Image
-                local assetId = string.match(imageId, "rbxthumb://type=Asset&id=(%d+)")
-                
-                if assetId then
-                    spawn(function()
-                        local success, result = pcall(function()
-                            local objects = game:GetObjects("rbxassetid://" .. assetId)
-                            if objects[1] and objects[1]:IsA("Animation") then
-                                local animationId = urlToId(objects[1].AnimationId)
-                                objects[1]:Destroy()
-                                return animationId
-                            end
-                            return nil
-                        end)
-                        
-                        if success and result then
-                            local emoteName = "Unknown Emote"
-                            local nameSuccess, productInfo = pcall(function()
-                                return game:GetService("MarketplaceService"):GetProductInfo(tonumber(assetId))
-                            end)
-                            
-                            if nameSuccess and productInfo then
-                                emoteName = productInfo.Name
-                            end
-                            
-                            table.insert(scannedEmotes, {
-                                assetId = assetId,
-                                animationId = result,
-                                name = emoteName
-                            })
-                        end
-                    end)
-                end
-            end
-        end
-        
-        return {}
-    end
-
-    local function isInFavorites(emoteId)
-        for _, favorite in pairs(favoriteEmotes) do
-            if favorite.id == tostring(emoteId) then return true end
-        end
+local function checkEmotesMenuExists()
+    local coreGui = game:GetService("CoreGui")
+    local robloxGui = coreGui:FindFirstChild("RobloxGui")
+    if not robloxGui then
         return false
     end
 
-    local function findAssetIdByAnimationId(playedAnimationId)
-        for _, emoteData in pairs(scannedEmotes) do
-            if emoteData.animationId == playedAnimationId then
-                return emoteData.assetId, emoteData.name
-            end
-        end
-        return nil, nil
+    local emotesMenu = robloxGui:FindFirstChild("EmotesMenu")
+    if not emotesMenu then
+        return false
     end
 
-   local function updateEmotes()
+    local children = emotesMenu:FindFirstChild("Children")
+    if not children then
+        return false
+    end
+
+    local main = children:FindFirstChild("Main")
+    if not main then
+        return false
+    end
+
+    local emotesWheel = main:FindFirstChild("EmotesWheel")
+    if not emotesWheel then
+        return false
+    end
+
+    return true, emotesWheel
+end
+
+local function getBackgroundOverlay()
+    local success, result = pcall(function()
+        return game:GetService("CoreGui").RobloxGui.EmotesMenu.Children.Main.EmotesWheel.Back.Background
+                   .BackgroundCircleOverlay
+    end)
+    if success then
+        return result
+    end
+    return nil
+end
+
+local function updateGUIColors()
+    local backgroundOverlay = getBackgroundOverlay()
+    if not backgroundOverlay then
+        return
+    end
+
+    local bgColor = backgroundOverlay.BackgroundColor3
+    local bgTransparency = backgroundOverlay.BackgroundTransparency
+
+    if _1left then
+        _1left.ImageColor3 = bgColor
+        _1left.ImageTransparency = bgTransparency
+    end
+
+    if _9right then
+        _9right.ImageColor3 = bgColor
+        _9right.ImageTransparency = bgTransparency
+    end
+
+    if _4pages then
+        _4pages.TextColor3 = bgColor
+        _4pages.TextTransparency = bgTransparency
+    end
+
+    if _3TextLabel then
+        _3TextLabel.TextColor3 = bgColor
+        _3TextLabel.TextTransparency = bgTransparency
+    end
+
+    if _2Routenumber then
+        _2Routenumber.TextColor3 = bgColor
+        _2Routenumber.TextTransparency = bgTransparency
+    end
+
+    if Top then
+        Top.BackgroundColor3 = bgColor
+        Top.BackgroundTransparency = bgTransparency
+    end
+
+    if EmoteWalkButton then
+        EmoteWalkButton.BackgroundColor3 = bgColor
+        EmoteWalkButton.BackgroundTransparency = bgTransparency
+    end
+
+    if SpeedEmote then
+        SpeedEmote.BackgroundColor3 = bgColor
+        SpeedEmote.BackgroundTransparency = bgTransparency
+    end
+
+    if SpeedBox then
+        SpeedBox.BackgroundColor3 = bgColor
+        SpeedBox.BackgroundTransparency = bgTransparency
+    end
+
+    if Favorite then
+        Favorite.BackgroundColor3 = bgColor
+        Favorite.BackgroundTransparency = bgTransparency
+    end
+end
+
+local function urlToId(animationId)
+    animationId = string.gsub(animationId, "http://www%.roblox%.com/asset/%?id=", "")
+    animationId = string.gsub(animationId, "rbxassetid://", "")
+    return animationId
+end
+
+local function saveFavorites()
+    if writefile then
+        local jsonData = HttpService:JSONEncode(favoriteEmotes)
+        writefile(favoriteFileName, jsonData)
+    end
+end
+
+local function loadFavorites()
+    if readfile and isfile and isfile(favoriteFileName) then
+        local success, result = pcall(function()
+            local fileContent = readfile(favoriteFileName)
+            return HttpService:JSONDecode(fileContent)
+        end)
+        if success and result then
+            favoriteEmotes = result
+        end
+    end
+end
+
+local function loadSpeedEmoteConfig()
+    if readfile and isfile and isfile(speedEmoteConfigFile) then
+        local success, result = pcall(function()
+            local fileContent = readfile(speedEmoteConfigFile)
+            return HttpService:JSONDecode(fileContent)
+        end)
+        if success and result then
+            speedEmoteEnabled = result.Enabled or false
+            if SpeedBox then
+                SpeedBox.Text = tostring(result.SpeedValue or 1)
+                SpeedBox.Visible = speedEmoteEnabled
+            end
+        end
+    end
+end
+
+local function scanCurrentEmotes()
+    if not favoriteEnabled then
+        return {}
+    end
+
+    local success, frontFrame = pcall(function()
+        return game:GetService("CoreGui").RobloxGui.EmotesMenu.Children.Main.EmotesWheel.Front.EmotesButtons
+    end)
+
+    if not success then
+        return {}
+    end
+
+    scannedEmotes = {}
+
+    for _, child in pairs(frontFrame:GetChildren()) do
+        if child:IsA("ImageLabel") then
+            local imageId = child.Image
+            local assetId = string.match(imageId, "rbxthumb://type=Asset&id=(%d+)")
+
+            if assetId then
+                spawn(function()
+                    local success, result = pcall(function()
+                        local objects = game:GetObjects("rbxassetid://" .. assetId)
+                        if objects[1] and objects[1]:IsA("Animation") then
+                            local animationId = urlToId(objects[1].AnimationId)
+                            objects[1]:Destroy()
+                            return animationId
+                        end
+                        return nil
+                    end)
+
+                    if success and result then
+                        local emoteName = "Unknown Emote"
+                        local nameSuccess, productInfo = pcall(function()
+                            return game:GetService("MarketplaceService"):GetProductInfo(tonumber(assetId))
+                        end)
+
+                        if nameSuccess and productInfo then
+                            emoteName = productInfo.Name
+                        end
+
+                        table.insert(scannedEmotes, {
+                            assetId = assetId,
+                            animationId = result,
+                            name = emoteName
+                        })
+                    end
+                end)
+            end
+        end
+    end
+
+    return {}
+end
+
+local function isInFavorites(emoteId)
+    for _, favorite in pairs(favoriteEmotes) do
+        if favorite.id == tostring(emoteId) then
+            return true
+        end
+    end
+    return false
+end
+
+local function findAssetIdByAnimationId(playedAnimationId)
+    for _, emoteData in pairs(scannedEmotes) do
+        if emoteData.animationId == playedAnimationId then
+            return emoteData.assetId, emoteData.name
+        end
+    end
+    return nil, nil
+end
+
+local function updateEmotes()
     local character, humanoid = getCharacterAndHumanoid()
-    if not character or not humanoid then return end
-    
+    if not character or not humanoid then
+        return
+    end
+
     local humanoidDescription = humanoid.HumanoidDescription
-    if not humanoidDescription then return end
+    if not humanoidDescription then
+        return
+    end
 
     local currentPageEmotes = {}
     local emoteTable = {}
@@ -255,7 +313,7 @@
     if isInFavoritesPages and hasFavorites then
         local startIndex = (currentPage - 1) * itemsPerPage + 1
         local endIndex = math.min(startIndex + itemsPerPage - 1, #favoritesToUse)
-        
+
         for i = startIndex, endIndex do
             if favoritesToUse[i] then
                 table.insert(currentPageEmotes, {
@@ -271,11 +329,11 @@
                 table.insert(normalEmotes, emote)
             end
         end
-        
+
         local adjustedPage = currentPage - favoritePagesCount
         local startIndex = (adjustedPage - 1) * itemsPerPage + 1
         local endIndex = math.min(startIndex + itemsPerPage - 1, #normalEmotes)
-        
+
         for i = startIndex, endIndex do
             if normalEmotes[i] then
                 table.insert(currentPageEmotes, normalEmotes[i])
@@ -294,345 +352,407 @@
     humanoidDescription:SetEquippedEmotes(equippedEmotes)
 end
 
-
-   local function calculateTotalPages()
+local function calculateTotalPages()
     local favoritesToUse = _G.filteredFavoritesForDisplay or favoriteEmotes
     local hasFavorites = #favoritesToUse > 0
     local normalEmotesCount = 0
-    
+
     for _, emote in pairs(filteredEmotes) do
         if not isInFavorites(emote.id) then
             normalEmotesCount = normalEmotesCount + 1
         end
     end
-    
+
     local pages = 0
-    
+
     if hasFavorites then
         pages = pages + math.ceil(#favoritesToUse / itemsPerPage)
     end
-    
+
     if normalEmotesCount > 0 then
         pages = pages + math.ceil(normalEmotesCount / itemsPerPage)
     end
-    
+
     return math.max(pages, 1)
 end
 
-    local function isGivenAnimation(animationHolder, animationId)
-        for _, animation in animationHolder:GetChildren() do
-            if animation:IsA("Animation") and urlToId(animation.AnimationId) == animationId then
-                return true
+local function isGivenAnimation(animationHolder, animationId)
+    for _, animation in animationHolder:GetChildren() do
+        if animation:IsA("Animation") and urlToId(animation.AnimationId) == animationId then
+            return true
+        end
+    end
+    return false
+end
+
+local function isDancing(character, animationTrack)
+    local animationId = urlToId(animationTrack.Animation.AnimationId)
+    for _, animationHolder in character.Animate:GetChildren() do
+        if animationHolder:IsA("StringValue") then
+            local sharesAnimationId = isGivenAnimation(animationHolder, animationId)
+            if sharesAnimationId then
+                return false
             end
         end
+    end
+    return true
+end
+
+local function createGUIElements()
+    local exists, emotesWheel = checkEmotesMenuExists()
+    if not exists then
         return false
     end
 
-    local function isDancing(character, animationTrack)
-        local animationId = urlToId(animationTrack.Animation.AnimationId)
-        for _, animationHolder in character.Animate:GetChildren() do
-            if animationHolder:IsA("StringValue") then
-                local sharesAnimationId = isGivenAnimation(animationHolder, animationId)
-                if sharesAnimationId then return false end
-            end
-        end
-        return true
+    if emotesWheel:FindFirstChild("Under") then
+        emotesWheel.Under:Destroy()
+    end
+    if emotesWheel:FindFirstChild("Top") then
+        emotesWheel.Top:Destroy()
+    end
+    if emotesWheel:FindFirstChild("EmoteWalkButton") then
+        emotesWheel.EmoteWalkButton:Destroy()
+    end
+    if emotesWheel:FindFirstChild("Favorite") then
+        emotesWheel.Favorite:Destroy()
+    end
+    if emotesWheel:FindFirstChild("SpeedEmote") then
+        emotesWheel.SpeedEmote:Destroy()
+    end
+    if emotesWheel:FindFirstChild("SpeedBox") then
+        emotesWheel.SpeedBox:Destroy()
     end
 
-    local function createGUIElements()
-        local exists, emotesWheel = checkEmotesMenuExists()
-        if not exists then return false end
-        
-        if emotesWheel:FindFirstChild("Under") then emotesWheel.Under:Destroy() end
-        if emotesWheel:FindFirstChild("Top") then emotesWheel.Top:Destroy() end
-        if emotesWheel:FindFirstChild("EmoteWalkButton") then emotesWheel.EmoteWalkButton:Destroy() end
-        if emotesWheel:FindFirstChild("Favorite") then emotesWheel.Favorite:Destroy() end
-        
-        Under = Instance.new("Frame")
-        UIListLayout = Instance.new("UIListLayout")
-        _1left = Instance.new("ImageButton")
-        _9right = Instance.new("ImageButton")
-        _4pages = Instance.new("TextLabel")
-        _3TextLabel = Instance.new("TextLabel")
-        _2Routenumber = Instance.new("TextBox")
-        EmoteWalkButton = Instance.new("ImageButton")
-        UICorner1 = Instance.new("UICorner")
-        Top = Instance.new("Frame")
-        UIListLayout_2 = Instance.new("UIListLayout")
-        UICorner = Instance.new("UICorner")
-        Search = Instance.new("TextBox")
-        Favorite = Instance.new("ImageButton")
-        UICorner2 = Instance.new("UICorner")
+    Under = Instance.new("Frame")
+    UIListLayout = Instance.new("UIListLayout")
+    _1left = Instance.new("ImageButton")
+    _9right = Instance.new("ImageButton")
+    _4pages = Instance.new("TextLabel")
+    _3TextLabel = Instance.new("TextLabel")
+    _2Routenumber = Instance.new("TextBox")
+    EmoteWalkButton = Instance.new("ImageButton")
+    UICorner1 = Instance.new("UICorner")
+    Top = Instance.new("Frame")
+    UIListLayout_2 = Instance.new("UIListLayout")
+    UICorner = Instance.new("UICorner")
+    Search = Instance.new("TextBox")
+    Favorite = Instance.new("ImageButton")
+    UICorner2 = Instance.new("UICorner")
+    SpeedBox = Instance.new("TextBox")
+    UICorner_4 = Instance.new("UICorner")
+    SpeedEmote = Instance.new("ImageButton")
+    UICorner_2 = Instance.new("UICorner")
 
-        Under.Name = "Under"
-        Under.Parent = emotesWheel
-        Under.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-        Under.BackgroundTransparency = 1.000
-        Under.BorderColor3 = Color3.fromRGB(0, 0, 0)
-        Under.BorderSizePixel = 0
-        Under.Position = UDim2.new(0.129999995, 0, 1, 0)
-        Under.Size = UDim2.new(0.737500012, 0, 0.132499993, 0)
+    Under.Name = "Under"
+    Under.Parent = emotesWheel
+    Under.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    Under.BackgroundTransparency = 1.000
+    Under.BorderColor3 = Color3.fromRGB(0, 0, 0)
+    Under.BorderSizePixel = 0
+    Under.Position = UDim2.new(0.129999995, 0, 1, 0)
+    Under.Size = UDim2.new(0.737500012, 0, 0.132499993, 0)
 
-        UIListLayout.Parent = Under
-        UIListLayout.FillDirection = Enum.FillDirection.Horizontal
-        UIListLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+    UIListLayout.Parent = Under
+    UIListLayout.FillDirection = Enum.FillDirection.Horizontal
+    UIListLayout.VerticalAlignment = Enum.VerticalAlignment.Center
 
-        _1left.Name = "1left"
-        _1left.Parent = Under
-        _1left.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-        _1left.BackgroundTransparency = 1.000
-        _1left.BorderColor3 = Color3.fromRGB(0, 0, 0)
-        _1left.BorderSizePixel = 0
-        _1left.Position = UDim2.new(0.0289389063, 0, -0.0849056691, 0)
-        _1left.Rotation = 7456.000
-        _1left.Size = UDim2.new(0.169491529, 0, 0.94339627, 0)
-        _1left.Image = "rbxassetid://93111945058621"
-        _1left.ImageColor3 = Color3.fromRGB(0, 0, 0)
-        _1left.ImageTransparency = 0.400
+    _1left.Name = "1left"
+    _1left.Parent = Under
+    _1left.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    _1left.BackgroundTransparency = 1.000
+    _1left.BorderColor3 = Color3.fromRGB(0, 0, 0)
+    _1left.BorderSizePixel = 0
+    _1left.Position = UDim2.new(0.0289389063, 0, -0.0849056691, 0)
+    _1left.Rotation = 7456.000
+    _1left.Size = UDim2.new(0.169491529, 0, 0.94339627, 0)
+    _1left.Image = "rbxassetid://93111945058621"
+    _1left.ImageColor3 = Color3.fromRGB(0, 0, 0)
+    _1left.ImageTransparency = 0.400
 
-        _9right.Name = "9right"
-        _9right.Parent = Under
-        _9right.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-        _9right.BackgroundTransparency = 1.000
-        _9right.BorderColor3 = Color3.fromRGB(0, 0, 0)
-        _9right.BorderSizePixel = 0
-        _9right.Position = UDim2.new(0.0289389063, 0, -0.0849056691, 0)
-        _9right.Rotation = 7456.000
-        _9right.Size = UDim2.new(0.169491529, 0, 0.94339627, 0)
-        _9right.Image = "rbxassetid://107938916240738"
-        _9right.ImageColor3 = Color3.fromRGB(0, 0, 0)
-        _9right.ImageTransparency = 0.400
+    _9right.Name = "9right"
+    _9right.Parent = Under
+    _9right.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    _9right.BackgroundTransparency = 1.000
+    _9right.BorderColor3 = Color3.fromRGB(0, 0, 0)
+    _9right.BorderSizePixel = 0
+    _9right.Position = UDim2.new(0.0289389063, 0, -0.0849056691, 0)
+    _9right.Rotation = 7456.000
+    _9right.Size = UDim2.new(0.169491529, 0, 0.94339627, 0)
+    _9right.Image = "rbxassetid://107938916240738"
+    _9right.ImageColor3 = Color3.fromRGB(0, 0, 0)
+    _9right.ImageTransparency = 0.400
 
-        _4pages.Name = "4pages"
-        _4pages.Parent = Under
-        _4pages.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-        _4pages.BackgroundTransparency = 1.000
-        _4pages.BorderColor3 = Color3.fromRGB(0, 0, 0)
-        _4pages.BorderSizePixel = 0
-        _4pages.Position = UDim2.new(0.630225062, 0, 0.188679263, 0)
-        _4pages.Size = UDim2.new(0.159322038, 0, 0.811320841, 0)
-        _4pages.Font = Enum.Font.SourceSansBold
-        _4pages.Text = "1"
-        _4pages.TextColor3 = Color3.fromRGB(0, 0, 0)
-        _4pages.TextScaled = true
-        _4pages.TextSize = 14.000
-        _4pages.TextTransparency = 0.400
-        _4pages.TextWrapped = true
+    _4pages.Name = "4pages"
+    _4pages.Parent = Under
+    _4pages.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    _4pages.BackgroundTransparency = 1.000
+    _4pages.BorderColor3 = Color3.fromRGB(0, 0, 0)
+    _4pages.BorderSizePixel = 0
+    _4pages.Position = UDim2.new(0.630225062, 0, 0.188679263, 0)
+    _4pages.Size = UDim2.new(0.159322038, 0, 0.811320841, 0)
+    _4pages.Font = Enum.Font.SourceSansBold
+    _4pages.Text = "1"
+    _4pages.TextColor3 = Color3.fromRGB(0, 0, 0)
+    _4pages.TextScaled = true
+    _4pages.TextSize = 14.000
+    _4pages.TextTransparency = 0.400
+    _4pages.TextWrapped = true
 
-        _3TextLabel.Name = "3TextLabel"
-        _3TextLabel.Parent = Under
-        _3TextLabel.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-        _3TextLabel.BackgroundTransparency = 1.000
-        _3TextLabel.BorderColor3 = Color3.fromRGB(0, 0, 0)
-        _3TextLabel.BorderSizePixel = 0
-        _3TextLabel.Position = UDim2.new(0.363344043, 0, 0.0283018891, 0)
-        _3TextLabel.Size = UDim2.new(0.338983059, 0, 0.94339627, 0)
-        _3TextLabel.Font = Enum.Font.SourceSansBold
-        _3TextLabel.Text = " ------ "
-        _3TextLabel.TextColor3 = Color3.fromRGB(0, 0, 0)
-        _3TextLabel.TextScaled = true
-        _3TextLabel.TextSize = 14.000
-        _3TextLabel.TextTransparency = 0.400
-        _3TextLabel.TextWrapped = true
+    _3TextLabel.Name = "3TextLabel"
+    _3TextLabel.Parent = Under
+    _3TextLabel.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    _3TextLabel.BackgroundTransparency = 1.000
+    _3TextLabel.BorderColor3 = Color3.fromRGB(0, 0, 0)
+    _3TextLabel.BorderSizePixel = 0
+    _3TextLabel.Position = UDim2.new(0.363344043, 0, 0.0283018891, 0)
+    _3TextLabel.Size = UDim2.new(0.338983059, 0, 0.94339627, 0)
+    _3TextLabel.Font = Enum.Font.SourceSansBold
+    _3TextLabel.Text = " ------ "
+    _3TextLabel.TextColor3 = Color3.fromRGB(0, 0, 0)
+    _3TextLabel.TextScaled = true
+    _3TextLabel.TextSize = 14.000
+    _3TextLabel.TextTransparency = 0.400
+    _3TextLabel.TextWrapped = true
 
-        _2Routenumber.Name = "2Route-number"
-        _2Routenumber.Parent = Under
-        _2Routenumber.Active = true
-        _2Routenumber.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-        _2Routenumber.BackgroundTransparency = 1.000
-        _2Routenumber.BorderColor3 = Color3.fromRGB(0, 0, 0)
-        _2Routenumber.BorderSizePixel = 0
-        _2Routenumber.Position = UDim2.new(0.138263673, 0, 0.0283018891, 0)
-        _2Routenumber.Selectable = true
-        _2Routenumber.Size = UDim2.new(0.159322038, 0, 0.811320841, 0)
-        _2Routenumber.Font = Enum.Font.SourceSansBold
-        _2Routenumber.PlaceholderColor3 = Color3.fromRGB(0, 0, 0)
-        _2Routenumber.Text = "1"
-        _2Routenumber.TextColor3 = Color3.fromRGB(0, 0, 0)
-        _2Routenumber.TextScaled = true
-        _2Routenumber.TextSize = 14.000
-        _2Routenumber.TextStrokeColor3 = Color3.fromRGB(255, 255, 255)
-        _2Routenumber.TextTransparency = 0.400
-        _2Routenumber.TextWrapped = true
+    _2Routenumber.Name = "2Route-number"
+    _2Routenumber.Parent = Under
+    _2Routenumber.Active = true
+    _2Routenumber.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    _2Routenumber.BackgroundTransparency = 1.000
+    _2Routenumber.BorderColor3 = Color3.fromRGB(0, 0, 0)
+    _2Routenumber.BorderSizePixel = 0
+    _2Routenumber.Position = UDim2.new(0.138263673, 0, 0.0283018891, 0)
+    _2Routenumber.Selectable = true
+    _2Routenumber.Size = UDim2.new(0.159322038, 0, 0.811320841, 0)
+    _2Routenumber.Font = Enum.Font.SourceSansBold
+    _2Routenumber.PlaceholderColor3 = Color3.fromRGB(0, 0, 0)
+    _2Routenumber.Text = "1"
+    _2Routenumber.TextColor3 = Color3.fromRGB(0, 0, 0)
+    _2Routenumber.TextScaled = true
+    _2Routenumber.TextSize = 14.000
+    _2Routenumber.TextStrokeColor3 = Color3.fromRGB(255, 255, 255)
+    _2Routenumber.TextTransparency = 0.400
+    _2Routenumber.TextWrapped = true
 
-        Top.Name = "Top"
-        Top.Parent = emotesWheel
-        Top.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-        Top.BackgroundTransparency = 0.400
-        Top.BorderColor3 = Color3.fromRGB(0, 0, 0)
-        Top.BorderSizePixel = 0
-        Top.Position = UDim2.new(0.127499998, 0, -0.109999999, 0)
-        Top.Size = UDim2.new(0.737500012, 0, 0.0949999914, 0)
+    Top.Name = "Top"
+    Top.Parent = emotesWheel
+    Top.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    Top.BackgroundTransparency = 0.400
+    Top.BorderColor3 = Color3.fromRGB(0, 0, 0)
+    Top.BorderSizePixel = 0
+    Top.Position = UDim2.new(0.127499998, 0, -0.109999999, 0)
+    Top.Size = UDim2.new(0.737500012, 0, 0.0949999914, 0)
 
-        UIListLayout_2.Parent = Top
-        UIListLayout_2.FillDirection = Enum.FillDirection.Horizontal
-        UIListLayout_2.HorizontalAlignment = Enum.HorizontalAlignment.Center
-        UIListLayout_2.SortOrder = Enum.SortOrder.LayoutOrder
-        UIListLayout_2.VerticalAlignment = Enum.VerticalAlignment.Center
+    UIListLayout_2.Parent = Top
+    UIListLayout_2.FillDirection = Enum.FillDirection.Horizontal
+    UIListLayout_2.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    UIListLayout_2.SortOrder = Enum.SortOrder.LayoutOrder
+    UIListLayout_2.VerticalAlignment = Enum.VerticalAlignment.Center
 
-        UICorner.CornerRadius = UDim.new(0, 20)
-        UICorner.Parent = Top
+    UICorner.CornerRadius = UDim.new(0, 20)
+    UICorner.Parent = Top
 
-        Search.Name = "Search"
-        Search.Parent = Top
-        Search.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-        Search.BackgroundTransparency = 1.000
-        Search.BorderColor3 = Color3.fromRGB(0, 0, 0)
-        Search.Position = UDim2.new(0.0677966103, 0, 0)
-        Search.Size = UDim2.new(0.864406765, 0, 0.81578958, 0)
-        Search.Font = Enum.Font.SourceSansBold
-        Search.PlaceholderText = "Search"
-        Search.Text = ""
-        Search.TextColor3 = Color3.fromRGB(255, 255, 255)
-        Search.TextScaled = true
-        Search.TextSize = 14.000
-        Search.TextWrapped = true
+    Search.Name = "Search"
+    Search.Parent = Top
+    Search.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    Search.BackgroundTransparency = 1.000
+    Search.BorderColor3 = Color3.fromRGB(0, 0, 0)
+    Search.Position = UDim2.new(0.0677966103, 0, 0)
+    Search.Size = UDim2.new(0.864406765, 0, 0.81578958, 0)
+    Search.Font = Enum.Font.SourceSansBold
+    Search.PlaceholderText = "Search"
+    Search.Text = ""
+    Search.TextColor3 = Color3.fromRGB(255, 255, 255)
+    Search.TextScaled = true
+    Search.TextSize = 14.000
+    Search.TextWrapped = true
 
-        EmoteWalkButton.Name = "EmoteWalkButton"
-        EmoteWalkButton.Parent = emotesWheel
-        EmoteWalkButton.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-        EmoteWalkButton.BackgroundTransparency = 0.400
-        EmoteWalkButton.BorderColor3 = Color3.fromRGB(0, 0, 0)
-        EmoteWalkButton.BorderSizePixel = 0
-        EmoteWalkButton.Position = UDim2.new(0.889999986, 0, -0.107500002, 0)
-        EmoteWalkButton.Size = UDim2.new(0.0874999985, 0, 0.0874999985, 0)
-        EmoteWalkButton.Image = defaultButtonImage
+    EmoteWalkButton.Name = "EmoteWalkButton"
+    EmoteWalkButton.Parent = emotesWheel
+    EmoteWalkButton.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    EmoteWalkButton.BackgroundTransparency = 0.400
+    EmoteWalkButton.BorderColor3 = Color3.fromRGB(0, 0, 0)
+    EmoteWalkButton.BorderSizePixel = 0
+    EmoteWalkButton.Position = UDim2.new(0.889999986, 0, -0.107500002, 0)
+    EmoteWalkButton.Size = UDim2.new(0.0874999985, 0, 0.0874999985, 0)
+    EmoteWalkButton.Image = defaultButtonImage
 
-        UICorner1.CornerRadius = UDim.new(0, 10)
-        UICorner1.Parent = EmoteWalkButton
+    UICorner1.CornerRadius = UDim.new(0, 10)
+    UICorner1.Parent = EmoteWalkButton
 
-        Favorite.Name = "Favorite"
-        Favorite.Parent = emotesWheel
-        Favorite.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-        Favorite.BackgroundTransparency = 0.400
-        Favorite.BorderColor3 = Color3.fromRGB(0, 0, 0)
-        Favorite.BorderSizePixel = 0
-        Favorite.Position = UDim2.new(0.0189999994, 0, -0.108000003, 0)
-        Favorite.Size = UDim2.new(0.0874999985, 0, 0.0874999985, 0)
-        Favorite.Image = "rbxassetid://124025954365505"
+    Favorite.Name = "Favorite"
+    Favorite.Parent = emotesWheel
+    Favorite.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    Favorite.BackgroundTransparency = 0.400
+    Favorite.BorderColor3 = Color3.fromRGB(0, 0, 0)
+    Favorite.BorderSizePixel = 0
+    Favorite.Position = UDim2.new(0.0189999994, 0, -0.108000003, 0)
+    Favorite.Size = UDim2.new(0.0874999985, 0, 0.0874999985, 0)
+    Favorite.Image = "rbxassetid://124025954365505"
 
-        UICorner2.CornerRadius = UDim.new(0, 10)
-        UICorner2.Parent = Favorite
-        
-        connectEvents()
-        isGUICreated = true
-        updateGUIColors()
-        return true
+    UICorner2.CornerRadius = UDim.new(0, 10)
+    UICorner2.Parent = Favorite
+
+    SpeedBox.Name = "SpeedBox"
+    SpeedBox.Parent = emotesWheel
+    SpeedBox.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    SpeedBox.BackgroundTransparency = 0.400
+    SpeedBox.BorderColor3 = Color3.fromRGB(0, 0, 0)
+    SpeedBox.BorderSizePixel = 0
+    SpeedBox.Position = UDim2.new(0.0189999398, 0, -0.000499992399, 0)
+    SpeedBox.Size = UDim2.new(0.0874999985, 0, 0.0874999985, 0)
+    SpeedBox.Visible = false
+    SpeedBox.Font = Enum.Font.SourceSansBold
+    SpeedBox.PlaceholderColor3 = Color3.fromRGB(178, 178, 178)
+    SpeedBox.Text = "1"
+    SpeedBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+    SpeedBox.TextScaled = true
+    SpeedBox.TextWrapped = true
+    SpeedBox:GetPropertyChangedSignal("Text"):Connect(function()
+        SpeedBox.Text = SpeedBox.Text:gsub("%D+", "")
+    end)
+    SpeedBox.ZIndex = 2
+
+    UICorner_4.CornerRadius = UDim.new(0, 10)
+    UICorner_4.Parent = SpeedBox
+
+    SpeedEmote.Name = "SpeedEmote"
+    SpeedEmote.Parent = emotesWheel
+    SpeedEmote.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    SpeedEmote.BackgroundTransparency = 0.400
+    SpeedEmote.BorderColor3 = Color3.fromRGB(0, 0, 0)
+    SpeedEmote.BorderSizePixel = 0
+    SpeedEmote.Position = UDim2.new(0.888999999, 0, -0, 0)
+    SpeedEmote.Size = UDim2.new(0.0874999985, 0, 0.0874999985, 0)
+    SpeedEmote.Image = "rbxassetid://116056570415896"
+    SpeedEmote.ZIndex = 2
+
+    UICorner_2.CornerRadius = UDim.new(0, 10)
+    UICorner_2.Parent = SpeedEmote
+
+    loadSpeedEmoteConfig()
+
+    connectEvents()
+    isGUICreated = true
+    updateGUIColors()
+    return true
+end
+
+local function updatePageDisplay()
+    if _4pages and _2Routenumber then
+        _4pages.Text = tostring(totalPages)
+        _2Routenumber.Text = tostring(currentPage)
+    end
+end
+
+local function toggleFavorite(emoteId, emoteName)
+    local found = false
+    local index = 0
+
+    for i, fav in pairs(favoriteEmotes) do
+        if fav.id == emoteId then
+            found = true
+            index = i
+            break
+        end
     end
 
-    local function updatePageDisplay()
-        if _4pages and _2Routenumber then
-            _4pages.Text = tostring(totalPages)
-            _2Routenumber.Text = tostring(currentPage)
-        end
-    end
-
-    local function toggleFavorite(emoteId, emoteName)
-        local found = false
-        local index = 0
-        
-        for i, fav in pairs(favoriteEmotes) do
-            if fav.id == emoteId then
-                found = true
-                index = i
-                break
-            end
-        end
-        
-        if found then
-            table.remove(favoriteEmotes, index)
-            getgenv().Notify({
-                Title = '7yd7 | Favorite System',
-                Content = '🗑️ Removed "' .. emoteName .. '" from favorites',
-                Duration = 3
-            })
-        else
-            table.insert(favoriteEmotes, {
-                id = emoteId,
-                name = emoteName .. " - ⭐"
-            })
-            getgenv().Notify({
-                Title = '7yd7 | Favorite System',
-                Content = '✅ Added "' .. emoteName .. '" to favorites',
-                Duration = 3
-            })
-        end
-        
-        saveFavorites()
-        totalPages = calculateTotalPages()
-        updatePageDisplay()
-        updateEmotes()
-    end
-
-    local function fetchAllEmotes()
-        if isLoading then return end
-        isLoading = true
-        emotesData = {}
-        totalEmotesLoaded = 0
-        
-        local success, result = pcall(function()
-            local response = syn and syn.request or request
-            local requestData = {
-                Url = "https://raw.githubusercontent.com/7yd7/sniper-Emote/refs/heads/test/EmoteSniper.json",
-                Method = "GET",
-                Headers = {
-                    ["content-type"] = "application/json",
-                    ["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-                }
-            }
-            local apiResponse = response(requestData)
-            if apiResponse.StatusCode == 200 then
-                local data = HttpService:JSONDecode(apiResponse.Body)
-                return data.data or {}
-            else
-                return nil
-            end
-        end)
-        
-        if success and result then
-            for _, item in pairs(result) do
-                local emoteData = {
-                    id = tonumber(item.id),
-                    name = item.name or ("Emote_" .. (item.id or "Unknown"))
-                }
-                if emoteData.id and emoteData.id > 0 then
-                    table.insert(emotesData, emoteData)
-                    totalEmotesLoaded = totalEmotesLoaded + 1
-                end
-            end
-        else
-            emotesData = {{
-                id = 3360686498,
-                name = "Stadium"
-            }, {
-                id = 3360692915,
-                name = "Tilt"
-            }, {
-                id = 3576968026,
-                name = "Shrug"
-            }, {
-                id = 3360689775,
-                name = "Salute"
-            }}
-            totalEmotesLoaded = #emotesData
-        end
-        
-        originalEmotesData = emotesData
-        filteredEmotes = emotesData
-        
-        totalPages = calculateTotalPages()
-        currentPage = 1
-        updatePageDisplay()
-        updateEmotes()
+    if found then
+        table.remove(favoriteEmotes, index)
         getgenv().Notify({
-            Title = '7yd7 | Emote',
-            Content = "🎉 Loaded Successfully! Total Emotes: " .. totalEmotesLoaded,
-            Duration = 5
+            Title = '7yd7 | Favorite System',
+            Content = '🗑️ Removed "' .. emoteName .. '" from favorites',
+            Duration = 3
         })
-        isLoading = false
+    else
+        table.insert(favoriteEmotes, {
+            id = emoteId,
+            name = emoteName .. " - ⭐"
+        })
+        getgenv().Notify({
+            Title = '7yd7 | Favorite System',
+            Content = '✅ Added "' .. emoteName .. '" to favorites',
+            Duration = 3
+        })
     end
 
-    local function searchEmotes(searchTerm)
+    saveFavorites()
+    totalPages = calculateTotalPages()
+    updatePageDisplay()
+    updateEmotes()
+end
+
+local function fetchAllEmotes()
+    if isLoading then
+        return
+    end
+    isLoading = true
+    emotesData = {}
+    totalEmotesLoaded = 0
+
+    local success, result = pcall(function()
+        local response = syn and syn.request or request
+        local requestData = {
+            Url = "https://raw.githubusercontent.com/7yd7/sniper-Emote/refs/heads/test/EmoteSniper.json",
+            Method = "GET",
+            Headers = {
+                ["content-type"] = "application/json",
+                ["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+            }
+        }
+        local apiResponse = response(requestData)
+        if apiResponse.StatusCode == 200 then
+            local data = HttpService:JSONDecode(apiResponse.Body)
+            return data.data or {}
+        else
+            return nil
+        end
+    end)
+
+    if success and result then
+        for _, item in pairs(result) do
+            local emoteData = {
+                id = tonumber(item.id),
+                name = item.name or ("Emote_" .. (item.id or "Unknown"))
+            }
+            if emoteData.id and emoteData.id > 0 then
+                table.insert(emotesData, emoteData)
+                totalEmotesLoaded = totalEmotesLoaded + 1
+            end
+        end
+    else
+        emotesData = {{
+            id = 3360686498,
+            name = "Stadium"
+        }, {
+            id = 3360692915,
+            name = "Tilt"
+        }, {
+            id = 3576968026,
+            name = "Shrug"
+        }, {
+            id = 3360689775,
+            name = "Salute"
+        }}
+        totalEmotesLoaded = #emotesData
+    end
+
+    originalEmotesData = emotesData
+    filteredEmotes = emotesData
+
+    totalPages = calculateTotalPages()
+    currentPage = 1
+    updatePageDisplay()
+    updateEmotes()
+    getgenv().Notify({
+        Title = '7yd7 | Emote',
+        Content = "🎉 Loaded Successfully! Total Emotes: " .. totalEmotesLoaded,
+        Duration = 5
+    })
+    isLoading = false
+end
+
+local function searchEmotes(searchTerm)
     if isLoading then
         getgenv().Notify({
             Title = '7yd7 | Emote',
@@ -658,7 +778,7 @@ end
             end
         end
         filteredEmotes = newFilteredList
-        
+
         if not _G.originalFavoritesBackup then
             _G.originalFavoritesBackup = {}
             for i, favorite in pairs(favoriteEmotes) do
@@ -668,7 +788,7 @@ end
                 }
             end
         end
-        
+
         _G.filteredFavoritesForDisplay = {}
         for _, favorite in pairs(favoriteEmotes) do
             if favorite.name:lower():find(searchTerm) then
@@ -676,308 +796,405 @@ end
             end
         end
     end
-    
+
     totalPages = calculateTotalPages()
     currentPage = 1
     updatePageDisplay()
     updateEmotes()
 end
 
-
-    local function goToPage(pageNumber)
-        if pageNumber < 1 then
-            currentPage = 1
-        elseif pageNumber > totalPages then
-            currentPage = totalPages
-        else
-            currentPage = pageNumber
-        end
-        updatePageDisplay()
-        updateEmotes()
+local function goToPage(pageNumber)
+    if pageNumber < 1 then
+        currentPage = 1
+    elseif pageNumber > totalPages then
+        currentPage = totalPages
+    else
+        currentPage = pageNumber
     end
+    updatePageDisplay()
+    updateEmotes()
+end
 
-    local function previousPage()
-        if currentPage <= 1 then
-            currentPage = totalPages
-        else
-            currentPage = currentPage - 1
-        end
-        updatePageDisplay()
-        updateEmotes()
+local function previousPage()
+    if currentPage <= 1 then
+        currentPage = totalPages
+    else
+        currentPage = currentPage - 1
     end
+    updatePageDisplay()
+    updateEmotes()
+end
 
-    local function nextPage()
-        if currentPage >= totalPages then
-            currentPage = 1
-        else
-            currentPage = currentPage + 1
-        end
-        updatePageDisplay()
-        updateEmotes()
+local function nextPage()
+    if currentPage >= totalPages then
+        currentPage = 1
+    else
+        currentPage = currentPage + 1
     end
+    updatePageDisplay()
+    updateEmotes()
+end
 
-    local function stopCurrentEmote()
-        if currentEmoteTrack then
-            currentEmoteTrack:Stop()
-            currentEmoteTrack = nil
+local function stopCurrentEmote()
+    if currentEmoteTrack then
+        currentEmoteTrack:Stop()
+        currentEmoteTrack = nil
+    end
+end
+
+local function playEmote(humanoid, emoteId)
+    stopCurrentEmote()
+    stopEmotes()
+
+    local animation = Instance.new("Animation")
+    animation.AnimationId = "rbxassetid://" .. emoteId
+
+    local success, animTrack = pcall(function()
+        return humanoid.Animator:LoadAnimation(animation)
+    end)
+
+    if success and animTrack then
+        currentEmoteTrack = animTrack
+        currentEmoteTrack.Priority = Enum.AnimationPriority.Action
+        currentEmoteTrack.Looped = true
+        wait(0.1)
+        currentEmoteTrack:Play()
+
+        if speedEmoteEnabled then
+            local speedValue = tonumber(SpeedBox.Text) or 1
+            currentEmoteTrack:AdjustSpeed(speedValue)
         end
     end
+end
 
-    local function playEmote(humanoid, emoteId)
-        stopCurrentEmote()
-        stopEmotes()
+local function onCharacterAdded(character)
+    currentCharacter = character
+    stopCurrentEmote()
 
-        local animation = Instance.new("Animation")
-        animation.AnimationId = "rbxassetid://" .. emoteId
+    local humanoid = character:WaitForChild("Humanoid")
+    local animator = humanoid:WaitForChild("Animator")
 
-        local success, animTrack = pcall(function()
-            return humanoid.Animator:LoadAnimation(animation)
-        end)
+    animator.AnimationPlayed:Connect(function(animationTrack)
+        if isDancing(character, animationTrack) then
+            local playedEmoteId = urlToId(animationTrack.Animation.AnimationId)
 
-        if success and animTrack then
-            currentEmoteTrack = animTrack
-            currentEmoteTrack.Priority = Enum.AnimationPriority.Action
-            currentEmoteTrack.Looped = true
-            wait(0.1)
-            currentEmoteTrack:Play()
-        end
-    end
-
-    local function onCharacterAdded(character)
-        currentCharacter = character
-        stopCurrentEmote()
-        
-        local humanoid = character:WaitForChild("Humanoid")
-        local animator = humanoid:WaitForChild("Animator")
-
-        animator.AnimationPlayed:Connect(function(animationTrack)
-            if isDancing(character, animationTrack) then
-                local playedEmoteId = urlToId(animationTrack.Animation.AnimationId)
-                
-                if emotesWalkEnabled then
-                    if currentEmoteTrack then
-                        local currentEmoteId = urlToId(currentEmoteTrack.Animation.AnimationId)
-                        if currentEmoteId == playedEmoteId then return
-                        else stopCurrentEmote() end
-                    end
-                    
-                    playEmote(humanoid, playedEmoteId)
-                    
-                    if currentEmoteTrack then
-                        currentEmoteTrack.Ended:Connect(function()
-                            if currentEmoteTrack == animationTrack then
-                                currentEmoteTrack = nil
-                            end
-                        end)
+            if emotesWalkEnabled then
+                if currentEmoteTrack then
+                    local currentEmoteId = urlToId(currentEmoteTrack.Animation.AnimationId)
+                    if currentEmoteId == playedEmoteId then
+                        return
+                    else
+                        stopCurrentEmote()
                     end
                 end
-                
-                if favoriteEnabled then
-                    stopEmotes()
 
+                playEmote(humanoid, playedEmoteId)
+
+                if currentEmoteTrack then
+                    currentEmoteTrack.Ended:Connect(function()
+                        if currentEmoteTrack == animationTrack then
+                            currentEmoteTrack = nil
+                        end
+                    end)
+                end
+            end
+
+            if speedEmoteEnabled and not emotesWalkEnabled then
+                if currentEmoteTrack then
+                    local currentEmoteId = urlToId(currentEmoteTrack.Animation.AnimationId)
+                    if currentEmoteId == playedEmoteId then
+                        return
+                    else
+                        stopCurrentEmote()
+                    end
+                end
+
+                playEmote(humanoid, playedEmoteId)
+
+                if currentEmoteTrack then
+                    currentEmoteTrack.Ended:Connect(function()
+                        if currentEmoteTrack == animationTrack then
+                            currentEmoteTrack = nil
+                        end
+                    end)
+                end
+            end
+
+            if favoriteEnabled then
+                stopEmotes()
+
+                getgenv().Notify({
+                    Title = '7yd7 | Favorite System',
+                    Content = '🔎 Checking emote...',
+                    Duration = 4
+                })
+
+                local assetId, emoteName = findAssetIdByAnimationId(playedEmoteId)
+
+                if assetId and emoteName then
                     getgenv().Notify({
-                        Title = '7yd7 | Favorite System',
-                        Content = '🔎 Checking emote...',
+                        Title = '7yd7 | Favorite System Success!',
+                        Content = '✅ Saving: ' .. emoteName,
                         Duration = 4
                     })
-                    
-                    local assetId, emoteName = findAssetIdByAnimationId(playedEmoteId)
-                    
-                    if assetId and emoteName then
-                        getgenv().Notify({
-                            Title = '7yd7 | Favorite System Success!',
-                            Content = '✅ Saving: ' .. emoteName,
-                            Duration = 4
-                        })
-                        
-                        toggleFavorite(assetId, emoteName)
 
-                        wait(.1)
+                    toggleFavorite(assetId, emoteName)
+
+                    wait(.1)
                     local GuiService = game:GetService("GuiService")
                     GuiService:SetEmotesMenuOpen(true)
 
-                    else
-                        getgenv().Notify({
-                            Title = '7yd7 | Favorite System Not Found',
-                            Content = '🧐 Re-scanning emotes...',
-                            Duration = 4
-                        })
-                        wait(.1)
-                    local GuiService = game:GetService("GuiService")
-                    GuiService:SetEmotesMenuOpen(true)
-
-                        spawn(function()
-                            scanCurrentEmotes()
-                            wait(0.5)
-
-                            local assetId2, emoteName2 = findAssetIdByAnimationId(playedEmoteId)
-                            if assetId2 and emoteName2 then
-                                getgenv().Notify({
-                                    Title = '7yd7 | Favorite System Found!',
-                                    Content = '✅ Saving: ' .. emoteName2,
-                                    Duration = 4
-                                })
-                                toggleFavorite(assetId2, emoteName2)
-                            else
-                                getgenv().Notify({
-                                    Title = '7yd7 | Favorite System Failed',
-                                    Content = '❌ Could not save emote',
-                                    Duration = 3
-                                })
-                            end
-                        end)
-                    end
-                end
-            end
-        end)
-        
-        humanoid.Died:Connect(function()
-            stopCurrentEmote()
-        end)
-    end
-
-    local function toggleEmoteWalk()
-        emotesWalkEnabled = not emotesWalkEnabled
-        
-        if emotesWalkEnabled then
-            getgenv().Notify({
-                    Title = '7yd7 | Emote Freeze',
-                    Content = "🔒 Emote freeze ON",
-                    Duration = 5
-                })
-
-            EmoteWalkButton.Image = enabledButtonImage
-        else
-            getgenv().Notify({
-                    Title = '7yd7 | Emote Freeze',
-                    Content = '🔓 Emote freeze OFF',
-                    Duration = 5
-                })
-            EmoteWalkButton.Image = defaultButtonImage
-            stopCurrentEmote()
-        end
-    end
-
-    local function toggleFavoriteMode()
-        favoriteEnabled = not favoriteEnabled
-        
-        if favoriteEnabled then
-            Favorite.Image = "rbxassetid://97307461910825"
-            getgenv().Notify({
-                Title = '7yd7 | Favorite System',
-                Content = "🔒 Emote Favorite ON",
-                Duration = 5
-            })
-
-            getgenv().Notify({
-                Title = '7yd7 | Favorite System',
-                Content = "⚠️ Add a favorite, click a dance and it will be added \n (opposite of removing)",
-                Duration = 5
-            })
-        else
-            Favorite.Image = "rbxassetid://124025954365505"
-                getgenv().Notify({
-                Title = '7yd7 | Favorite System',
-                Content = '🔓 Emote Favorite OFF',
-                Duration = 3
-            })
-        end
-    end
-
-    function connectEvents()
-        if _1left then
-            _1left.MouseButton1Click:Connect(previousPage)
-        end
-        
-        if _9right then
-            _9right.MouseButton1Click:Connect(nextPage)
-        end
-        
-        if _2Routenumber then
-            _2Routenumber.FocusLost:Connect(function(enterPressed)
-                local pageNum = tonumber(_2Routenumber.Text)
-                if pageNum then
-                    goToPage(pageNum)
                 else
-                    _2Routenumber.Text = tostring(currentPage)
-                end
-            end)
-        end
-        
-        if Search then
-            Search.Changed:Connect(function(property)
-                if property == "Text" then
-                    searchEmotes(Search.Text)
-                end
-            end)
-        end
-        
-        if EmoteWalkButton then
-            EmoteWalkButton.MouseButton1Click:Connect(toggleEmoteWalk)
-        end
-        
-        if Favorite then
-            Favorite.MouseButton1Click:Connect(toggleFavoriteMode)
-        end
-    end
+                    getgenv().Notify({
+                        Title = '7yd7 | Favorite System Not Found',
+                        Content = '🧐 Re-scanning emotes...',
+                        Duration = 4
+                    })
+                    wait(.1)
+                    local GuiService = game:GetService("GuiService")
+                    GuiService:SetEmotesMenuOpen(true)
 
-    local function checkAndRecreateGUI()
-        local exists, emotesWheel = checkEmotesMenuExists()
-        if not exists then
-            isGUICreated = false
-            return
-        end
-        
-        if not emotesWheel:FindFirstChild("Under") or not emotesWheel:FindFirstChild("Top") or not emotesWheel:FindFirstChild("EmoteWalkButton") or not emotesWheel:FindFirstChild("Favorite") then
-            isGUICreated = false
-            if createGUIElements() then
-                updatePageDisplay()
-                updateEmotes()
+                    spawn(function()
+                        scanCurrentEmotes()
+                        wait(0.5)
+
+                        local assetId2, emoteName2 = findAssetIdByAnimationId(playedEmoteId)
+                        if assetId2 and emoteName2 then
+                            getgenv().Notify({
+                                Title = '7yd7 | Favorite System Found!',
+                                Content = '✅ Saving: ' .. emoteName2,
+                                Duration = 4
+                            })
+                            toggleFavorite(assetId2, emoteName2)
+                        else
+                            getgenv().Notify({
+                                Title = '7yd7 | Favorite System Failed',
+                                Content = '❌ Could not save emote',
+                                Duration = 3
+                            })
+                        end
+                    end)
+                end
             end
         end
+    end)
+
+    humanoid.Died:Connect(function()
+        stopCurrentEmote()
+    end)
+end
+
+local function toggleEmoteWalk()
+    emotesWalkEnabled = not emotesWalkEnabled
+
+    if emotesWalkEnabled then
+        getgenv().Notify({
+            Title = '7yd7 | Emote Freeze',
+            Content = "🔒 Emote freeze ON",
+            Duration = 5
+        })
+
+        EmoteWalkButton.Image = enabledButtonImage
+
+        if currentEmoteTrack and currentEmoteTrack.IsPlaying then
+            currentEmoteTrack:AdjustSpeed(1)
+        end
+    else
+        getgenv().Notify({
+            Title = '7yd7 | Emote Freeze',
+            Content = '🔓 Emote freeze OFF',
+            Duration = 5
+        })
+        EmoteWalkButton.Image = defaultButtonImage
+        stopCurrentEmote()
+
+        if currentEmoteTrack and currentEmoteTrack.IsPlaying and speedEmoteEnabled then
+            local speedValue = tonumber(SpeedBox.Text) or 1
+            currentEmoteTrack:AdjustSpeed(speedValue)
+        elseif currentEmoteTrack and currentEmoteTrack.IsPlaying then
+            currentEmoteTrack:AdjustSpeed(1)
+        end
+    end
+end
+
+local function toggleSpeedEmote()
+    speedEmoteEnabled = not speedEmoteEnabled
+
+    SpeedBox.Visible = speedEmoteEnabled
+
+    if speedEmoteEnabled then
+        getgenv().Notify({
+            Title = '7yd7 | Speed Emote',
+            Content = "⚡ Speed Emote ON",
+            Duration = 5
+        })
+    else
+        getgenv().Notify({
+            Title = '7yd7 | Speed Emote',
+            Content = '⚡ Speed Emote OFF',
+            Duration = 5
+        })
+        stopCurrentEmote()
     end
 
-    if player.Character then
-        onCharacterAdded(player.Character)
+    if writefile then
+        writefile(speedEmoteConfigFile, HttpService:JSONEncode({
+            Enabled = speedEmoteEnabled,
+            SpeedValue = tonumber(SpeedBox.Text) or 1
+        }))
+    end
+end
+
+local function toggleFavoriteMode()
+    favoriteEnabled = not favoriteEnabled
+
+    if favoriteEnabled then
+        Favorite.Image = "rbxassetid://97307461910825"
+        getgenv().Notify({
+            Title = '7yd7 | Favorite System',
+            Content = "🔒 Emote Favorite ON",
+            Duration = 5
+        })
+
+        getgenv().Notify({
+            Title = '7yd7 | Favorite System',
+            Content = "⚠️ Add a favorite, click a dance and it will be added \n (opposite of removing)",
+            Duration = 5
+        })
+    else
+        Favorite.Image = "rbxassetid://124025954365505"
+        getgenv().Notify({
+            Title = '7yd7 | Favorite System',
+            Content = '🔓 Emote Favorite OFF',
+            Duration = 3
+        })
+    end
+end
+
+function connectEvents()
+    if _1left then
+        _1left.MouseButton1Click:Connect(previousPage)
     end
 
-    player.CharacterAdded:Connect(function(character)
-        onCharacterAdded(character)
-        wait(0.3)
-        spawn(function()
-            while not checkEmotesMenuExists() do
-                wait(0.1)
-            end
-            wait(0.3)
-            if createGUIElements() then
-                if #emotesData > 0 then
-                    updatePageDisplay()
-                    updateEmotes()
-                end
+    if _9right then
+        _9right.MouseButton1Click:Connect(nextPage)
+    end
+
+    if _2Routenumber then
+        _2Routenumber.FocusLost:Connect(function(enterPressed)
+            local pageNum = tonumber(_2Routenumber.Text)
+            if pageNum then
+                goToPage(pageNum)
+            else
+                _2Routenumber.Text = tostring(currentPage)
             end
         end)
-    end)
+    end
 
-    local heartbeatConnection = RunService.Heartbeat:Connect(function()
-        if not isGUICreated then
-            checkAndRecreateGUI()
-        else
-            updateGUIColors()
+    if Search then
+        Search.Changed:Connect(function(property)
+            if property == "Text" then
+                searchEmotes(Search.Text)
+            end
+        end)
+    end
+
+    if EmoteWalkButton then
+        EmoteWalkButton.MouseButton1Click:Connect(toggleEmoteWalk)
+    end
+
+    if Favorite then
+        Favorite.MouseButton1Click:Connect(toggleFavoriteMode)
+    end
+
+    if SpeedEmote then
+        SpeedEmote.MouseButton1Click:Connect(toggleSpeedEmote)
+    end
+
+    if SpeedBox then
+        SpeedBox.FocusLost:Connect(function()
+            if writefile then
+                writefile(speedEmoteConfigFile, HttpService:JSONEncode({
+                    Enabled = speedEmoteEnabled,
+                    SpeedValue = tonumber(SpeedBox.Text) or 1
+                }))
+            end
+        end)
+    end
+end
+
+local function checkAndRecreateGUI()
+    local exists, emotesWheel = checkEmotesMenuExists()
+    if not exists then
+        isGUICreated = false
+        return
+    end
+
+    if not emotesWheel:FindFirstChild("Under") or not emotesWheel:FindFirstChild("Top") or
+        not emotesWheel:FindFirstChild("EmoteWalkButton") or not emotesWheel:FindFirstChild("Favorite") or
+        not emotesWheel:FindFirstChild("SpeedEmote") or not emotesWheel:FindFirstChild("SpeedBox") then
+        isGUICreated = false
+        if createGUIElements() then
+            updatePageDisplay()
+            updateEmotes()
+            loadSpeedEmoteConfig()
         end
-    end)
+    end
+end
 
+if player.Character then
+    onCharacterAdded(player.Character)
+end
+
+player.CharacterAdded:Connect(function(character)
+    onCharacterAdded(character)
+    wait(0.3)
     spawn(function()
         while not checkEmotesMenuExists() do
             wait(0.1)
         end
+        wait(0.3)
         if createGUIElements() then
-            loadFavorites()
-            fetchAllEmotes()
+            if #emotesData > 0 then
+                updatePageDisplay()
+                updateEmotes()
+                loadSpeedEmoteConfig()
+            end
         end
     end)
+end)
 
+local heartbeatConnection = RunService.Heartbeat:Connect(function()
+    if not isGUICreated then
+        checkAndRecreateGUI()
+    else
+        updateGUIColors()
+    end
+end)
 
-    task.spawn(function()
+RunService.Stepped:Connect(function()
+    if humanoid and currentEmoteTrack and currentEmoteTrack.IsPlaying then
+        if humanoid.MoveDirection.Magnitude > 0 then
+            if speedEmoteEnabled and not emotesWalkEnabled then
+                currentEmoteTrack:Stop()
+                currentEmoteTrack = nil
+            end
+        end
+    end
+end)
+
+spawn(function()
+    while not checkEmotesMenuExists() do
+        wait(0.1)
+    end
+    if createGUIElements() then
+        loadFavorites()
+        fetchAllEmotes()
+        loadSpeedEmoteConfig()
+    end
+end)
+
+task.spawn(function()
     local StarterGui = game:GetService("StarterGui")
     local CoreGui = game:GetService("CoreGui")
 
@@ -989,35 +1206,35 @@ end
             StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.EmotesMenu, true)
 
         else
-            local exists = emotesMenu:FindFirstChild("Children")
-                and emotesMenu.Children:FindFirstChild("Main")
-                and emotesMenu.Children.Main:FindFirstChild("EmotesWheel")
+            local exists = emotesMenu:FindFirstChild("Children") and emotesMenu.Children:FindFirstChild("Main") and
+                               emotesMenu.Children.Main:FindFirstChild("EmotesWheel")
 
             if exists then
                 local emotesWheel = emotesMenu.Children.Main.EmotesWheel
                 if not emotesWheel:FindFirstChild("Under") or not emotesWheel:FindFirstChild("Top") then
                     if createGUIElements then
                         createGUIElements()
+                        loadSpeedEmoteConfig()
                     end
 
-                if updateGUIColors then
-                    updateGUIColors()
-                    updatePageDisplay()
-                    loadFavorites()
+                    if updateGUIColors then
+                        updateGUIColors()
+                        updatePageDisplay()
+                        loadFavorites()
+                    end
                 end
             end
         end
-    end
 
         task.wait(.3)
     end
 end)
 
-    if UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled and not UserInputService.MouseEnabled then
-	   loadstring(game:HttpGet("https://raw.githubusercontent.com/7yd7/Hub/refs/heads/Branch/GUIS/OpenEmote.lua"))()
-        getgenv().Notify({
-            Title = '7yd7 | Emote Mobile',
-            Content = '📱 Added emote open button for ease of use',
-            Duration = 5
-        })
-    end
+if UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled and not UserInputService.MouseEnabled then
+    loadstring(game:HttpGet("https://raw.githubusercontent.com/7yd7/Hub/refs/heads/Branch/GUIS/OpenEmote.lua"))()
+    getgenv().Notify({
+        Title = '7yd7 | Emote Mobile',
+        Content = '📱 Added emote open button for ease of use',
+        Duration = 5
+    })
+end
