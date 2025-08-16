@@ -691,18 +691,10 @@ local function fetchAllEmotes()
     totalEmotesLoaded = 0
 
     local success, result = pcall(function()
-        local response = syn and syn.request or request
-        local requestData = {
-            Url = "https://raw.githubusercontent.com/7yd7/sniper-Emote/refs/heads/test/EmoteSniper.json",
-            Method = "GET",
-            Headers = {
-                ["content-type"] = "application/json",
-                ["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-            }
-        }
-        local apiResponse = response(requestData)
-        if apiResponse.StatusCode == 200 then
-            local data = HttpService:JSONDecode(apiResponse.Body)
+        local jsonContent = game:HttpGet("https://raw.githubusercontent.com/7yd7/sniper-Emote/refs/heads/test/EmoteSniper.json")
+        
+        if jsonContent and jsonContent ~= "" then
+            local data = HttpService:JSONDecode(jsonContent)
             return data.data or {}
         else
             return nil
@@ -721,19 +713,12 @@ local function fetchAllEmotes()
             end
         end
     else
-        emotesData = {{
-            id = 3360686498,
-            name = "Stadium"
-        }, {
-            id = 3360692915,
-            name = "Tilt"
-        }, {
-            id = 3576968026,
-            name = "Shrug"
-        }, {
-            id = 3360689775,
-            name = "Salute"
-        }}
+        emotesData = {
+            {id = 3360686498, name = "Stadium"},
+            {id = 3360692915, name = "Tilt"},
+            {id = 3576968026, name = "Shrug"},
+            {id = 3360689775, name = "Salute"}
+        }
         totalEmotesLoaded = #emotesData
     end
 
@@ -744,11 +729,13 @@ local function fetchAllEmotes()
     currentPage = 1
     updatePageDisplay()
     updateEmotes()
+    
     getgenv().Notify({
         Title = '7yd7 | Emote',
         Content = "🎉 Loaded Successfully! Total Emotes: " .. totalEmotesLoaded,
         Duration = 5
     })
+    
     isLoading = false
 end
 
