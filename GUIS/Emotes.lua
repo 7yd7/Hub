@@ -30,6 +30,38 @@ local player = Players.LocalPlayer
 local character = player.Character or player.CharacterAdded:Wait()
 local humanoid = character:WaitForChild("Humanoid")
 local UserInputService = game:GetService("UserInputService")
+local CoreGui = game:GetService("CoreGui")
+
+local currentTimer = nil
+
+RunService.Heartbeat:Connect(function()
+    if player.Character and player.Character.Humanoid.RigType == Enum.HumanoidRigType.R6 then
+        local errorMsg = CoreGui.RobloxGui.EmotesMenu.Children.ErrorMessage
+        if errorMsg.Visible then
+            errorMsg.ErrorText.Text = "Only r15 does not work r6"
+        end
+    end
+end)
+
+function ErrorMessage(text, duration)
+
+    if currentTimer then
+        task.cancel(currentTimer)
+        currentTimer = nil
+    end
+    
+    local errorMessage = CoreGui.RobloxGui.EmotesMenu.Children.ErrorMessage
+    local errorText = errorMessage.ErrorText
+    
+    errorText.Text = text
+    
+    errorMessage.Visible = true
+    
+    currentTimer = task.delay(duration, function()
+        errorMessage.Visible = false
+        currentTimer = nil
+    end)
+end
 
 local function stopEmotes()
     for _, track in ipairs(humanoid:GetPlayingAnimationTracks()) do
