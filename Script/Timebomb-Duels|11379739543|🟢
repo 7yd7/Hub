@@ -24,6 +24,7 @@ end
 
 getgenv().ScriptGe = function()
 
+
 getgenv().EnemyDetection = false
 getgenv().AFKMode = false
 getgenv().SmartEvasion = false
@@ -97,7 +98,6 @@ local function updatePlayerDropdown()
     end
 end
 
-
 spawn(function()
     while true do
         wait(3)
@@ -114,7 +114,6 @@ game.Players.PlayerRemoving:Connect(function()
     wait(0.5)
     updatePlayerDropdown()
 end)
-
 
 Toggle:OnChanged(function()
     getgenv().EnemyDetection = Options.EnemyDetection_Toggle.Value
@@ -483,7 +482,6 @@ function checkPathClear(startPos, endPos)
     return true, endPos
 end
 
-
 function getEnemiesWithBombs(enemies)
     local enemiesWithBombs = {}
     for _, enemy in pairs(enemies) do
@@ -606,7 +604,6 @@ function findUltimateEscapePosition(currentPosition, primaryEnemy, allEnemies, a
     
     return bestPosition
 end
-
 
 function startEvasionLoop()
     spawn(function()
@@ -741,10 +738,30 @@ function isSlotInGame(arena, side, slotNum)
     if slot and slot:FindFirstChild("Pad") then
         local pad = slot.Pad
         local color = pad.Color
-        if color.R == 87/255 and color.G == 181/255 and color.B == 57/255 then
+        if math.abs(color.R - 87/255) < 0.01 and 
+           math.abs(color.G - 181/255) < 0.01 and 
+           math.abs(color.B - 57/255) < 0.01 then
             return true
         end
     end
+    return false
+end
+
+function isAnyPlayerInGameInArena(arena)
+    if not arena or not arena:FindFirstChild("Slots") then
+        return false
+    end
+    
+    for _, side in pairs({"Left", "Right"}) do
+        if arena.Slots:FindFirstChild(side) then
+            for i = 1, 4 do
+                if isSlotInGame(arena, side, i) then
+                    return true
+                end
+            end
+        end
+    end
+    
     return false
 end
 
@@ -778,12 +795,35 @@ function findTargetPlayer(targetName)
     return nil
 end
 
+function findFirstAvailableSlot(arena, side, excludeSlot)
+    if not arena or not arena.Slots or not arena.Slots:FindFirstChild(side) then
+        return nil
+    end
+    
+    for i = 1, 4 do
+        if i ~= excludeSlot then
+            local slot = arena.Slots[side]:FindFirstChild(tostring(i))
+            if slot and slot:FindFirstChild("Data") and slot.Data:FindFirstChild("Player") then
+                if slot.Data.Player.Value == nil and not isSlotInGame(arena, side, i) then
+                    return i
+                end
+            end
+        end
+    end
+    
+    return nil
+end
+
 function findPlayerInArenas(targetPlayer)
     if workspace.Arenas then
         local availablePlayers = {}
         
         for _, arena in pairs(workspace.Arenas:GetChildren()) do
             if arena:FindFirstChild("Slots") then
+                if isAnyPlayerInGameInArena(arena) then
+                    continue
+                end
+                
                 for _, side in pairs({"Left", "Right"}) do
                     if arena.Slots:FindFirstChild(side) then
                         for i = 1, 4 do
@@ -791,15 +831,30 @@ function findPlayerInArenas(targetPlayer)
                             if slot and slot:FindFirstChild("Data") and slot.Data:FindFirstChild("Player") then
                                 local player = slot.Data.Player.Value
                                 if player and player ~= localPlayer and player.Parent and not isSlotInGame(arena, side, i) then
-                                    if targetPlayer == nil then
-                                        table.insert(availablePlayers, {
-                                            arena = arena,
-                                            side = side,
-                                            slot = i,
-                                            player = player
-                                        })
-                                    elseif player == targetPlayer then
-                                        return arena, side, i, player
+                                    local hasAvailableSlot = false
+                                    
+                                    if getgenv().JoinMode == "infection" then
+                                        local oppositeSide = (side == "Left") and "Right" or "Left"
+                                        if findFirstAvailableSlot(arena, oppositeSide, nil) then
+                                            hasAvailableSlot = true
+                                        end
+                                    elseif getgenv().JoinMode == "team" then
+                                        if findFirstAvailableSlot(arena, side, i) then
+                                            hasAvailableSlot = true
+                                        end
+                                    end
+                                    
+                                    if hasAvailableSlot then
+                                        if targetPlayer == nil then
+                                            table.insert(availablePlayers, {
+                                                arena = arena,
+                                                side = side,
+                                                slot = i,
+                                                player = player
+                                            })
+                                        elseif player == targetPlayer then
+                                            return arena, side, i, player
+                                        end
                                     end
                                 end
                             end
@@ -810,11 +865,6 @@ function findPlayerInArenas(targetPlayer)
         end
         
         if targetPlayer == nil and #availablePlayers > 0 then
-            for i = #availablePlayers, 2, -1 do
-                local j = math.random(i)
-                availablePlayers[i], availablePlayers[j] = availablePlayers[j], availablePlayers[i]
-            end
-            
             local selected = availablePlayers[1]
             return selected.arena, selected.side, selected.slot, selected.player
         end
@@ -861,7 +911,7 @@ function joinArenaSlot(arena, targetSide, targetSlot)
         local hull = arena.Slots[targetSide][tostring(targetSlot)].Hull
         local character = localPlayer.Character
         if character and character:FindFirstChild("HumanoidRootPart") then
-            character.HumanoidRootPart.CFrame = hull.CFrame
+            character.HumanoidRootPart.CFrame = hull.CFrame * CFrame.new(0, -5, 0)
             return true
         end
     end
@@ -869,6 +919,10 @@ function joinArenaSlot(arena, targetSide, targetSlot)
 end
 
 function findBestSlot(arena, foundSide, foundSlot, foundPlayer)
+    if isAnyPlayerInGameInArena(arena) then
+        return nil, nil
+    end
+    
     local targetSide = foundSide
     local targetSlot = foundSlot
     
@@ -877,6 +931,8 @@ function findBestSlot(arena, foundSide, foundSlot, foundPlayer)
         targetSlot = foundSlot
     elseif getgenv().JoinMode == "team" then
         targetSide = foundSide
+        targetSlot = nil
+        
         for i = 1, 4 do
             if i ~= foundSlot then
                 local slot = arena.Slots[targetSide]:FindFirstChild(tostring(i))
@@ -887,6 +943,10 @@ function findBestSlot(arena, foundSide, foundSlot, foundPlayer)
                     end
                 end
             end
+        end
+        
+        if targetSlot == nil then
+            return nil, nil
         end
     end
     
@@ -901,7 +961,12 @@ function startAutoJoinLoop()
         local lastTargetPlayer = nil
         
         while getgenv().AutoJoin do
-            wait(.1)
+            wait(0.1)
+
+            if isInGame() then
+                wait(0.3)
+                continue
+            end
             
             local isInArena, currentArena, currentSide, currentSlot = isPlayerInArena()
             
@@ -925,7 +990,7 @@ function startAutoJoinLoop()
 
                 if #playersInCurrentArena == 0 then
                     teleportToWorldSpawn()
-                    wait(.1)
+                    wait(0.1)
                     continue
                 end
 
@@ -933,7 +998,7 @@ function startAutoJoinLoop()
                 if readyVisible and readyPrompt and readyPrompt.Text == "Ready" then
                     fireReadyRemote()
                 end
-                wait(.1)
+                wait(0.1)
                 continue
             end
             
@@ -950,18 +1015,25 @@ function startAutoJoinLoop()
             if foundArena and foundSide and foundSlot then
                 local targetSide, targetSlot = findBestSlot(foundArena, foundSide, foundSlot, foundPlayer)
                 
+                if not targetSide or not targetSlot then
+                    wait(2)
+                    continue
+                end
+                
                 local targetSlotObj = foundArena.Slots[targetSide]:FindFirstChild(tostring(targetSlot))
                 if targetSlotObj and targetSlotObj:FindFirstChild("Data") and targetSlotObj.Data:FindFirstChild("Player") then
                     if targetSlotObj.Data.Player.Value == nil and not isSlotInGame(foundArena, targetSide, targetSlot) then
-                        if joinArenaSlot(foundArena, targetSide, targetSlot) then
-                            lastJoinedArena = foundArena
-                            lastJoinedSide = targetSide
-                            lastJoinedSlot = targetSlot
-                            lastTargetPlayer = foundPlayer
-                            wait(.1)
-                            local readyVisible, readyPrompt = isReadyPromptVisible()
-                            if readyVisible and readyPrompt and readyPrompt.Text == "Ready" then
-                                fireReadyRemote()
+                        if not isAnyPlayerInGameInArena(foundArena) then
+                            if joinArenaSlot(foundArena, targetSide, targetSlot) then
+                                lastJoinedArena = foundArena
+                                lastJoinedSide = targetSide
+                                lastJoinedSlot = targetSlot
+                                lastTargetPlayer = foundPlayer
+                                wait(0.1)
+                                local readyVisible, readyPrompt = isReadyPromptVisible()
+                                if readyVisible and readyPrompt and readyPrompt.Text == "Ready" then
+                                    fireReadyRemote()
+                                end
                             end
                         end
                     end
@@ -973,102 +1045,107 @@ function startAutoJoinLoop()
     end)
 end
 
+
 local originalPosition = nil
 local isUsingBomb = false
 local lastEnemyPosition = nil
 local enemyVelocity = Vector3.new(0, 0, 0)
+local bombLoop = nil
 
 function useBombOnEnemy(bombTool, character, targetEnemy)
-    if bombTool and character and targetEnemy and targetEnemy.Character then
-        local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
-        local targetRootPart = targetEnemy.Character:FindFirstChild("HumanoidRootPart")
+    if bombLoop or not bombTool or not character or not targetEnemy or not targetEnemy.Character then
+        return false
+    end
+    
+    local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
+    local targetRootPart = targetEnemy.Character:FindFirstChild("HumanoidRootPart")
+    
+    if not humanoidRootPart or not targetRootPart then
+        return false
+    end
+    
+    if not isUsingBomb then
+        originalPosition = humanoidRootPart.CFrame
+        isUsingBomb = true
+    end
+    
+    local behindPosition = targetRootPart.CFrame * CFrame.new(-2, 0, 4)
+    humanoidRootPart.CFrame = behindPosition
+    
+    bombLoop = spawn(function()
+        local bombActivated = false
+        local maxAttempts = 50
+        local attempts = 0
         
-        if humanoidRootPart and targetRootPart then
-            if not isUsingBomb then
-                originalPosition = humanoidRootPart.CFrame
-                isUsingBomb = true
+        while getgenv().EnemyDetection and character:FindFirstChild("Bomb") and attempts < maxAttempts do
+            attempts = attempts + 1
+            wait(0.05)
+            
+            local currentBomb = character:FindFirstChild("Bomb")
+            if not currentBomb or not targetRootPart or not humanoidRootPart then
+                break
             end
             
-            local behindPosition = targetRootPart.CFrame * CFrame.new(-2, 0, 4) 
+            local currentEnemyPosition = targetRootPart.Position
+            if lastEnemyPosition then
+                enemyVelocity = (currentEnemyPosition - lastEnemyPosition) / 0.05
+            end
+            lastEnemyPosition = currentEnemyPosition
             
-            humanoidRootPart.CFrame = behindPosition
+            local speed = enemyVelocity.Magnitude
+            local distance = 3
+            local leftOffset = -1.5
             
-            spawn(function()
-                while getgenv().EnemyDetection and character:FindFirstChild("Bomb") do
-                    wait(0.01) 
-                    
-                    local currentBomb = character:FindFirstChild("Bomb")
-                    if currentBomb and targetRootPart and humanoidRootPart then
-                        local currentEnemyPosition = targetRootPart.Position
-                        if lastEnemyPosition then
-                            enemyVelocity = (currentEnemyPosition - lastEnemyPosition) / 0.1
-                        end
-                        lastEnemyPosition = currentEnemyPosition
-                        
-                        local speed = enemyVelocity.Magnitude
-                        local distance = 3 
-                        local leftOffset = -1.5 
-                        
-                        if speed > 5 then
-                            distance = 5
-                            leftOffset = -1
-                        elseif speed < 1 then
-                            distance = 2
-                            leftOffset = -1
-                        else
-                            distance = 3
-                            leftOffset = -1.5
-                        end
-                        
-                        local predictedPosition = currentEnemyPosition
-                        if speed > 1 then
-                            local forwardVelocity = Vector3.new(enemyVelocity.X, 0, enemyVelocity.Z)
-                            local enemyLookVector = targetRootPart.CFrame.LookVector
-                            local movementDirection = forwardVelocity.Unit
-                            local dotProduct = enemyLookVector:Dot(movementDirection)
-                            
-                            if dotProduct > -0.5 then
-                                predictedPosition = currentEnemyPosition + (forwardVelocity * 0.3)
-                            end
-                        end
-                        
-                        local predictedCFrame = CFrame.new(predictedPosition, predictedPosition + targetRootPart.CFrame.LookVector)
-                        local smartBehindPosition = predictedCFrame * CFrame.new(leftOffset, 0, distance)
-                        
-                        humanoidRootPart.CFrame = smartBehindPosition
-                        
-                        if currentBomb:FindFirstChild("RemoteEvent") then
-                            currentBomb.RemoteEvent:FireServer()
-                        end
-                        if currentBomb:FindFirstChild("ClickDetector") then
-                            fireclickdetector(currentBomb.ClickDetector)
-                        end
-                        if currentBomb:FindFirstChild("Handle") then
-                            currentBomb:Activate()
-                        end
-                        pcall(function()
-                            currentBomb:Activate()
-                        end)
-                    end
+            if speed > 5 then
+                distance = 5
+                leftOffset = -1
+            elseif speed < 1 then
+                distance = 2
+                leftOffset = -1
+            else
+                distance = 3
+                leftOffset = -1.5
+            end
+            
+            local predictedPosition = currentEnemyPosition
+            if speed > 1 then
+                local forwardVelocity = Vector3.new(enemyVelocity.X, 0, enemyVelocity.Z)
+                local enemyLookVector = targetRootPart.CFrame.LookVector
+                local movementDirection = forwardVelocity.Unit
+                local dotProduct = enemyLookVector:Dot(movementDirection)
+                
+                if dotProduct > -0.5 then
+                    predictedPosition = currentEnemyPosition + (forwardVelocity * 0.3)
                 end
-                
-                lastEnemyPosition = nil
-                enemyVelocity = Vector3.new(0, 0, 0)
-                
-                if getgenv().AFKMode then
-                    teleportToWorldSpawn()
-                elseif originalPosition and humanoidRootPart then
-                    humanoidRootPart.CFrame = originalPosition
-                end
-                
-                originalPosition = nil
-                isUsingBomb = false
-            end)
+            end
             
-            return true
+            local predictedCFrame = CFrame.new(predictedPosition, predictedPosition + targetRootPart.CFrame.LookVector)
+            local smartBehindPosition = predictedCFrame * CFrame.new(leftOffset, 0, distance)
+            
+            humanoidRootPart.CFrame = smartBehindPosition
+            
+            if not bombActivated then
+                bombActivated = true
+                wait(0.5)
+                break
+            end
         end
-    end
-    return false
+        
+        lastEnemyPosition = nil
+        enemyVelocity = Vector3.new(0, 0, 0)
+        bombLoop = nil
+        
+        if getgenv().AFKMode then
+            teleportToWorldSpawn()
+        elseif originalPosition and humanoidRootPart then
+            humanoidRootPart.CFrame = originalPosition
+        end
+        
+        originalPosition = nil
+        isUsingBomb = false
+    end)
+    
+    return true
 end
 
 function isPlayerAlive(player)
@@ -1084,17 +1161,17 @@ end
 function startEnemyDetectionLoop()
     spawn(function()
         while getgenv().EnemyDetection do
-            wait(.1)
+            wait(.2)
             
             if not isInGame() then
                 wait(1)
                 continue
             end
             
-            local enemies, arenaOfLocalPlayer = detectEnemyPlayers() 
+            local enemies, arenaOfLocalPlayer = detectEnemyPlayers()
             
             local validEnemies = {}
-            if arenaOfLocalPlayer then 
+            if arenaOfLocalPlayer then
                 for _, enemy in pairs(enemies) do
                     if isPlayerAlive(enemy) and isPlayerOnArenaFloor(enemy, arenaOfLocalPlayer) then
                         table.insert(validEnemies, enemy)
@@ -1113,7 +1190,7 @@ function startEnemyDetectionLoop()
                         teleportToWorldSpawn()
                     end
                 end
-            elseif #validEnemies == 0 then  
+            elseif #validEnemies == 0 then
                 if isUsingBomb and originalPosition then
                     local character = localPlayer.Character
                     if character and character:FindFirstChild("HumanoidRootPart") then
@@ -1124,6 +1201,9 @@ function startEnemyDetectionLoop()
                         end
                         originalPosition = nil
                         isUsingBomb = false
+                        if bombLoop then
+                            bombLoop = nil
+                        end
                     end
                 end
             end
@@ -1139,6 +1219,9 @@ function startEnemyDetectionLoop()
                 end
                 originalPosition = nil
                 isUsingBomb = false
+                if bombLoop then
+                    bombLoop = nil
+                end
             end
         end
     end)
