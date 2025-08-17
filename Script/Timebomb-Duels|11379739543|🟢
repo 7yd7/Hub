@@ -381,17 +381,14 @@ function isPositionInArena(position, arena)
     local floor = arena.Map.Floor
     local floorCFrame = floor.CFrame
     local floorSize = floor.Size
-    
-    local floorY = floor.Position.Y
-    local testPosition = Vector3.new(position.X, floorY, position.Z)
-    local relativePos = floorCFrame:PointToObjectSpace(testPosition)
+    local relativePos = floorCFrame:PointToObjectSpace(position)
     
     local padding = 4
     local withinX = math.abs(relativePos.X) <= (floorSize.X / 2) - padding
     local withinZ = math.abs(relativePos.Z) <= (floorSize.Z / 2) - padding
     
-    local heightDiff = math.abs(position.Y - floorY)
-    local withinHeight = heightDiff < 10
+    local heightDiff = math.abs(position.Y - floor.Position.Y)
+    local withinHeight = heightDiff < 50
     
     return withinX and withinZ and withinHeight
 end
@@ -461,13 +458,11 @@ function hasEnemyBomb(enemy)
 end
 
 function checkPathClear(startPos, endPos)
-    local fixedEndPos = Vector3.new(endPos.X, startPos.Y, endPos.Z)
-    
-    local direction = (fixedEndPos - startPos)
+    local direction = (endPos - startPos)
     local distance = direction.Magnitude
     
     if distance < 1 then
-        return true, fixedEndPos
+        return true, endPos
     end
     
     direction = direction.Unit
@@ -481,30 +476,11 @@ function checkPathClear(startPos, endPos)
         if raycast.Distance < distance - 2 then
             local safeDistance = math.max(1, raycast.Distance - 3)
             local safePos = startPos + (direction * safeDistance)
-            return false, Vector3.new(safePos.X, startPos.Y, safePos.Z)
+            return false, safePos
         end
     end
     
-    local stepSize = math.min(4, distance / 3)
-    local steps = math.ceil(distance / stepSize)
-    
-    for i = 1, steps do
-        local currentDistance = i * stepSize
-        if currentDistance > distance then
-            currentDistance = distance
-        end
-        
-        local checkRay = workspace:Raycast(startPos, direction * currentDistance, raycastParams)
-        if checkRay then
-            if checkRay.Distance < currentDistance - 1.5 then
-                local safeDistance = math.max(1, checkRay.Distance - 2)
-                local safePos = startPos + (direction * safeDistance)
-                return false, Vector3.new(safePos.X, startPos.Y, safePos.Z)
-            end
-        end
-    end
-    
-    return true, fixedEndPos
+    return true, endPos
 end
 
 
@@ -524,24 +500,20 @@ function findUltimateEscapePosition(currentPosition, primaryEnemy, allEnemies, a
         return currentPosition
     end
     
-    local humanoidRootPart = character.HumanoidRootPart
     local primaryEnemyPos = primaryEnemy.Character.HumanoidRootPart.Position
     local primaryDistance = (currentPosition - primaryEnemyPos).Magnitude
     
-    local currentY = currentPosition.Y
-    local primaryEnemyPos2D = Vector3.new(primaryEnemyPos.X, currentY, primaryEnemyPos.Z)
-    
     if primaryDistance < 8 then
-        local emergencyDirection = (Vector3.new(currentPosition.X, currentY, currentPosition.Z) - primaryEnemyPos2D).Unit
+        local emergencyDirection = (currentPosition - primaryEnemyPos).Unit
         
         for testDist = 15, 5, -2 do
-            local emergencyPos = Vector3.new(currentPosition.X, currentY, currentPosition.Z) + (emergencyDirection * testDist)
+            local emergencyPos = currentPosition + (emergencyDirection * testDist)
             local pathClear, actualPos = checkPathClear(currentPosition, emergencyPos)
             
             if pathClear and isPositionInArena(emergencyPos, arena) then
                 return emergencyPos
             elseif actualPos then
-                local safePos = Vector3.new(currentPosition.X, currentY, currentPosition.Z) + (emergencyDirection * (testDist - 3))
+                local safePos = currentPosition + (emergencyDirection * (testDist - 3))
                 if isPositionInArena(safePos, arena) then
                     return safePos
                 end
@@ -560,22 +532,18 @@ function findUltimateEscapePosition(currentPosition, primaryEnemy, allEnemies, a
     
     for _, direction in pairs(directions) do
         for testDistance = 6, 25, 3 do
-            local testPosition = Vector3.new(
-                currentPosition.X + (direction.X * testDistance),
-                currentY, 
-                currentPosition.Z + (direction.Z * testDistance)
-            )
+            local testPosition = currentPosition + (direction * testDistance)
             
             local pathClear, blockedAt = checkPathClear(currentPosition, testPosition)
             
             if not pathClear then
                 if blockedAt then
-                    local safeDistance = (Vector3.new(blockedAt.X, currentY, blockedAt.Z) - currentPosition).Magnitude
+                    local safeDistance = (blockedAt - currentPosition).Magnitude
                     if safeDistance > 3 then
-                        testPosition = Vector3.new(blockedAt.X, currentY, blockedAt.Z)
+                        testPosition = blockedAt
                         testDistance = safeDistance
                     else
-                        break 
+                        break
                     end
                 else
                     break
@@ -592,9 +560,7 @@ function findUltimateEscapePosition(currentPosition, primaryEnemy, allEnemies, a
             for _, enemy in pairs(allEnemies) do
                 if enemy.Character and enemy.Character:FindFirstChild("HumanoidRootPart") then
                     local enemyPos = enemy.Character.HumanoidRootPart.Position
-                    local enemyPos2D = Vector3.new(enemyPos.X, currentY, enemyPos.Z)
-                    local testPos2D = Vector3.new(testPosition.X, currentY, testPosition.Z)
-                    local distanceToEnemy = (testPos2D - enemyPos2D).Magnitude
+                    local distanceToEnemy = (testPosition - enemyPos).Magnitude
                     
                     minEnemyDistance = math.min(minEnemyDistance, distanceToEnemy)
                     
@@ -627,13 +593,9 @@ function findUltimateEscapePosition(currentPosition, primaryEnemy, allEnemies, a
     
     local finalCheck, _ = checkPathClear(currentPosition, bestPosition)
     if not finalCheck then
-        local fallbackDirection = (Vector3.new(bestPosition.X, currentY, bestPosition.Z) - currentPosition).Unit
+        local fallbackDirection = (bestPosition - currentPosition).Unit
         for dist = 5, 15, 2 do
-            local fallbackPos = Vector3.new(
-                currentPosition.X + (fallbackDirection.X * dist),
-                currentY,
-                currentPosition.Z + (fallbackDirection.Z * dist)
-            )
+            local fallbackPos = currentPosition + (fallbackDirection * dist)
             local fallbackCheck, _ = checkPathClear(currentPosition, fallbackPos)
             if fallbackCheck and isPositionInArena(fallbackPos, arena) then
                 return fallbackPos
