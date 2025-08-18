@@ -41,10 +41,12 @@ local lastPlayerCount = 0
 local playerUpdateConnection = nil
 local localPlayer = game.Players.LocalPlayer
 
-    Tabs.Gameworks:AddParagraph({
-        Title = "WARNING",
-        Content = "Custom script for Auto Farm Automation\nFFA not working"
-    })
+local dropdownUpdateEnabled = false
+
+Tabs.Gameworks:AddParagraph({
+    Title = "WARNING",
+    Content = "Custom script for Auto Farm Automation\nFFA not working"
+})
 
 Tabs.Gameworks:AddSection("Auto Farm")
 
@@ -96,6 +98,8 @@ local TargetPlayerDropdown = Tabs.Gameworks:AddDropdown("TargetPlayer_Dropdown",
 })
 
 local function updatePlayerDropdown()
+    if not dropdownUpdateEnabled then return end
+    
     local currentPlayerCount = #game.Players:GetPlayers()
     if currentPlayerCount ~= lastPlayerCount then
         local updatedPlayers = getAllPlayerNames()
@@ -104,29 +108,50 @@ local function updatePlayerDropdown()
     end
 end
 
+local function enableDropdownUpdates()
+    dropdownUpdateEnabled = true
+end
+
+local function disableDropdownUpdates()
+    dropdownUpdateEnabled = false
+end
+
 spawn(function()
     while true do
-        wait(3)
+        wait(10)
         updatePlayerDropdown()
     end
 end)
 
+local playerAddedDebounce = false
+local playerRemovedDebounce = false
+
 game.Players.PlayerAdded:Connect(function()
-    wait(0.5)
+    if playerAddedDebounce then return end
+    playerAddedDebounce = true
+    
+    wait(2)
     updatePlayerDropdown()
+    playerAddedDebounce = false
 end)
 
 game.Players.PlayerRemoving:Connect(function()
-    wait(0.5)
+    if playerRemovedDebounce then return end
+    playerRemovedDebounce = true
+    
+    wait(2)
     updatePlayerDropdown()
+    playerRemovedDebounce = false
 end)
 
 Toggle:OnChanged(function()
     getgenv().EnemyDetection = Options.EnemyDetection_Toggle.Value
     if getgenv().EnemyDetection then
         startEnemyDetectionLoop()
+        disableDropdownUpdates()
     else
         getgenv().EnemyDetection = false
+        enableDropdownUpdates() 
         if isUsingBomb and originalPosition then
             local character = localPlayer.Character
             if character and character:FindFirstChild("HumanoidRootPart") then
@@ -154,6 +179,9 @@ EvasionToggle:OnChanged(function()
     getgenv().SmartEvasion = Options.SmartEvasion_Toggle.Value
     if getgenv().SmartEvasion then
         startEvasionLoop()
+        disableDropdownUpdates()
+    else
+        enableDropdownUpdates()
     end
 end)
 
@@ -161,6 +189,9 @@ AutoJoinToggle:OnChanged(function()
     getgenv().AutoJoin = Options.AutoJoin_Toggle.Value
     if getgenv().AutoJoin then
         startAutoJoinLoop()
+        enableDropdownUpdates() 
+    else
+        disableDropdownUpdates()
     end
 end)
 
@@ -180,7 +211,15 @@ function isInGame()
     return false
 end
 
+local enemyDetectionCache = {}
+local cacheTimeout = 0.5
+
 function detectEnemyPlayers()
+    local currentTime = tick()
+    if enemyDetectionCache.data and (currentTime - enemyDetectionCache.time) < cacheTimeout then
+        return enemyDetectionCache.data.enemies, enemyDetectionCache.data.arena
+    end
+
     local enemyPlayers = {}
     local localPlayerTeam = nil
     local currentArenaForLocalPlayer = nil 
@@ -235,6 +274,11 @@ function detectEnemyPlayers()
             end
         end
     end
+    
+    enemyDetectionCache = {
+        data = {enemies = enemyPlayers, arena = currentArenaForLocalPlayer},
+        time = currentTime
+    }
     
     return enemyPlayers, currentArenaForLocalPlayer 
 end
@@ -373,7 +417,6 @@ function isPlayerInsideHull(arena, side, slotNum)
     
     return distance <= maxDistance
 end
-
 
 function teleportToWorldSpawn()
     local character = localPlayer.Character
@@ -644,13 +687,13 @@ function startEvasionLoop()
             wait(0.01) 
             
             if not isInGame() then
-                wait(0.01) 
+                wait(0.2) 
                 continue
             end
             
             local character = localPlayer.Character
             if not character or not character:FindFirstChild("HumanoidRootPart") then
-                wait(0.01)
+                wait(0.1)
                 continue
             end
             
@@ -727,7 +770,7 @@ function startEvasionLoop()
                         lastEvasionTime = currentTime
                         
                         if emergencyMode then
-                            wait(0.01) 
+                            wait(0.02)
                             emergencyMode = false
                         end
                     end
@@ -786,7 +829,6 @@ function checkPlayerArenaStatus()
 end
 
 function autoFixPosition(arena, side, slotNum)
-    
     teleportToWorldSpawn()
     wait(0.5) 
     return joinArenaSlot(arena, side, slotNum)
@@ -1094,7 +1136,7 @@ function startAutoJoinLoop()
             wait(0.1) 
 
             if isInGame() then
-                wait(0.3)
+                wait(0.5)
                 continue
             end
             
@@ -1137,7 +1179,7 @@ function startAutoJoinLoop()
                 if readyVisible and readyPrompt and readyPrompt.Text == "Ready" then
                     fireReadyRemote()
                 end
-                wait(0.1)
+                wait(0.2)
                 continue
             end
             
@@ -1155,7 +1197,7 @@ function startAutoJoinLoop()
                 local targetSide, targetSlot = findBestSlot(foundArena, foundSide, foundSlot, foundPlayer)
                 
                 if not targetSide or not targetSlot then
-                    wait(.1)
+                    wait(.2) 
                     continue
                 end
                 
@@ -1169,7 +1211,7 @@ function startAutoJoinLoop()
                                 lastJoinedSlot = targetSlot
                                 lastTargetPlayer = foundPlayer
                                 
-                                wait(0.1)  
+                                wait(0.2)
                                 
                                 local readyVisible, readyPrompt = isReadyPromptVisible()
                                 if readyVisible and readyPrompt and readyPrompt.Text == "Ready" then
@@ -1180,7 +1222,7 @@ function startAutoJoinLoop()
                     end
                 end
             else
-                wait(0.2) 
+                wait(0.4) 
             end
         end
     end)
@@ -1188,7 +1230,7 @@ end
 
 spawn(function()
     while true do
-        wait(60) 
+        wait(120) 
         local currentTime = tick()
         
         for key, time in pairs(joinCooldown) do
@@ -1199,9 +1241,12 @@ spawn(function()
         if #joinAttempts > 50 then
             joinAttempts = {}
         end
+        
+        if enemyDetectionCache.time and (currentTime - enemyDetectionCache.time) > 10 then
+            enemyDetectionCache = {}
+        end
     end
 end)
-
 
 local originalPosition = nil
 local isUsingBomb = false
@@ -1213,97 +1258,66 @@ function useBombOnEnemy(bombTool, character, targetEnemy)
     if bombLoop or not bombTool or not character or not targetEnemy or not targetEnemy.Character then
         return false
     end
-    
     local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
     local targetRootPart = targetEnemy.Character:FindFirstChild("HumanoidRootPart")
-    
     if not humanoidRootPart or not targetRootPart then
         return false
     end
-    
     if not isUsingBomb then
         originalPosition = humanoidRootPart.CFrame
         isUsingBomb = true
     end
-    
-    local behindPosition = targetRootPart.CFrame * CFrame.new(-2, 0, 4)
-    humanoidRootPart.CFrame = behindPosition
-    
-    bombLoop = spawn(function()
+    humanoidRootPart.CFrame = targetRootPart.CFrame * CFrame.new(0, 0, 3)
+    bombLoop = task.spawn(function()
         local bombActivated = false
-        local maxAttempts = 100 
         local attempts = 0
-        
+        local maxAttempts = 100 
         while getgenv().EnemyDetection and character:FindFirstChild("Bomb") and attempts < maxAttempts do
-            attempts = attempts + 1
-            wait(0.01) 
+            attempts += 1
+            task.wait(0.001)
+            if not targetRootPart or not humanoidRootPart then break end
             
-            local currentBomb = character:FindFirstChild("Bomb")
-            if not currentBomb or not targetRootPart or not humanoidRootPart then
-                break
-            end
+            local enemyVelocity = targetRootPart.Velocity
+            local distanceToEnemy = (targetRootPart.Position - humanoidRootPart.Position).Magnitude
             
-            local currentEnemyPosition = targetRootPart.Position
-            if lastEnemyPosition then
-                enemyVelocity = (currentEnemyPosition - lastEnemyPosition) / 0.01 
-            end
-            lastEnemyPosition = currentEnemyPosition
+            local predictionTime = 0.01
             
-            local speed = enemyVelocity.Magnitude
-            local distance = 2 
-            local leftOffset = -1
+            local predictedPosition = targetRootPart.Position + (enemyVelocity * predictionTime)
             
-            if speed > 8 then
-                distance = 3
-                leftOffset = -0.5
-            elseif speed < 1 then
-                distance = 1.5
-                leftOffset = -0.8
-            else
-                distance = 2
-                leftOffset = -1
-            end
-            
-            local predictedPosition = currentEnemyPosition
-            if speed > 1 then
-                local forwardVelocity = Vector3.new(enemyVelocity.X, 0, enemyVelocity.Z)
-                local enemyLookVector = targetRootPart.CFrame.LookVector
-                local movementDirection = forwardVelocity.Unit
-                local dotProduct = enemyLookVector:Dot(movementDirection)
-                
-                if dotProduct > -0.5 then
-                    predictedPosition = currentEnemyPosition + (forwardVelocity * 0.15) 
-                end
-            end
-            
+            local offset = 0 
             local predictedCFrame = CFrame.new(predictedPosition, predictedPosition + targetRootPart.CFrame.LookVector)
-            local smartBehindPosition = predictedCFrame * CFrame.new(leftOffset, 0, distance)
+            local smartBehindPosition = predictedCFrame * CFrame.new(0, 0, offset)
+            
+            local raycastParams = RaycastParams.new()
+            raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
+            raycastParams.FilterDescendantsInstances = {character, targetEnemy.Character}
+            local raycastResult = workspace:Raycast(humanoidRootPart.Position, (smartBehindPosition.Position - humanoidRootPart.Position).Unit * (smartBehindPosition.Position - humanoidRootPart.Position).Magnitude, raycastParams)
+            
+            if raycastResult then
+                smartBehindPosition = CFrame.new(raycastResult.Position) * CFrame.new(0,0,-1) 
+            end
             
             humanoidRootPart.CFrame = smartBehindPosition
             
             if not bombActivated then
                 bombActivated = true
-                wait(0.01) 
-                break
+                task.wait(0.02)
             end
         end
         
-        lastEnemyPosition = nil
-        enemyVelocity = Vector3.new(0, 0, 0)
         bombLoop = nil
-        
+        isUsingBomb = false
         if getgenv().AFKMode then
             teleportToWorldSpawn()
         elseif originalPosition and humanoidRootPart then
             humanoidRootPart.CFrame = originalPosition
         end
-        
         originalPosition = nil
-        isUsingBomb = false
     end)
-    
     return true
 end
+
+
 
 function isPlayerAlive(player)
     if player and player.Character and player.Character:FindFirstChild("Humanoid") then
@@ -1318,10 +1332,10 @@ end
 function startEnemyDetectionLoop()
     spawn(function()
         while getgenv().EnemyDetection do
-            wait(.01) 
+            wait(.0015)
             
             if not isInGame() then
-                wait(0.1)
+                wait(0.2)
                 continue
             end
             
