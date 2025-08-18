@@ -1091,7 +1091,7 @@ local function toggleFavoriteMode()
 end
 
 local clickCooldown = {}
-local CLICK_COOLDOWN_TIME = 0.3
+local CLICK_COOLDOWN_TIME = 0.1
 
 local function safeButtonClick(buttonName, callback)
     local currentTime = tick()
@@ -1103,15 +1103,11 @@ end
 
 function connectEvents()
     if _1left then
-        _1left.MouseButton1Click:Connect(function()
-            safeButtonClick("previousPage", previousPage)
-        end)
+        _1left.MouseButton1Click:Connect(previousPage)
     end
 
     if _9right then
-        _9right.MouseButton1Click:Connect(function()
-            safeButtonClick("nextPage", nextPage)
-        end)
+        _9right.MouseButton1Click:Connect(nextPage)
     end
 
       if _2Routenumber then
