@@ -1412,6 +1412,13 @@ function startBombLoop()
     end)
 end
 
+    Tabs.Gameworks:AddButton({
+    Title = "Disable Ice",
+    Callback = function()
+         workspace.Arenas.Arena5ICED.Map.Ice.CustomPhysicalProperties = PhysicalProperties.new(0, 0, 0)
+    end
+})
+
 
 end
 
