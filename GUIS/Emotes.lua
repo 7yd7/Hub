@@ -876,7 +876,7 @@ local function playEmote(humanoid, emoteId)
         currentEmoteTrack = animTrack
         currentEmoteTrack.Priority = Enum.AnimationPriority.Action
         currentEmoteTrack.Looped = true
-        wait(0.1)
+        task.wait(0.1)
         currentEmoteTrack:Play()
 
         if speedEmoteEnabled then
@@ -1090,16 +1090,31 @@ local function toggleFavoriteMode()
     end
 end
 
+local clickCooldown = {}
+local CLICK_COOLDOWN_TIME = 0.3
+
+local function safeButtonClick(buttonName, callback)
+    local currentTime = tick()
+    if not clickCooldown[buttonName] or (currentTime - clickCooldown[buttonName]) > CLICK_COOLDOWN_TIME then
+        clickCooldown[buttonName] = currentTime
+        callback()
+    end
+end
+
 function connectEvents()
     if _1left then
-        _1left.MouseButton1Click:Connect(previousPage)
+        _1left.MouseButton1Click:Connect(function()
+            safeButtonClick("previousPage", previousPage)
+        end)
     end
 
     if _9right then
-        _9right.MouseButton1Click:Connect(nextPage)
+        _9right.MouseButton1Click:Connect(function()
+            safeButtonClick("nextPage", nextPage)
+        end)
     end
 
-    if _2Routenumber then
+      if _2Routenumber then
         _2Routenumber.FocusLost:Connect(function(enterPressed)
             local pageNum = tonumber(_2Routenumber.Text)
             if pageNum then
@@ -1119,15 +1134,21 @@ function connectEvents()
     end
 
     if EmoteWalkButton then
-        EmoteWalkButton.MouseButton1Click:Connect(toggleEmoteWalk)
+        EmoteWalkButton.MouseButton1Click:Connect(function()
+            safeButtonClick("EmoteWalk", toggleEmoteWalk)
+        end)
     end
 
     if Favorite then
-        Favorite.MouseButton1Click:Connect(toggleFavoriteMode)
+        Favorite.MouseButton1Click:Connect(function()
+            safeButtonClick("Favorite", toggleFavoriteMode)
+        end)
     end
 
     if SpeedEmote then
-        SpeedEmote.MouseButton1Click:Connect(toggleSpeedEmote)
+        SpeedEmote.MouseButton1Click:Connect(function()
+            safeButtonClick("SpeedEmote", toggleSpeedEmote)
+        end)
     end
 
     if SpeedBox then
@@ -1167,12 +1188,12 @@ end
 
 player.CharacterAdded:Connect(function(character)
     onCharacterAdded(character)
-    wait(0.3)
+    task.wait(0.3) 
     spawn(function()
         while not checkEmotesMenuExists() do
-            wait(0.1)
+            task.wait(0.1) 
         end
-        wait(0.3)
+        task.wait(0.3) 
         if createGUIElements() then
             if #emotesData > 0 then
                 updatePageDisplay()
