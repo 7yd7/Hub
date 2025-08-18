@@ -31,6 +31,12 @@ getgenv().SmartEvasion = false
 getgenv().AutoJoin = false
 getgenv().JoinMode = "infection"
 getgenv().TargetPlayer = "all"
+
+local joinAttempts = {} 
+local lastJoinPosition = nil  
+local maxJoinAttempts = 5 
+local joinCooldown = {} 
+
 local lastPlayerCount = 0
 local playerUpdateConnection = nil
 local localPlayer = game.Players.LocalPlayer
@@ -345,6 +351,29 @@ function getPlayerStatusInArena(player, arena)
     
     return "not_found"
 end
+
+function isPlayerInsideHull(arena, side, slotNum)
+    local character = localPlayer.Character
+    if not character or not character:FindFirstChild("HumanoidRootPart") then
+        return false
+    end
+    
+    local slot = arena.Slots[side]:FindFirstChild(tostring(slotNum))
+    if not slot or not slot:FindFirstChild("Hull") then
+        return false
+    end
+    
+    local hull = slot.Hull
+    local playerPosition = character.HumanoidRootPart.Position
+    local hullPosition = hull.Position
+    local hullSize = hull.Size
+    
+    local distance = (playerPosition - hullPosition).Magnitude
+    local maxDistance = math.max(hullSize.X, hullSize.Y, hullSize.Z) / 2 + 2
+    
+    return distance <= maxDistance
+end
+
 
 function teleportToWorldSpawn()
     local character = localPlayer.Character
@@ -733,6 +762,36 @@ function isPlayerInArena()
     return false
 end
 
+function checkPlayerArenaStatus()
+    if workspace.Arenas then
+        for _, arena in pairs(workspace.Arenas:GetChildren()) do
+            if arena:FindFirstChild("Slots") then
+                for _, side in pairs({"Left", "Right"}) do
+                    if arena.Slots:FindFirstChild(side) then
+                        for i = 1, 4 do
+                            local slot = arena.Slots[side]:FindFirstChild(tostring(i))
+                            if slot and slot:FindFirstChild("Data") and slot.Data:FindFirstChild("Player") then
+                                if slot.Data.Player.Value == localPlayer then
+                                    local isInside = isPlayerInsideHull(arena, side, i)
+                                    return true, arena, side, i, isInside
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+    return false, nil, nil, nil, false
+end
+
+function autoFixPosition(arena, side, slotNum)
+    
+    teleportToWorldSpawn()
+    wait(0.5) 
+    return joinArenaSlot(arena, side, slotNum)
+end
+
 function quickEnemyCheck()
     local enemies, arena = detectEnemyPlayers()
     if not arena then return nil end
@@ -941,13 +1000,49 @@ function checkIfStillWithPlayer(currentArena, currentSide, currentSlot, targetPl
 end
 
 function joinArenaSlot(arena, targetSide, targetSlot)
-    if arena.Slots[targetSide]:FindFirstChild(tostring(targetSlot)) and 
-    arena.Slots[targetSide][tostring(targetSlot)]:FindFirstChild("Hull") then
-        local hull = arena.Slots[targetSide][tostring(targetSlot)].Hull
-        local character = localPlayer.Character
-        if character and character:FindFirstChild("HumanoidRootPart") then
-            character.HumanoidRootPart.CFrame = hull.CFrame * CFrame.new(0, -5, 0)
+    if not arena.Slots[targetSide]:FindFirstChild(tostring(targetSlot)) or 
+       not arena.Slots[targetSide][tostring(targetSlot)]:FindFirstChild("Hull") then
+        return false
+    end
+    
+    local arenaKey = tostring(arena) .. "_" .. targetSide .. "_" .. targetSlot
+    local currentTime = tick()
+    
+    if joinCooldown[arenaKey] and (currentTime - joinCooldown[arenaKey]) < 2 then
+        return false
+    end
+    
+    local currentPosition = arena.Slots[targetSide][tostring(targetSlot)].Hull.Position
+    if lastJoinPosition and (lastJoinPosition - currentPosition).Magnitude > 10 then
+        joinAttempts = {}
+    end
+    lastJoinPosition = currentPosition
+    
+    if not joinAttempts[arenaKey] then
+        joinAttempts[arenaKey] = 0
+    end
+    
+    if joinAttempts[arenaKey] >= maxJoinAttempts then
+        teleportToWorldSpawn()
+        joinAttempts[arenaKey] = 0 
+        joinCooldown[arenaKey] = currentTime
+        return false
+    end
+    
+    local hull = arena.Slots[targetSide][tostring(targetSlot)].Hull
+    local character = localPlayer.Character
+    if character and character:FindFirstChild("HumanoidRootPart") then
+        joinAttempts[arenaKey] = joinAttempts[arenaKey] + 1
+        
+        character.HumanoidRootPart.CFrame = hull.CFrame * CFrame.new(0, -5, 0)
+        
+        wait(0.3)
+        
+        if isPlayerInsideHull(arena, targetSide, targetSlot) then
+            joinAttempts[arenaKey] = 0 
             return true
+        else
+            return false
         end
     end
     return false
@@ -996,16 +1091,25 @@ function startAutoJoinLoop()
         local lastTargetPlayer = nil
         
         while getgenv().AutoJoin do
-            wait(0.05)
+            wait(0.1) 
 
             if isInGame() then
                 wait(0.3)
                 continue
             end
             
-            local isInArena, currentArena, currentSide, currentSlot = isPlayerInArena()
+            local isInArena, currentArena, currentSide, currentSlot, isInsideHull = checkPlayerArenaStatus()
             
             if isInArena then
+                if not isInsideHull then
+                    if autoFixPosition(currentArena, currentSide, currentSlot) then
+                    else
+                        teleportToWorldSpawn()
+                    end
+                    wait(1)
+                    continue
+                end
+                
                 local playersInCurrentArena = {}
                 if currentArena and currentArena:FindFirstChild("Slots") then
                     for _, side in pairs({"Left", "Right"}) do
@@ -1025,7 +1129,7 @@ function startAutoJoinLoop()
 
                 if #playersInCurrentArena == 0 then
                     teleportToWorldSpawn()
-                    wait(0.05)
+                    wait(0.2)
                     continue
                 end
 
@@ -1033,7 +1137,7 @@ function startAutoJoinLoop()
                 if readyVisible and readyPrompt and readyPrompt.Text == "Ready" then
                     fireReadyRemote()
                 end
-                wait(0.05)
+                wait(0.1)
                 continue
             end
             
@@ -1051,7 +1155,7 @@ function startAutoJoinLoop()
                 local targetSide, targetSlot = findBestSlot(foundArena, foundSide, foundSlot, foundPlayer)
                 
                 if not targetSide or not targetSlot then
-                    wait(2)
+                    wait(.1)
                     continue
                 end
                 
@@ -1064,7 +1168,9 @@ function startAutoJoinLoop()
                                 lastJoinedSide = targetSide
                                 lastJoinedSlot = targetSlot
                                 lastTargetPlayer = foundPlayer
-                                wait(0.05)
+                                
+                                wait(0.1)  
+                                
                                 local readyVisible, readyPrompt = isReadyPromptVisible()
                                 if readyVisible and readyPrompt and readyPrompt.Text == "Ready" then
                                     fireReadyRemote()
@@ -1074,11 +1180,27 @@ function startAutoJoinLoop()
                     end
                 end
             else
-                wait(0.05)
+                wait(0.2) 
             end
         end
     end)
 end
+
+spawn(function()
+    while true do
+        wait(60) 
+        local currentTime = tick()
+        
+        for key, time in pairs(joinCooldown) do
+            if (currentTime - time) > 300 then  
+                joinCooldown[key] = nil
+            end
+        end
+        if #joinAttempts > 50 then
+            joinAttempts = {}
+        end
+    end
+end)
 
 
 local originalPosition = nil
