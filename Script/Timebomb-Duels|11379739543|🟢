@@ -612,16 +612,16 @@ function startEvasionLoop()
         local lastKnownEnemyPositions = {}
         
         while getgenv().SmartEvasion do
-            wait(0.05) 
+            wait(0.01) 
             
             if not isInGame() then
-                wait(0.5)
+                wait(0.01) 
                 continue
             end
             
             local character = localPlayer.Character
             if not character or not character:FindFirstChild("HumanoidRootPart") then
-                wait(0.5)
+                wait(0.01)
                 continue
             end
             
@@ -698,7 +698,7 @@ function startEvasionLoop()
                         lastEvasionTime = currentTime
                         
                         if emergencyMode then
-                            wait(0.1)
+                            wait(0.01) 
                             emergencyMode = false
                         end
                     end
@@ -731,6 +731,41 @@ function isPlayerInArena()
         end
     end
     return false
+end
+
+function quickEnemyCheck()
+    local enemies, arena = detectEnemyPlayers()
+    if not arena then return nil end
+    
+    for _, enemy in pairs(enemies) do
+        if enemy.Character and enemy.Character:FindFirstChild("HumanoidRootPart") and isPlayerOnArenaFloor(enemy, arena) then
+            return enemy
+        end
+    end
+    return nil
+end
+
+function instantTeleportToEnemy(targetEnemy)
+    local character = localPlayer.Character
+    if not character or not character:FindFirstChild("HumanoidRootPart") then
+        return false
+    end
+    
+    if not targetEnemy.Character or not targetEnemy.Character:FindFirstChild("HumanoidRootPart") then
+        return false
+    end
+    
+    local humanoidRootPart = character.HumanoidRootPart
+    local targetRootPart = targetEnemy.Character.HumanoidRootPart
+    
+    if not originalPosition then
+        originalPosition = humanoidRootPart.CFrame
+    end
+    
+    local behindPosition = targetRootPart.CFrame * CFrame.new(-1, 0, 2.5)
+    humanoidRootPart.CFrame = behindPosition
+    
+    return true
 end
 
 function isSlotInGame(arena, side, slotNum)
@@ -961,7 +996,7 @@ function startAutoJoinLoop()
         local lastTargetPlayer = nil
         
         while getgenv().AutoJoin do
-            wait(0.1)
+            wait(0.05)
 
             if isInGame() then
                 wait(0.3)
@@ -990,7 +1025,7 @@ function startAutoJoinLoop()
 
                 if #playersInCurrentArena == 0 then
                     teleportToWorldSpawn()
-                    wait(0.1)
+                    wait(0.05)
                     continue
                 end
 
@@ -998,7 +1033,7 @@ function startAutoJoinLoop()
                 if readyVisible and readyPrompt and readyPrompt.Text == "Ready" then
                     fireReadyRemote()
                 end
-                wait(0.1)
+                wait(0.05)
                 continue
             end
             
@@ -1029,7 +1064,7 @@ function startAutoJoinLoop()
                                 lastJoinedSide = targetSide
                                 lastJoinedSlot = targetSlot
                                 lastTargetPlayer = foundPlayer
-                                wait(0.1)
+                                wait(0.05)
                                 local readyVisible, readyPrompt = isReadyPromptVisible()
                                 if readyVisible and readyPrompt and readyPrompt.Text == "Ready" then
                                     fireReadyRemote()
@@ -1039,7 +1074,7 @@ function startAutoJoinLoop()
                     end
                 end
             else
-                wait(2)
+                wait(0.05)
             end
         end
     end)
@@ -1074,12 +1109,12 @@ function useBombOnEnemy(bombTool, character, targetEnemy)
     
     bombLoop = spawn(function()
         local bombActivated = false
-        local maxAttempts = 50
+        local maxAttempts = 100 
         local attempts = 0
         
         while getgenv().EnemyDetection and character:FindFirstChild("Bomb") and attempts < maxAttempts do
             attempts = attempts + 1
-            wait(0.05)
+            wait(0.01) 
             
             local currentBomb = character:FindFirstChild("Bomb")
             if not currentBomb or not targetRootPart or not humanoidRootPart then
@@ -1088,23 +1123,23 @@ function useBombOnEnemy(bombTool, character, targetEnemy)
             
             local currentEnemyPosition = targetRootPart.Position
             if lastEnemyPosition then
-                enemyVelocity = (currentEnemyPosition - lastEnemyPosition) / 0.05
+                enemyVelocity = (currentEnemyPosition - lastEnemyPosition) / 0.01 
             end
             lastEnemyPosition = currentEnemyPosition
             
             local speed = enemyVelocity.Magnitude
-            local distance = 3
-            local leftOffset = -1.5
+            local distance = 2 
+            local leftOffset = -1
             
-            if speed > 5 then
-                distance = 5
-                leftOffset = -1
+            if speed > 8 then
+                distance = 3
+                leftOffset = -0.5
             elseif speed < 1 then
+                distance = 1.5
+                leftOffset = -0.8
+            else
                 distance = 2
                 leftOffset = -1
-            else
-                distance = 3
-                leftOffset = -1.5
             end
             
             local predictedPosition = currentEnemyPosition
@@ -1115,7 +1150,7 @@ function useBombOnEnemy(bombTool, character, targetEnemy)
                 local dotProduct = enemyLookVector:Dot(movementDirection)
                 
                 if dotProduct > -0.5 then
-                    predictedPosition = currentEnemyPosition + (forwardVelocity * 0.3)
+                    predictedPosition = currentEnemyPosition + (forwardVelocity * 0.15) 
                 end
             end
             
@@ -1126,7 +1161,7 @@ function useBombOnEnemy(bombTool, character, targetEnemy)
             
             if not bombActivated then
                 bombActivated = true
-                wait(0.5)
+                wait(0.01) 
                 break
             end
         end
@@ -1161,10 +1196,10 @@ end
 function startEnemyDetectionLoop()
     spawn(function()
         while getgenv().EnemyDetection do
-            wait(.2)
+            wait(.01) 
             
             if not isInGame() then
-                wait(1)
+                wait(0.1)
                 continue
             end
             
@@ -1208,24 +1243,53 @@ function startEnemyDetectionLoop()
                 end
             end
         end
-        
-        if isUsingBomb and originalPosition then
-            local character = localPlayer.Character
-            if character and character:FindFirstChild("HumanoidRootPart") then
-                if getgenv().AFKMode then
-                    teleportToWorldSpawn()
-                else
-                    character.HumanoidRootPart.CFrame = originalPosition
-                end
-                originalPosition = nil
-                isUsingBomb = false
-                if bombLoop then
-                    bombLoop = nil
+    end)
+end
+
+Tabs.Gameworks:AddSection("More")
+
+local Toggle = Tabs.Gameworks:AddToggle("Bomb_Resize", {Title = "Bomb Resize", Default = false})
+
+Toggle:OnChanged(function()
+    getgenv().BombResize = Options.Bomb_Resize.Value
+
+    if getgenv().BombResize then
+        startBombLoop()
+    else
+        getgenv().BombResize = false
+    end
+end)
+
+function startBombLoop()
+    spawn(function()
+        while getgenv().BombResize do
+            task.wait(.2)
+
+            local Players = game:GetService("Players")
+            local LocalPlayer = Players.LocalPlayer
+
+            for _, player in ipairs(Players:GetPlayers()) do
+                if player.Character then
+                    local tool = player.Character:FindFirstChildOfClass("Tool")
+                    if tool then
+                        for _, part in pairs(tool:GetDescendants()) do
+                            if part:IsA("BasePart") then
+                                if player == LocalPlayer then
+                                    part.Size = Vector3.new(10, 10, 10) 
+                                else
+                                    part.Size = Vector3.new(2, 2, 2) 
+                                end
+                                part.Massless = true
+                                part.CanCollide = false
+                            end
+                        end
+                    end
                 end
             end
         end
     end)
 end
+
 
 end
 
