@@ -1014,7 +1014,8 @@ local function toggleEmoteWalk()
         })
 
         EmoteWalkButton.Image = enabledButtonImage
-
+        task.wait(0.1)
+        stopCurrentEmote()
         if currentEmoteTrack and currentEmoteTrack.IsPlaying then
             currentEmoteTrack:AdjustSpeed(1)
         end
@@ -1025,6 +1026,7 @@ local function toggleEmoteWalk()
             Duration = 5
         })
         EmoteWalkButton.Image = defaultButtonImage
+        task.wait(0.1)
         stopCurrentEmote()
 
         if currentEmoteTrack and currentEmoteTrack.IsPlaying and speedEmoteEnabled then
@@ -1047,12 +1049,15 @@ local function toggleSpeedEmote()
             Content = "⚡ Speed Emote ON",
             Duration = 5
         })
+        task.wait(0.1)
+        stopCurrentEmote()
     else
         getgenv().Notify({
             Title = '7yd7 | Speed Emote',
             Content = '⚡ Speed Emote OFF',
             Duration = 5
         })
+        task.wait(0.1)
         stopCurrentEmote()
     end
 
