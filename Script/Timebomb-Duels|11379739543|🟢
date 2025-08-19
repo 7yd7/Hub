@@ -16,6 +16,12 @@ end
 
 getgenv().update = function()
     local text = [[
+1.0.3 | 2025/8/19
+  * Fix all Script
+  + add Auto Lava Close
+  + Disable Ice
+  * Internal improvements script
+
 1.0.0 | 2025/8/17
   + add Script Timebomb Duels!
     ]]
@@ -205,8 +211,8 @@ end)
 
 function isInGame()
     local playerGui = localPlayer:FindFirstChild("PlayerGui")
-    if playerGui and playerGui:FindFirstChild("TBDUI") and playerGui.TBDUI:FindFirstChild("Arena") and playerGui.TBDUI.Arena:FindFirstChild("Scorebar") then
-        return playerGui.TBDUI.Arena.Scorebar.Visible
+    if playerGui and playerGui:FindFirstChild("TBDUI") and playerGui.TBDUI:FindFirstChild("Main") and playerGui.TBDUI.Main:FindFirstChild("Scorebar") then
+        return playerGui.TBDUI.Main.Scorebar.Visible
     end
     return false
 end
@@ -444,25 +450,16 @@ function checkForWalls(position, direction, maxDistance)
     return math.max(1, maxDistance - 2) 
 end
 
-function isPositionInArena(position, arena)
-    if not arena or not arena:FindFirstChild("Map") or not arena.Map:FindFirstChild("Floor") then
-        return true
+local function isPositionInArena(pos, arena)
+
+    if arena and arena:IsA("Part") then
+        local bounds = arena.CFrame:pointToObjectSpace(pos)
+        local halfSize = arena.Size / 2
+        return math.abs(bounds.X) <= halfSize.X and math.abs(bounds.Y) <= halfSize.Y and math.abs(bounds.Z) <= halfSize.Z
     end
-    
-    local floor = arena.Map.Floor
-    local floorCFrame = floor.CFrame
-    local floorSize = floor.Size
-    local relativePos = floorCFrame:PointToObjectSpace(position)
-    
-    local padding = 4
-    local withinX = math.abs(relativePos.X) <= (floorSize.X / 2) - padding
-    local withinZ = math.abs(relativePos.Z) <= (floorSize.Z / 2) - padding
-    
-    local heightDiff = math.abs(position.Y - floor.Position.Y)
-    local withinHeight = heightDiff < 50
-    
-    return withinX and withinZ and withinHeight
+    return true 
 end
+
 
 function findSafestPosition(currentPosition, enemies)
     local character = localPlayer.Character
@@ -528,30 +525,21 @@ function hasEnemyBomb(enemy)
     return false
 end
 
-function checkPathClear(startPos, endPos)
+local function checkPathClear(startPos, endPos)
     local direction = (endPos - startPos)
     local distance = direction.Magnitude
     
-    if distance < 1 then
-        return true, endPos
-    end
-    
-    direction = direction.Unit
-    
     local raycastParams = RaycastParams.new()
-    raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
     raycastParams.FilterDescendantsInstances = {localPlayer.Character}
+    raycastParams.FilterType = Enum.RaycastFilterType.Exclude
     
-    local raycast = workspace:Raycast(startPos, direction * distance, raycastParams)
-    if raycast then
-        if raycast.Distance < distance - 2 then
-            local safeDistance = math.max(1, raycast.Distance - 3)
-            local safePos = startPos + (direction * safeDistance)
-            return false, safePos
-        end
+    local result = workspace:Raycast(startPos, direction, raycastParams)
+    
+    if result then
+        return false, result.Position
+    else
+        return true, nil
     end
-    
-    return true, endPos
 end
 
 function getEnemiesWithBombs(enemies)
@@ -569,49 +557,54 @@ function findUltimateEscapePosition(currentPosition, primaryEnemy, allEnemies, a
     if not character or not character:FindFirstChild("HumanoidRootPart") then
         return currentPosition
     end
-    
+
     local primaryEnemyPos = primaryEnemy.Character.HumanoidRootPart.Position
     local primaryDistance = (currentPosition - primaryEnemyPos).Magnitude
-    
+
     if primaryDistance < 8 then
         local emergencyDirection = (currentPosition - primaryEnemyPos).Unit
-        
+
         for testDist = 15, 5, -2 do
             local emergencyPos = currentPosition + (emergencyDirection * testDist)
+            emergencyPos = Vector3.new(emergencyPos.X, currentPosition.Y, emergencyPos.Z)
+
             local pathClear, actualPos = checkPathClear(currentPosition, emergencyPos)
-            
+
             if pathClear and isPositionInArena(emergencyPos, arena) then
                 return emergencyPos
             elseif actualPos then
-                local safePos = currentPosition + (emergencyDirection * (testDist - 3))
+                local safePos = currentPosition + (emergencyDirection * ((actualPos - currentPosition).Magnitude - 1))
+                safePos = Vector3.new(safePos.X, currentPosition.Y, safePos.Z)
                 if isPositionInArena(safePos, arena) then
                     return safePos
                 end
             end
         end
     end
-    
+
     local bestPosition = currentPosition
     local maxSafetyScore = 0
-    
+
     local directions = {}
     for angle = 0, 315, 30 do
         local rad = math.rad(angle)
         table.insert(directions, Vector3.new(math.cos(rad), 0, math.sin(rad)))
     end
-    
+
     for _, direction in pairs(directions) do
         for testDistance = 6, 25, 3 do
             local testPosition = currentPosition + (direction * testDistance)
-            
+            testPosition = Vector3.new(testPosition.X, currentPosition.Y, testPosition.Z)
+
             local pathClear, blockedAt = checkPathClear(currentPosition, testPosition)
-            
+
             if not pathClear then
                 if blockedAt then
                     local safeDistance = (blockedAt - currentPosition).Magnitude
                     if safeDistance > 3 then
-                        testPosition = blockedAt
-                        testDistance = safeDistance
+                        testPosition = currentPosition + (direction * (safeDistance - 2))
+                        testPosition = Vector3.new(testPosition.X, currentPosition.Y, testPosition.Z)
+                        testDistance = safeDistance - 2
                     else
                         break
                     end
@@ -619,21 +612,21 @@ function findUltimateEscapePosition(currentPosition, primaryEnemy, allEnemies, a
                     break
                 end
             end
-            
+
             if not isPositionInArena(testPosition, arena) then
                 break
             end
-            
+
             local safetyScore = 0
             local minEnemyDistance = math.huge
-            
+
             for _, enemy in pairs(allEnemies) do
                 if enemy.Character and enemy.Character:FindFirstChild("HumanoidRootPart") then
                     local enemyPos = enemy.Character.HumanoidRootPart.Position
                     local distanceToEnemy = (testPosition - enemyPos).Magnitude
-                    
+
                     minEnemyDistance = math.min(minEnemyDistance, distanceToEnemy)
-                    
+
                     if enemy == primaryEnemy then
                         safetyScore = safetyScore + (distanceToEnemy * 3)
                     else
@@ -641,41 +634,45 @@ function findUltimateEscapePosition(currentPosition, primaryEnemy, allEnemies, a
                     end
                 end
             end
-            
+
             if minEnemyDistance > 12 and minEnemyDistance < 30 then
                 safetyScore = safetyScore + 25
             end
-            
+
             if pathClear then
                 safetyScore = safetyScore + 15
             end
-            
+
             if testDistance > 8 and testDistance < 20 then
                 safetyScore = safetyScore + 10
             end
-            
+
             if safetyScore > maxSafetyScore then
                 maxSafetyScore = safetyScore
                 bestPosition = testPosition
             end
         end
     end
-    
-    local finalCheck, _ = checkPathClear(currentPosition, bestPosition)
+
+    local finalCheck, blockedAt = checkPathClear(currentPosition, bestPosition)
     if not finalCheck then
-        local fallbackDirection = (bestPosition - currentPosition).Unit
-        for dist = 5, 15, 2 do
-            local fallbackPos = currentPosition + (fallbackDirection * dist)
-            local fallbackCheck, _ = checkPathClear(currentPosition, fallbackPos)
-            if fallbackCheck and isPositionInArena(fallbackPos, arena) then
-                return fallbackPos
+        if blockedAt then
+            local fallbackDirection = (bestPosition - currentPosition).Unit
+            for dist = 5, 15, 2 do
+                local fallbackPos = currentPosition + (fallbackDirection * dist)
+                fallbackPos = Vector3.new(fallbackPos.X, currentPosition.Y, fallbackPos.Z)
+                local fallbackCheck, _ = checkPathClear(currentPosition, fallbackPos)
+                if fallbackCheck and isPositionInArena(fallbackPos, arena) then
+                    return fallbackPos
+                end
             end
         end
         return currentPosition
     end
-    
+
     return bestPosition
 end
+
 
 function startEvasionLoop()
     spawn(function()
@@ -734,12 +731,12 @@ function startEvasionLoop()
                         
                         local threatLevel = 0
                         
-                        if distance < 40 then
-                            threatLevel = threatLevel + (40 - distance) * 2
+                        if distance < 60 then
+                            threatLevel = threatLevel + (60 - distance) * 2
                         end
                         
                         if speed > 16 then 
-                            threatLevel = threatLevel + speed * 1.5
+                            threatLevel = threatLevel + speed * 2
                         end
                         
                         if speed > 5 then
@@ -760,7 +757,7 @@ function startEvasionLoop()
                     end
                 end
                 
-                if mostDangerousEnemy and (highestThreat > 15 or emergencyMode) then
+                if mostDangerousEnemy and (highestThreat > 10 or emergencyMode) then
                     local safePosition = findUltimateEscapePosition(currentPosition, mostDangerousEnemy, enemiesWithBombs, currentArena)
                     
                     if safePosition and (safePosition - currentPosition).Magnitude > 1 then
@@ -903,9 +900,9 @@ end
 
 function isReadyPromptVisible()
     local playerGui = localPlayer:FindFirstChild("PlayerGui")
-    if playerGui and playerGui:FindFirstChild("TBDUI") and playerGui.TBDUI:FindFirstChild("Arena") 
-    and playerGui.TBDUI.Arena:FindFirstChild("Prompts") and playerGui.TBDUI.Arena.Prompts:FindFirstChild("Ready") then
-        return playerGui.TBDUI.Arena.Prompts.Ready.Visible, playerGui.TBDUI.Arena.Prompts.Ready
+    if playerGui and playerGui:FindFirstChild("TBDUI") and playerGui.TBDUI:FindFirstChild("Main") 
+    and playerGui.TBDUI.Main:FindFirstChild("Prompts") and playerGui.TBDUI.Main.Prompts:FindFirstChild("Ready") then
+        return playerGui.TBDUI.Main.Prompts.Ready.Visible, playerGui.TBDUI.Main.Prompts.Ready
     end
     return false, nil
 end
@@ -1425,6 +1422,132 @@ function startBombLoop()
         end
     end)
 end
+
+local Toggle = Tabs.Gameworks:AddToggle("Lava_Copy", {Title = "Auto Lava Close", Default = false})
+
+local copiedLavaObjects = {}
+local lavaDataCache = {}
+
+function findLavaInWorkspace(parent)
+    local lavaObjects = {}
+    
+    for _, child in pairs(parent:GetChildren()) do
+        if child.Name == "Lava" then
+            table.insert(lavaObjects, child)
+        end
+        
+        if #child:GetChildren() > 0 then
+            local subLava = findLavaInWorkspace(child)
+            for _, lava in pairs(subLava) do
+                table.insert(lavaObjects, lava)
+            end
+        end
+    end
+    
+    return lavaObjects
+end
+
+function copyLavaObject(originalLava)
+    local copy = originalLava:Clone()
+    copy.Transparency = 1
+    copy.Name = "LavaCopy_" .. originalLava.Name .. "_" .. tostring(originalLava:GetDebugId())
+    
+    local originalPosition = originalLava.Position
+    copy.Position = Vector3.new(originalPosition.X, originalPosition.Y + 1, originalPosition.Z)
+    
+    copy.Parent = workspace
+    copy.CanCollide = true
+    
+    local lavaId = tostring(originalLava:GetDebugId())
+    copiedLavaObjects[lavaId] = {original = originalLava, copy = copy}
+    lavaDataCache[lavaId] = {
+        position = originalPosition,
+        size = originalLava.Size
+    }
+    
+    return copy
+end
+
+function cleanupCopiedLava()
+    for _, lavaData in pairs(copiedLavaObjects) do
+        if lavaData.copy and lavaData.copy.Parent then
+            lavaData.copy:Destroy()
+        end
+    end
+    
+    for _, obj in pairs(workspace:GetChildren()) do
+        if obj.Name:find("LavaCopy_") then
+            obj:Destroy()
+        end
+    end
+    
+    copiedLavaObjects = {}
+    lavaDataCache = {}
+end
+
+function updateLavaCopy(lavaId, originalLava)
+    local lavaData = copiedLavaObjects[lavaId]
+    if lavaData and lavaData.copy and lavaData.copy.Parent then
+        local newPosition = originalLava.Position
+        lavaData.copy.Position = Vector3.new(newPosition.X, newPosition.Y + 2, newPosition.Z)
+        lavaData.copy.Size = originalLava.Size
+        
+        lavaDataCache[lavaId] = {
+            position = newPosition,
+            size = originalLava.Size
+        }
+    end
+end
+
+function hasLavaChanged(lavaId, currentLava)
+    local cachedData = lavaDataCache[lavaId]
+    if not cachedData then return true end
+    
+    local positionChanged = (cachedData.position - currentLava.Position).Magnitude > 0.1
+    local sizeChanged = (cachedData.size - currentLava.Size).Magnitude > 0.1
+    
+    return positionChanged or sizeChanged
+end
+
+function startLavaCopyLoop()
+    spawn(function()
+        while getgenv().AutoLavaCopy do 
+            task.wait(.3)
+
+            if not getgenv().AutoLavaCopy then break end
+
+            local lavaObjects = findLavaInWorkspace(workspace)
+            
+            for _, lava in pairs(lavaObjects) do
+                if not getgenv().AutoLavaCopy then break end
+
+                local lavaId = tostring(lava:GetDebugId())
+                local alreadyCopied = copiedLavaObjects[lavaId] ~= nil
+                
+                if not alreadyCopied then
+                    copyLavaObject(lava)
+                elseif hasLavaChanged(lavaId, lava) then
+                    updateLavaCopy(lavaId, lava)
+                end
+            end
+        end
+    end)
+end
+
+
+Toggle:OnChanged(function()
+    getgenv().AutoLavaCopy = Options.Lava_Copy.Value
+
+    if getgenv().AutoLavaCopy then
+        startLavaCopyLoop()
+    else
+        getgenv().AutoLavaCopy = false
+        cleanupCopiedLava()
+    end
+end)
+
+
+
 
     Tabs.Gameworks:AddButton({
     Title = "Disable Ice",
