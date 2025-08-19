@@ -679,38 +679,40 @@ function startEvasionLoop()
         local lastEvasionTime = 0
         local emergencyMode = false
         local lastKnownEnemyPositions = {}
-        
+        local lastSafePos = nil
+        local stuckCheckTime = tick()
+
         while getgenv().SmartEvasion do
-            wait(0.01) 
-            
+            task.wait(0.05)
+
             if not isInGame() then
-                wait(0.2) 
+                task.wait(0.2)
                 continue
             end
-            
+
             local character = localPlayer.Character
             if not character or not character:FindFirstChild("HumanoidRootPart") then
-                wait(0.1)
+                task.wait(0.1)
                 continue
             end
-            
+
             local humanoidRootPart = character.HumanoidRootPart
             local currentPosition = humanoidRootPart.Position
             local currentTime = tick()
-            
+
             local enemies, currentArena = detectEnemyPlayers()
             local enemiesWithBombs = getEnemiesWithBombs(enemies)
-            
+
             if #enemiesWithBombs > 0 and not isUsingBomb then
                 local mostDangerousEnemy = nil
                 local closestDistance = math.huge
                 local highestThreat = 0
-                
+
                 for _, enemy in pairs(enemiesWithBombs) do
                     if enemy.Character and enemy.Character:FindFirstChild("HumanoidRootPart") then
                         local enemyPos = enemy.Character.HumanoidRootPart.Position
                         local distance = (currentPosition - enemyPos).Magnitude
-                        
+
                         local enemyVelocity = Vector3.new(0, 0, 0)
                         if lastKnownEnemyPositions[enemy.UserId] then
                             local lastPos = lastKnownEnemyPositions[enemy.UserId].position
@@ -719,26 +721,26 @@ function startEvasionLoop()
                                 enemyVelocity = (enemyPos - lastPos) / timeDiff
                             end
                         end
-                        
+
                         lastKnownEnemyPositions[enemy.UserId] = {
                             position = enemyPos,
                             time = currentTime
                         }
-                        
+
                         local speed = enemyVelocity.Magnitude
                         local directionToMe = (currentPosition - enemyPos).Unit
                         local enemyDirection = enemyVelocity.Unit
-                        
+
                         local threatLevel = 0
-                        
+
                         if distance < 60 then
                             threatLevel = threatLevel + (60 - distance) * 2
                         end
-                        
+
                         if speed > 16 then 
                             threatLevel = threatLevel + speed * 2
                         end
-                        
+
                         if speed > 5 then
                             local dotProduct = enemyDirection:Dot(directionToMe)
                             if dotProduct > 0.7 then
@@ -748,7 +750,7 @@ function startEvasionLoop()
                                 threatLevel = threatLevel + 25
                             end
                         end
-                        
+
                         if threatLevel > highestThreat or (threatLevel > 20 and distance < closestDistance) then
                             mostDangerousEnemy = enemy
                             highestThreat = threatLevel
@@ -756,20 +758,31 @@ function startEvasionLoop()
                         end
                     end
                 end
-                
+
                 if mostDangerousEnemy and (highestThreat > 10 or emergencyMode) then
                     local safePosition = findUltimateEscapePosition(currentPosition, mostDangerousEnemy, enemiesWithBombs, currentArena)
-                    
-                    if safePosition and (safePosition - currentPosition).Magnitude > 1 then
-                        local escapeDirection = (safePosition - currentPosition).Unit
-                        humanoidRootPart.CFrame = CFrame.new(safePosition, safePosition + escapeDirection)
-                        
-                        lastEvasionTime = currentTime
-                        
-                        if emergencyMode then
-                            wait(0.02)
-                            emergencyMode = false
+
+                    if safePosition then
+                        local moveDistance = (safePosition - currentPosition).Magnitude
+                        if moveDistance > 3 then
+                            local steps = 8
+                            for i = 1, steps do
+                                if not getgenv().SmartEvasion then break end
+                                local alpha = i / steps
+                                local newPos = currentPosition:Lerp(safePosition, alpha)
+                                humanoidRootPart.CFrame = CFrame.new(newPos, newPos + (safePosition - currentPosition).Unit)
+                                task.wait(0.02)
+                            end
                         end
+
+                        if lastSafePos then
+                            local moved = (currentPosition - lastSafePos).Magnitude
+                            if moved < 2 and (currentTime - stuckCheckTime) > 1 then
+                                humanoidRootPart.CFrame = CFrame.new(safePosition + Vector3.new(0, 2, 0))
+                                stuckCheckTime = currentTime
+                            end
+                        end
+                        lastSafePos = humanoidRootPart.Position
                     end
                 end
             else
@@ -779,6 +792,7 @@ function startEvasionLoop()
         end
     end)
 end
+
 
 function isPlayerInArena()
     if workspace.Arenas then
@@ -1255,53 +1269,91 @@ function useBombOnEnemy(bombTool, character, targetEnemy)
     if bombLoop or not bombTool or not character or not targetEnemy or not targetEnemy.Character then
         return false
     end
+
     local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
     local targetRootPart = targetEnemy.Character:FindFirstChild("HumanoidRootPart")
     if not humanoidRootPart or not targetRootPart then
         return false
     end
+
     if not isUsingBomb then
         originalPosition = humanoidRootPart.CFrame
         isUsingBomb = true
     end
-    humanoidRootPart.CFrame = targetRootPart.CFrame * CFrame.new(0, 0, 3)
+
+    local lastTargetCFrame = targetRootPart.CFrame
+    local cframeChangeHistory = {}
+    local maxHistorySize = 3
+
+    local thresholds = {
+        {limit = 0.5,  offset = 0},   
+        {limit = 1.0,  offset = -7}, 
+        {limit = 1.5,  offset = -14},  
+        {limit = 2.0,  offset = -21}, 
+        {limit = 3.0,  offset = -27},   
+        {limit = 4.0,  offset = -36},
+        {limit = math.huge, offset = -43}
+    }
+
     bombLoop = task.spawn(function()
         local bombActivated = false
         local attempts = 0
-        local maxAttempts = 100 
+        local maxAttempts = 100
+
         while getgenv().EnemyDetection and character:FindFirstChild("Bomb") and attempts < maxAttempts do
             attempts += 1
             task.wait(0.001)
             if not targetRootPart or not humanoidRootPart then break end
-            
+
+            local currentCFrame = targetRootPart.CFrame
+            local cframeChange = (currentCFrame.Position - lastTargetCFrame.Position).Magnitude
+
+            table.insert(cframeChangeHistory, cframeChange)
+            if #cframeChangeHistory > maxHistorySize then
+                table.remove(cframeChangeHistory, 1)
+            end
+
+            local avgChange = 0
+            for _, change in ipairs(cframeChangeHistory) do
+                avgChange += change
+            end
+            avgChange = avgChange / #cframeChangeHistory
+
+            local baseOffset = 0
+            for _, t in ipairs(thresholds) do
+                if avgChange <= t.limit then
+                    baseOffset = t.offset
+                    break
+                end
+            end
+
             local enemyVelocity = targetRootPart.Velocity
-            local distanceToEnemy = (targetRootPart.Position - humanoidRootPart.Position).Magnitude
-            
-            local predictionTime = 0.01
-            
+            local predictionTime = 0.05
             local predictedPosition = targetRootPart.Position + (enemyVelocity * predictionTime)
-            
-            local offset = 0 
+
             local predictedCFrame = CFrame.new(predictedPosition, predictedPosition + targetRootPart.CFrame.LookVector)
-            local smartBehindPosition = predictedCFrame * CFrame.new(0, 0, offset)
-            
+            local smartBehindPosition = predictedCFrame * CFrame.new(0, 0, baseOffset)
+
             local raycastParams = RaycastParams.new()
             raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
             raycastParams.FilterDescendantsInstances = {character, targetEnemy.Character}
-            local raycastResult = workspace:Raycast(humanoidRootPart.Position, (smartBehindPosition.Position - humanoidRootPart.Position).Unit * (smartBehindPosition.Position - humanoidRootPart.Position).Magnitude, raycastParams)
-            
+            local direction = (smartBehindPosition.Position - humanoidRootPart.Position)
+            local raycastResult = workspace:Raycast(humanoidRootPart.Position, direction.Unit * direction.Magnitude, raycastParams)
+
             if raycastResult then
-                smartBehindPosition = CFrame.new(raycastResult.Position) * CFrame.new(0,0,-1) 
+                smartBehindPosition = CFrame.new(raycastResult.Position) * CFrame.new(0,0,-1)
             end
-            
+
             humanoidRootPart.CFrame = smartBehindPosition
-            
+
+            lastTargetCFrame = currentCFrame
+
             if not bombActivated then
                 bombActivated = true
                 task.wait(0.02)
             end
         end
-        
+
         bombLoop = nil
         isUsingBomb = false
         if getgenv().AFKMode then
@@ -1311,6 +1363,7 @@ function useBombOnEnemy(bombTool, character, targetEnemy)
         end
         originalPosition = nil
     end)
+
     return true
 end
 
