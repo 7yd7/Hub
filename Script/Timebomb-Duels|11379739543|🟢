@@ -18,6 +18,7 @@ getgenv().update = function()
     local text = [[
 1.0.4 | 2025/8/20
   * Improve Auto Join
+  * Improve Player Evasion
 
 1.0.3 | 2025/8/19
   * Fix all Script
@@ -1078,25 +1079,24 @@ local function handlePlayerEvasion()
 
                     if safePosition then
                         local moveDistance = (safePosition - currentPosition).Magnitude
-                        if moveDistance > 5 then
+                        if moveDistance > 3 then
                             local steps = 8
                             for i = 1, steps do
                                 if not getgenv().SmartEvasion then break end
                                 local alpha = i / steps
                                 local newPos = currentPosition:Lerp(safePosition, alpha)
-                                local targetCFrame = CFrame.new(newPos.X, currentPosition.Y, newPos.Z)
-                                humanoidRootPart.CFrame = targetCFrame * CFrame.Angles(0, (safePosition - currentPosition).Unit.Y, 0)
+                                humanoidRootPart.CFrame = CFrame.new(newPos, newPos + (safePosition - currentPosition).Unit)
                                 task.wait(0.02)
                             end
                         end
 
-if lastSafePos then
-    local moved = (currentPosition - lastSafePos).Magnitude
-    if moved < 2 and (currentTime - stuckCheckTime) > 1 and lastSafePos.Y < currentPosition.Y then
-        humanoidRootPart.CFrame = CFrame.new(currentPosition + Vector3.new(0, 1, 0))
-        stuckCheckTime = currentTime
-    end
-end
+                        if lastSafePos then
+                            local moved = (currentPosition - lastSafePos).Magnitude
+                            if moved < 2 and (currentTime - stuckCheckTime) > 1 then
+                                humanoidRootPart.CFrame = CFrame.new(safePosition + Vector3.new(0, 2, 0))
+                                stuckCheckTime = currentTime
+                            end
+                        end
                         lastSafePos = humanoidRootPart.Position
                     end
                 end
