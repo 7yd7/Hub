@@ -1085,8 +1085,8 @@ local function handlePlayerEvasion()
                                 if not getgenv().SmartEvasion then break end
                                 local alpha = i / steps
                                 local newPos = currentPosition:Lerp(safePosition, alpha)
-                                local targetPos = Vector3.new(newPos.X, currentPosition.Y, newPos.Z)
-                                humanoidRootPart.CFrame = CFrame.new(targetPos, safePosition)
+                                local targetCFrame = CFrame.new(newPos.X, currentPosition.Y, newPos.Z)
+                                humanoidRootPart.CFrame = targetCFrame * CFrame.Angles(0, (safePosition - currentPosition).Unit.Y, 0)
                                 task.wait(0.02)
                             end
                         end
