@@ -16,6 +16,10 @@ end
 
 getgenv().update = function()
     local text = [[
+1.0.4 | 2025/8/20
+  * Improve Auto Join
+  * Improve Player Evasion
+
 1.0.3 | 2025/8/19
   * Fix all Script
   + add Auto Lava Close
@@ -1075,24 +1079,25 @@ local function handlePlayerEvasion()
 
                     if safePosition then
                         local moveDistance = (safePosition - currentPosition).Magnitude
-                        if moveDistance > 3 then
+                        if moveDistance > 5 then
                             local steps = 8
                             for i = 1, steps do
                                 if not getgenv().SmartEvasion then break end
                                 local alpha = i / steps
                                 local newPos = currentPosition:Lerp(safePosition, alpha)
-                                humanoidRootPart.CFrame = CFrame.new(newPos, newPos + (safePosition - currentPosition).Unit)
+                                local targetPos = Vector3.new(newPos.X, currentPosition.Y, newPos.Z)
+                                humanoidRootPart.CFrame = CFrame.new(targetPos, safePosition)
                                 task.wait(0.02)
                             end
                         end
 
-                        if lastSafePos then
-                            local moved = (currentPosition - lastSafePos).Magnitude
-                            if moved < 2 and (currentTime - stuckCheckTime) > 1 then
-                                humanoidRootPart.CFrame = CFrame.new(safePosition + Vector3.new(0, 2, 0))
-                                stuckCheckTime = currentTime
-                            end
-                        end
+if lastSafePos then
+    local moved = (currentPosition - lastSafePos).Magnitude
+    if moved < 2 and (currentTime - stuckCheckTime) > 1 and lastSafePos.Y < currentPosition.Y then
+        humanoidRootPart.CFrame = CFrame.new(currentPosition + Vector3.new(0, 1, 0))
+        stuckCheckTime = currentTime
+    end
+end
                         lastSafePos = humanoidRootPart.Position
                     end
                 end
@@ -1143,6 +1148,7 @@ function startAutoJoinLoop()
         local lastJoinedSide = nil
         local lastJoinedSlot = nil
         local lastTargetPlayer = nil
+        local joinAttempts = {}
         
         while getgenv().AutoJoin do
             wait(0.1) 
@@ -1206,7 +1212,7 @@ function startAutoJoinLoop()
             end
             
             if foundArena and foundSide and foundSlot then
-                local targetSide, targetSlot = findBestSlot(foundArena, foundSide, foundSlot, foundPlayer)
+                local targetSide, targetSlot = findBestSlotOpposite(foundArena, foundSide, foundSlot, foundPlayer)
                 
                 if not targetSide or not targetSlot then
                     wait(.2) 
@@ -1217,18 +1223,64 @@ function startAutoJoinLoop()
                 if targetSlotObj and targetSlotObj:FindFirstChild("Data") and targetSlotObj.Data:FindFirstChild("Player") then
                     if targetSlotObj.Data.Player.Value == nil and not isSlotInGame(foundArena, targetSide, targetSlot) then
                         if not isAnyPlayerInGameInArena(foundArena) then
-                            if joinArenaSlot(foundArena, targetSide, targetSlot) then
-                                lastJoinedArena = foundArena
-                                lastJoinedSide = targetSide
-                                lastJoinedSlot = targetSlot
-                                lastTargetPlayer = foundPlayer
+                            local attemptKey = foundArena.Name .. "_" .. targetSide .. "_" .. targetSlot
+                            
+                            if not joinAttempts[attemptKey] then
+                                joinAttempts[attemptKey] = 0
+                            end
+                            
+                            if joinAttempts[attemptKey] >= 3 then
+                                teleportToWorldSpawn()
+                                joinAttempts[attemptKey] = 0 
+                                wait(1)
+                                continue
+                            end
+                            
+                            local joinSuccess = joinArenaSlot(foundArena, targetSide, targetSlot)
+                            
+                            if joinSuccess then
+                                wait(0.1)
                                 
-                                wait(0.2)
+                                local actuallyJoined = false
+                                local currentIsInArena, currentArenaCheck, currentSideCheck, currentSlotCheck = checkPlayerArenaStatus()
                                 
-                                local readyVisible, readyPrompt = isReadyPromptVisible()
-                                if readyVisible and readyPrompt and readyPrompt.Text == "Ready" then
-                                    fireReadyRemote()
+                                if currentIsInArena and currentArenaCheck == foundArena and currentSideCheck == targetSide and currentSlotCheck == targetSlot then
+                                    actuallyJoined = true
                                 end
+                                
+                                if not actuallyJoined then
+                                    local slotCheck = foundArena.Slots[targetSide]:FindFirstChild(tostring(targetSlot))
+                                    if slotCheck and slotCheck:FindFirstChild("Data") and slotCheck.Data:FindFirstChild("Player") then
+                                        if slotCheck.Data.Player.Value == localPlayer then
+                                            actuallyJoined = true
+                                        end
+                                    end
+                                end
+                                
+                                if actuallyJoined then
+                                    lastJoinedArena = foundArena
+                                    lastJoinedSide = targetSide
+                                    lastJoinedSlot = targetSlot
+                                    lastTargetPlayer = foundPlayer
+                                    
+                                    joinAttempts[attemptKey] = 0                                    
+                                    wait(0.1)
+                                    
+                                    local readyVisible, readyPrompt = isReadyPromptVisible()
+                                    if readyVisible and readyPrompt and readyPrompt.Text == "Ready" then
+                                        fireReadyRemote()
+                                    end
+                                else
+                                    joinAttempts[attemptKey] = joinAttempts[attemptKey] + 1
+                                    
+                                    teleportToWorldSpawn()
+                                    wait(1)
+                                end
+                            else
+                                joinAttempts[attemptKey] = joinAttempts[attemptKey] + 1
+                                
+                                teleportToWorldSpawn()
+                                wait(0.1)
                             end
                         end
                     end
@@ -1239,6 +1291,42 @@ function startAutoJoinLoop()
         end
     end)
 end
+
+function findBestSlotOpposite(arena, playerSide, playerSlot, targetPlayer)
+    if not arena or not arena:FindFirstChild("Slots") then
+        return nil, nil
+    end
+    
+    local oppositeSide = (playerSide == "Left") and "Right" or "Left"
+    
+    if arena.Slots:FindFirstChild(oppositeSide) then
+        for i = 1, 4 do
+            local slot = arena.Slots[oppositeSide]:FindFirstChild(tostring(i))
+            if slot and slot:FindFirstChild("Data") and slot.Data:FindFirstChild("Player") then
+                if slot.Data.Player.Value == nil and not isSlotInGame(arena, oppositeSide, i) then
+                    return oppositeSide, i
+                end
+            end
+        end
+    end
+    
+    if arena.Slots:FindFirstChild(playerSide) then
+        for i = 1, 4 do
+            if i ~= playerSlot then 
+                local slot = arena.Slots[playerSide]:FindFirstChild(tostring(i))
+                if slot and slot:FindFirstChild("Data") and slot.Data:FindFirstChild("Player") then
+                    if slot.Data.Player.Value == nil and not isSlotInGame(arena, playerSide, i) then
+                        return playerSide, i
+                    end
+                end
+            end
+        end
+    end
+    
+    return nil, nil
+end
+
+
 
 local JoinModeDropdown = Tabs.Gameworks:AddDropdown("JoinMode_Dropdown", {
     Title = "Join Mode",
@@ -1420,7 +1508,7 @@ function updateLavaCopy(lavaId, originalLava)
     local lavaData = copiedLavaObjects[lavaId]
     if lavaData and lavaData.copy and lavaData.copy.Parent then
         local newPosition = originalLava.Position
-        lavaData.copy.Position = Vector3.new(newPosition.X, newPosition.Y + 2, newPosition.Z)
+        lavaData.copy.Position = Vector3.new(newPosition.X, newPosition.Y + 3, newPosition.Z)
         lavaData.copy.Size = originalLava.Size
         
         lavaDataCache[lavaId] = {
