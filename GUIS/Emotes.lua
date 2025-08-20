@@ -877,14 +877,17 @@ local function playEmote(humanoid, emoteId)
         currentEmoteTrack.Priority = Enum.AnimationPriority.Action
         currentEmoteTrack.Looped = true
         task.wait(0.1)
-        currentEmoteTrack:Play()
+        if speedEmoteEnabled or emotesWalkEnabled then
+            currentEmoteTrack:Play()
 
-        if speedEmoteEnabled then
-            local speedValue = tonumber(SpeedBox.Text) or 1
-            currentEmoteTrack:AdjustSpeed(speedValue)
+            if speedEmoteEnabled then
+                local speedValue = tonumber(SpeedBox.Text) or 1
+                currentEmoteTrack:AdjustSpeed(speedValue)
+            end
         end
     end
 end
+
 
 local function onCharacterAdded(character)
     currentCharacter = character
