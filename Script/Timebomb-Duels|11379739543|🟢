@@ -18,7 +18,6 @@ getgenv().update = function()
     local text = [[
 1.0.4 | 2025/8/20
   * Improve Auto Join
-  * Improve Player Evasion
 
 1.0.3 | 2025/8/19
   * Fix all Script
