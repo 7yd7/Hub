@@ -990,122 +990,143 @@ local function goToUpAndSpin()
 end
 
 local function handlePlayerEvasion()
-    spawn(function()
-        local lastEvasionTime = 0
-        local emergencyMode = false
-        local lastKnownEnemyPositions = {}
-        local lastSafePos = nil
-        local stuckCheckTime = tick()
+spawn(function()
+    local lastEvasionTime = 0
+    local emergencyMode = false
+    local lastKnownEnemyPositions = {}
+    local lastSafePos = nil
+    local stuckCheckTime = tick()
 
-        while getgenv().SmartEvasion do
-            task.wait()
-
-            if not isInGame() then
-                task.wait(0.2)
-                continue
-            end
-
-            local character = localPlayer.Character
-            if not character or not character:FindFirstChild("HumanoidRootPart") then
-                task.wait()
-                continue
-            end
-
-            local humanoidRootPart = character.HumanoidRootPart
-            local currentPosition = humanoidRootPart.Position
-            local currentTime = tick()
-
-            local enemies, currentArena = detectEnemyPlayers()
-            local enemiesWithBombs = getEnemiesWithBombs(enemies)
-
-            if #enemiesWithBombs > 0 and not isUsingBomb then
-                local mostDangerousEnemy = nil
-                local closestDistance = math.huge
-                local highestThreat = 0
-
-                for _, enemy in pairs(enemiesWithBombs) do
-                    if enemy.Character and enemy.Character:FindFirstChild("HumanoidRootPart") then
-                        local enemyPos = enemy.Character.HumanoidRootPart.Position
-                        local distance = (currentPosition - enemyPos).Magnitude
-
-                        local enemyVelocity = Vector3.new(0, 0, 0)
-                        if lastKnownEnemyPositions[enemy.UserId] then
-                            local lastPos = lastKnownEnemyPositions[enemy.UserId].position
-                            local timeDiff = currentTime - lastKnownEnemyPositions[enemy.UserId].time
-                            if timeDiff > 0 then
-                                enemyVelocity = (enemyPos - lastPos) / timeDiff
-                            end
-                        end
-
-                        lastKnownEnemyPositions[enemy.UserId] = {
-                            position = enemyPos,
-                            time = currentTime
-                        }
-
-                        local speed = enemyVelocity.Magnitude
-                        local directionToMe = (currentPosition - enemyPos).Unit
-                        local enemyDirection = enemyVelocity.Unit
-
-                        local threatLevel = 0
-
-                        if distance < 60 then
-                            threatLevel = threatLevel + (60 - distance) * 2
-                        end
-
-                        if speed > 16 then 
-                            threatLevel = threatLevel + speed * 2
-                        end
-
-                        if speed > 5 then
-                            local dotProduct = enemyDirection:Dot(directionToMe)
-                            if dotProduct > 0.7 then
-                                threatLevel = threatLevel + 50
-                                emergencyMode = true
-                            elseif dotProduct > 0.3 then 
-                                threatLevel = threatLevel + 25
-                            end
-                        end
-
-                        if threatLevel > highestThreat or (threatLevel > 20 and distance < closestDistance) then
-                            mostDangerousEnemy = enemy
-                            highestThreat = threatLevel
-                            closestDistance = distance
-                        end
-                    end
-                end
-
-                if mostDangerousEnemy and (highestThreat > 10 or emergencyMode) then
-                    local safePosition = findUltimateEscapePosition(currentPosition, mostDangerousEnemy, enemiesWithBombs, currentArena)
-
-                    if safePosition then
-                        local moveDistance = (safePosition - currentPosition).Magnitude
-                        if moveDistance > 3 then
-                            local steps = 8
-                            for i = 1, steps do
-                                if not getgenv().SmartEvasion then break end
-                                local alpha = i / steps
-                                local newPos = currentPosition:Lerp(safePosition, alpha)
-                                humanoidRootPart.CFrame = CFrame.new(newPos, newPos + (safePosition - currentPosition).Unit)
-                                task.wait(0.02)
-                            end
-                        end
-
-                        if lastSafePos then
-                            local moved = (currentPosition - lastSafePos).Magnitude
-                            if moved < 2 and (currentTime - stuckCheckTime) > 1 then
-                                humanoidRootPart.CFrame = CFrame.new(safePosition + Vector3.new(0, 2, 0))
-                                stuckCheckTime = currentTime
-                            end
-                        end
-                        lastSafePos = humanoidRootPart.Position
-                    end
-                end
-            else
-                emergencyMode = false
-                lastKnownEnemyPositions = {}
+    local function touchingLavaCopy(character)
+        if not character or not character:FindFirstChild("HumanoidRootPart") then return false end
+        local hrp = character.HumanoidRootPart
+        local touchingParts = hrp:GetTouchingParts()
+        for _, part in ipairs(touchingParts) do
+            if part.Name:sub(1, 8) == "LavaCopy" then
+                return true
             end
         end
-    end)
+        return false
+    end
+
+    while getgenv().SmartEvasion do
+        task.wait()
+
+        if not isInGame() then
+            task.wait(0.2)
+            continue
+        end
+
+        local character = localPlayer.Character
+        if not character or not character:FindFirstChild("HumanoidRootPart") then
+            task.wait()
+            continue
+        end
+
+        local humanoidRootPart = character.HumanoidRootPart
+        local currentPosition = humanoidRootPart.Position
+        local currentTime = tick()
+
+        if touchingLavaCopy(character) then
+            emergencyMode = true
+            humanoidRootPart.CFrame = humanoidRootPart.CFrame + Vector3.new(0, 20, 0)
+            task.wait(0.2)
+            continue
+        end
+
+        local enemies, currentArena = detectEnemyPlayers()
+        local enemiesWithBombs = getEnemiesWithBombs(enemies)
+
+        if #enemiesWithBombs > 0 and not isUsingBomb then
+            local mostDangerousEnemy = nil
+            local closestDistance = math.huge
+            local highestThreat = 0
+
+            for _, enemy in pairs(enemiesWithBombs) do
+                if enemy.Character and enemy.Character:FindFirstChild("HumanoidRootPart") then
+                    local enemyPos = enemy.Character.HumanoidRootPart.Position
+                    local distance = (currentPosition - enemyPos).Magnitude
+
+                    local enemyVelocity = Vector3.new(0, 0, 0)
+                    if lastKnownEnemyPositions[enemy.UserId] then
+                        local lastPos = lastKnownEnemyPositions[enemy.UserId].position
+                        local timeDiff = currentTime - lastKnownEnemyPositions[enemy.UserId].time
+                        if timeDiff > 0 then
+                            enemyVelocity = (enemyPos - lastPos) / timeDiff
+                        end
+                    end
+
+                    lastKnownEnemyPositions[enemy.UserId] = {
+                        position = enemyPos,
+                        time = currentTime
+                    }
+
+                    local speed = enemyVelocity.Magnitude
+                    local directionToMe = (currentPosition - enemyPos).Unit
+                    local enemyDirection = enemyVelocity.Unit
+
+                    local threatLevel = 0
+
+                    if distance < 60 then
+                        threatLevel = threatLevel + (60 - distance) * 2
+                    end
+
+                    if speed > 16 then 
+                        threatLevel = threatLevel + speed * 2
+                    end
+
+                    if speed > 5 then
+                        local dotProduct = enemyDirection:Dot(directionToMe)
+                        if dotProduct > 0.7 then
+                            threatLevel = threatLevel + 50
+                            emergencyMode = true
+                        elseif dotProduct > 0.3 then 
+                            threatLevel = threatLevel + 25
+                        end
+                    end
+
+                    if threatLevel > highestThreat or (threatLevel > 20 and distance < closestDistance) then
+                        mostDangerousEnemy = enemy
+                        highestThreat = threatLevel
+                        closestDistance = distance
+                    end
+                end
+            end
+
+            if mostDangerousEnemy and (highestThreat > 10 or emergencyMode) then
+                local safePosition = findUltimateEscapePosition(currentPosition, mostDangerousEnemy, enemiesWithBombs, currentArena)
+
+                if safePosition then
+                    local moveDistance = (safePosition - currentPosition).Magnitude
+                    if moveDistance > 3 then
+                        local steps = 8
+                        for i = 1, steps do
+                            if not getgenv().SmartEvasion then break end
+                            local alpha = i / steps
+                            local newPos = currentPosition:Lerp(safePosition, alpha)
+                            humanoidRootPart.CFrame = CFrame.new(newPos, newPos + (safePosition - currentPosition).Unit)
+                            task.wait(0.02)
+                        end
+                    end
+
+                    if lastSafePos then
+                        local moved = (currentPosition - lastSafePos).Magnitude
+                        if moved < 2 and (currentTime - stuckCheckTime) > 1 then
+                            humanoidRootPart.CFrame = CFrame.new(safePosition + Vector3.new(0, 2, 0))
+                            stuckCheckTime = currentTime
+                        end
+                    end
+                    lastSafePos = humanoidRootPart.Position
+                end
+            end
+        else
+            emergencyMode = false
+            lastKnownEnemyPositions = {}
+        end
+    end
+end)
+
+   
 end
 
 
