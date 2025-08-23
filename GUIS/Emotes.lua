@@ -1045,7 +1045,12 @@ local function onCharacterAdded(character)
     end)
 
     humanoid.Died:Connect(function()
-        stopEmotes()
+    emotesWalkEnabled = false
+    speedEmoteEnabled = false
+    favoriteEnabled = false
+    currentEmoteTrack = nil
+
+    stopEmotes()
         stopCurrentEmote()
     end)
 end
@@ -1256,6 +1261,17 @@ player.CharacterAdded:Connect(function(character)
         end
     end)
 end)
+
+player.CharacterAdded:Connect(function(newChar)
+    character = newChar
+    humanoid = newChar:WaitForChild("Humanoid")
+    emotesWalkEnabled = false
+    speedEmoteEnabled = false
+    favoriteEnabled = false
+    currentEmoteTrack = nil
+    stopEmotes()
+end)
+
 
 local heartbeatConnection = RunService.Heartbeat:Connect(function()
     if not isGUICreated then
