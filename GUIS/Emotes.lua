@@ -1,7 +1,5 @@
 --[[ 
     Source script taken from: https://github.com/Roblox/creator-docs/blob/main/content/en-us/characters/emotes.md
-    If you want to set an emote, I recommend using a source script that was taken from for ease of use only.
-    Also other scripts, there is no difference them. I just created it if you want from the Roblox coregui menu, emote Easily (almost..).
 ]]
 
 
@@ -32,6 +30,8 @@ local humanoid = character:WaitForChild("Humanoid")
 local UserInputService = game:GetService("UserInputService")
 local CoreGui = game:GetService("CoreGui")
 
+local emoteClickConnections = {}
+local isMonitoringClicks = false
 local currentTimer = nil
 
 RunService.Heartbeat:Connect(function()
@@ -93,6 +93,9 @@ local Under, UIListLayout, _1left, _9right, _4pages, _3TextLabel, _2Routenumber,
 
 local defaultButtonImage = "rbxassetid://71408678974152"
 local enabledButtonImage = "rbxassetid://106798555684020"
+
+local favoriteIconId = "rbxassetid://97307461910825" 
+local notFavoriteIconId = "rbxassetid://124025954365505"
 
 local function getCharacterAndHumanoid()
     local character = player.Character
@@ -248,60 +251,21 @@ local function loadSpeedEmoteConfig()
     end
 end
 
-local function scanCurrentEmotes()
-    if not favoriteEnabled then
-        return {}
-    end
+local function extractAssetId(imageUrl)
+    local assetId = string.match(imageUrl, "Asset&id=(%d+)")
+    return assetId
+end
 
-    local success, frontFrame = pcall(function()
-        return game:GetService("CoreGui").RobloxGui.EmotesMenu.Children.Main.EmotesWheel.Front.EmotesButtons
+local function getEmoteName(assetId)
+    local success, productInfo = pcall(function()
+        return game:GetService("MarketplaceService"):GetProductInfo(tonumber(assetId))
     end)
-
-    if not success then
-        return {}
+    
+    if success and productInfo then
+        return productInfo.Name
+    else
+        return "Unknown Emote"
     end
-
-    scannedEmotes = {}
-
-    for _, child in pairs(frontFrame:GetChildren()) do
-        if child:IsA("ImageLabel") then
-            local imageId = child.Image
-            local assetId = string.match(imageId, "rbxthumb://type=Asset&id=(%d+)")
-
-            if assetId then
-                spawn(function()
-                    local success, result = pcall(function()
-                        local objects = game:GetObjects("rbxassetid://" .. assetId)
-                        if objects[1] and objects[1]:IsA("Animation") then
-                            local animationId = urlToId(objects[1].AnimationId)
-                            objects[1]:Destroy()
-                            return animationId
-                        end
-                        return nil
-                    end)
-
-                    if success and result then
-                        local emoteName = "Unknown Emote"
-                        local nameSuccess, productInfo = pcall(function()
-                            return game:GetService("MarketplaceService"):GetProductInfo(tonumber(assetId))
-                        end)
-
-                        if nameSuccess and productInfo then
-                            emoteName = productInfo.Name
-                        end
-
-                        table.insert(scannedEmotes, {
-                            assetId = assetId,
-                            animationId = result,
-                            name = emoteName
-                        })
-                    end
-                end)
-            end
-        end
-    end
-
-    return {}
 end
 
 local function isInFavorites(emoteId)
@@ -311,15 +275,6 @@ local function isInFavorites(emoteId)
         end
     end
     return false
-end
-
-local function findAssetIdByAnimationId(playedAnimationId)
-    for _, emoteData in pairs(scannedEmotes) do
-        if emoteData.animationId == playedAnimationId then
-            return emoteData.assetId, emoteData.name
-        end
-    end
-    return nil, nil
 end
 
 local function updateEmotes()
@@ -677,6 +632,49 @@ local function updatePageDisplay()
     end
 end
 
+local function updateFavoriteIcon(imageLabel, assetId, isFavorite)
+    local favoriteIcon = imageLabel:FindFirstChild("FavoriteIcon")
+    
+    if not favoriteIcon then
+        favoriteIcon = Instance.new("ImageLabel")
+        favoriteIcon.Name = "FavoriteIcon"
+        favoriteIcon.Size = UDim2.new(0.3, 0, 0.3, 0) 
+        favoriteIcon.Position = UDim2.new(0.7, 0, 0, 0)
+        favoriteIcon.AnchorPoint = Vector2.new(0, 0)
+        favoriteIcon.BackgroundTransparency = 1
+        favoriteIcon.ZIndex = imageLabel.ZIndex + 5
+        favoriteIcon.ScaleType = Enum.ScaleType.Fit
+        favoriteIcon.Parent = imageLabel
+    end
+    
+    if isFavorite then
+        favoriteIcon.Image = favoriteIconId
+    else
+        favoriteIcon.Image = notFavoriteIconId 
+    end
+end
+
+local function updateAllFavoriteIcons()
+    local success, frontFrame = pcall(function()
+        return game:GetService("CoreGui").RobloxGui.EmotesMenu.Children.Main.EmotesWheel.Front.EmotesButtons
+    end)
+    
+    if success and frontFrame then
+        for _, child in pairs(frontFrame:GetChildren()) do
+            if child:IsA("ImageLabel") and child.Image ~= "" then
+                local imageUrl = child.Image
+                local assetId = extractAssetId(imageUrl)
+                
+                if assetId then
+                    local isFavorite = isInFavorites(assetId)
+                    updateFavoriteIcon(child, assetId, isFavorite)
+                end
+            end
+        end
+    end
+end
+
+
 local function toggleFavorite(emoteId, emoteName)
     local found = false
     local index = 0
@@ -712,7 +710,110 @@ local function toggleFavorite(emoteId, emoteName)
     totalPages = calculateTotalPages()
     updatePageDisplay()
     updateEmotes()
+    
+    updateAllFavoriteIcons()
 end
+
+local function setupEmoteClickDetection()
+    if isMonitoringClicks then
+        return
+    end
+   
+    local function monitorEmotes()
+        while favoriteEnabled do
+            local success, frontFrame = pcall(function()
+                return game:GetService("CoreGui").RobloxGui.EmotesMenu.Children.Main.EmotesWheel.Front.EmotesButtons
+            end)
+           
+            if success and frontFrame then
+                for _, connection in pairs(emoteClickConnections) do
+                    if connection then
+                        connection:Disconnect()
+                    end
+                end
+                emoteClickConnections = {}
+               
+                for _, child in pairs(frontFrame:GetChildren()) do
+                    if child:IsA("ImageLabel") and child.Image ~= "" then
+                        local clickDetector = child:FindFirstChild("ClickDetector") or Instance.new("TextButton")
+                        clickDetector.Name = "ClickDetector"
+                        clickDetector.Size = UDim2.new(1, 0, 1, 0)
+                        clickDetector.Position = UDim2.new(0, 0, 0, 0)
+                        clickDetector.BackgroundTransparency = 1
+                        clickDetector.Text = ""
+                        clickDetector.ZIndex = child.ZIndex + 1
+                        clickDetector.Parent = child
+                        
+                        local imageUrl = child.Image
+                        local assetId = extractAssetId(imageUrl)
+                        if assetId then
+                            local isFavorite = isInFavorites(assetId)
+                            updateFavoriteIcon(child, assetId, isFavorite)
+                        end
+                       
+                        local connection = clickDetector.MouseButton1Click:Connect(function()
+                            if favoriteEnabled then
+                                if assetId then
+                                    local emoteName = getEmoteName(assetId)
+                                    toggleFavorite(assetId, emoteName)
+                                end
+                            end
+                        end)
+                       
+                        table.insert(emoteClickConnections, connection)
+                    end
+                end
+            end
+           
+            task.wait(0.1)
+        end
+       
+        for _, connection in pairs(emoteClickConnections) do
+            if connection then
+                connection:Disconnect()
+            end
+        end
+        emoteClickConnections = {}
+        isMonitoringClicks = false
+    end
+   
+    if favoriteEnabled then
+        isMonitoringClicks = true
+        task.spawn(monitorEmotes)
+    end
+end
+
+local function stopEmoteClickDetection()
+    isMonitoringClicks = false
+    
+    for _, connection in pairs(emoteClickConnections) do
+        if connection then
+            connection:Disconnect()
+        end
+    end
+    emoteClickConnections = {}
+    
+    local success, frontFrame = pcall(function()
+        return game:GetService("CoreGui").RobloxGui.EmotesMenu.Children.Main.EmotesWheel.Front.EmotesButtons
+    end)
+    
+    if success and frontFrame then
+        for _, child in pairs(frontFrame:GetChildren()) do
+            if child:IsA("ImageLabel") then
+                local clickDetector = child:FindFirstChild("ClickDetector")
+                if clickDetector then
+                    clickDetector:Destroy()
+                end
+                
+                local favoriteIcon = child:FindFirstChild("FavoriteIcon")
+                if favoriteIcon then
+                    favoriteIcon:Destroy()
+                end
+            end
+        end
+    end
+end
+
 
 local function fetchAllEmotes()
     if isLoading then
@@ -888,7 +989,6 @@ local function playEmote(humanoid, emoteId)
     end
 end
 
-
 local function onCharacterAdded(character)
     currentCharacter = character
     stopCurrentEmote()
@@ -937,63 +1037,6 @@ local function onCharacterAdded(character)
                     currentEmoteTrack.Ended:Connect(function()
                         if currentEmoteTrack == animationTrack then
                             currentEmoteTrack = nil
-                        end
-                    end)
-                end
-            end
-
-            if favoriteEnabled then
-                stopEmotes()
-
-                getgenv().Notify({
-                    Title = '7yd7 | Favorite System',
-                    Content = '🔎 Checking emote...',
-                    Duration = 4
-                })
-
-                local assetId, emoteName = findAssetIdByAnimationId(playedEmoteId)
-
-                if assetId and emoteName then
-                    getgenv().Notify({
-                        Title = '7yd7 | Favorite System Success!',
-                        Content = '✅ Saving: ' .. emoteName,
-                        Duration = 4
-                    })
-
-                    toggleFavorite(assetId, emoteName)
-
-                    wait(.1)
-                    local GuiService = game:GetService("GuiService")
-                    GuiService:SetEmotesMenuOpen(true)
-
-                else
-                    getgenv().Notify({
-                        Title = '7yd7 | Favorite System Not Found',
-                        Content = '🧐 Re-scanning emotes...',
-                        Duration = 4
-                    })
-                    wait(.1)
-                    local GuiService = game:GetService("GuiService")
-                    GuiService:SetEmotesMenuOpen(true)
-
-                    spawn(function()
-                        scanCurrentEmotes()
-                        wait(0.5)
-
-                        local assetId2, emoteName2 = findAssetIdByAnimationId(playedEmoteId)
-                        if assetId2 and emoteName2 then
-                            getgenv().Notify({
-                                Title = '7yd7 | Favorite System Found!',
-                                Content = '✅ Saving: ' .. emoteName2,
-                                Duration = 4
-                            })
-                            toggleFavorite(assetId2, emoteName2)
-                        else
-                            getgenv().Notify({
-                                Title = '7yd7 | Favorite System Failed',
-                                Content = '❌ Could not save emote',
-                                Duration = 3
-                            })
                         end
                     end)
                 end
@@ -1085,9 +1128,11 @@ local function toggleFavoriteMode()
 
         getgenv().Notify({
             Title = '7yd7 | Favorite System',
-            Content = "⚠️ Add a favorite, click a dance and it will be added \n (opposite of removing)",
+            Content = "⚠️ Click on any emote to add/remove from \n favorites ( Click to image )",
             Duration = 5
         })
+        
+        setupEmoteClickDetection()
     else
         Favorite.Image = "rbxassetid://124025954365505"
         getgenv().Notify({
@@ -1095,6 +1140,8 @@ local function toggleFavoriteMode()
             Content = '🔓 Emote Favorite OFF',
             Duration = 3
         })
+        
+        stopEmoteClickDetection()
     end
 end
 
