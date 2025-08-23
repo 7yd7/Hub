@@ -1045,6 +1045,7 @@ local function onCharacterAdded(character)
     end)
 
     humanoid.Died:Connect(function()
+        stopEmotes()
         stopCurrentEmote()
     end)
 end
@@ -1245,6 +1246,7 @@ player.CharacterAdded:Connect(function(character)
             task.wait(0.1) 
         end
         task.wait(0.3) 
+        stopEmotes()
         if createGUIElements() then
             if #emotesData > 0 then
                 updatePageDisplay()
