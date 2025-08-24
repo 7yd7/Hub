@@ -264,7 +264,7 @@ local function getEmoteName(assetId)
     if success and productInfo then
         return productInfo.Name
     else
-        return "Unknown Emote"
+        return "Emote_" .. tostring(assetId)
     end
 end
 
@@ -547,7 +547,7 @@ local function createGUIElements()
     Search.Position = UDim2.new(0.0677966103, 0, 0)
     Search.Size = UDim2.new(0.864406765, 0, 0.81578958, 0)
     Search.Font = Enum.Font.SourceSansBold
-    Search.PlaceholderText = "Search"
+    Search.PlaceholderText = "Search/ID"
     Search.Text = ""
     Search.TextColor3 = Color3.fromRGB(255, 255, 255)
     Search.TextScaled = true
@@ -891,28 +891,56 @@ local function searchEmotes(searchTerm)
         end
         _G.filteredFavoritesForDisplay = nil
     else
+        local isIdSearch = searchTerm:match("^%d%d%d%d%d+$")
+        
         local newFilteredList = {}
-        for _, emote in pairs(originalEmotesData) do
-            if emote.name:lower():find(searchTerm) then
-                table.insert(newFilteredList, emote)
+        
+        if isIdSearch then
+            for _, emote in pairs(originalEmotesData) do
+                if tostring(emote.id) == searchTerm then
+                    table.insert(newFilteredList, emote)
+                end
+            end
+            
+            if #newFilteredList == 0 then
+                local emoteId = tonumber(searchTerm)
+                if emoteId then
+                    local emoteName = getEmoteName(emoteId)
+                    local newEmote = {
+                        id = emoteId,
+                        name = emoteName
+                    }
+                    
+                    table.insert(originalEmotesData, newEmote)
+                    table.insert(newFilteredList, newEmote)
+                end
+            end
+        else
+            for _, emote in pairs(originalEmotesData) do
+                if emote.name:lower():find(searchTerm) then
+                    table.insert(newFilteredList, emote)
+                end
             end
         end
+        
         filteredEmotes = newFilteredList
 
-        if not _G.originalFavoritesBackup then
-            _G.originalFavoritesBackup = {}
-            for i, favorite in pairs(favoriteEmotes) do
-                _G.originalFavoritesBackup[i] = {
-                    id = favorite.id,
-                    name = favorite.name
-                }
+        if not isIdSearch then
+            if not _G.originalFavoritesBackup then
+                _G.originalFavoritesBackup = {}
+                for i, favorite in pairs(favoriteEmotes) do
+                    _G.originalFavoritesBackup[i] = {
+                        id = favorite.id,
+                        name = favorite.name
+                    }
+                end
             end
-        end
 
-        _G.filteredFavoritesForDisplay = {}
-        for _, favorite in pairs(favoriteEmotes) do
-            if favorite.name:lower():find(searchTerm) then
-                table.insert(_G.filteredFavoritesForDisplay, favorite)
+            _G.filteredFavoritesForDisplay = {}
+            for _, favorite in pairs(favoriteEmotes) do
+                if favorite.name:lower():find(searchTerm) then
+                    table.insert(_G.filteredFavoritesForDisplay, favorite)
+                end
             end
         end
     end
