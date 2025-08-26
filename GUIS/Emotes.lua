@@ -1,5 +1,7 @@
 --[[ 
     Source script taken from: https://github.com/Roblox/creator-docs/blob/main/content/en-us/characters/emotes.md
+
+    scriptblox: https://scriptblox.com/script/Universal-Script-7yd7-I-Emote-Script-48024
 ]]
 
 
@@ -1367,11 +1369,19 @@ task.spawn(function()
     end
 end)
 
-if UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled and not UserInputService.MouseEnabled then
+if UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled then
     loadstring(game:HttpGet("https://raw.githubusercontent.com/7yd7/Hub/refs/heads/Branch/GUIS/OpenEmote.lua"))()
     getgenv().Notify({
         Title = '7yd7 | Emote Mobile',
         Content = '📱 Added emote open button for ease of use',
-        Duration = 5
+        Duration = 10
+    })
+end
+
+if UserInputService.KeyboardEnabled then
+    getgenv().Notify({
+        Title = '7yd7 | Emote PC',
+        Content = '💻 Open menu press button "."',
+        Duration = 10
     })
 end
