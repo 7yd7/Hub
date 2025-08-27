@@ -36,6 +36,13 @@ local emoteClickConnections = {}
 local isMonitoringClicks = false
 local currentTimer = nil
 
+local currentMode = "emote"
+local animationsData = {}
+local originalAnimationsData = {}
+local filteredAnimations = {}
+local favoriteAnimations = {}
+local favoriteAnimationsFileName = "FavoriteAnimations.json"
+
 RunService.Heartbeat:Connect(function()
     if player.Character and player.Character.Humanoid.RigType == Enum.HumanoidRigType.R6 then
         local errorMsg = CoreGui.RobloxGui.EmotesMenu.Children.ErrorMessage
@@ -91,7 +98,7 @@ local speedEmoteEnabled = false
 local speedEmoteConfigFile = "SpeedEmoteConfig.json"
 
 local Under, UIListLayout, _1left, _9right, _4pages, _3TextLabel, _2Routenumber, Top, EmoteWalkButton, UICorner1,
-    UIListLayout_2, UICorner, Search, Favorite, UICorner2, UICorner_2, SpeedEmote, UICorner_4, SpeedBox
+    UIListLayout_2, UICorner, Search, Favorite, UICorner2, UICorner_2, SpeedEmote, UICorner_4, SpeedBox, UICorner_5, Changepage
 
 local defaultButtonImage = "rbxassetid://71408678974152"
 local enabledButtonImage = "rbxassetid://106798555684020"
@@ -201,6 +208,11 @@ local function updateGUIColors()
         SpeedEmote.BackgroundTransparency = bgTransparency
     end
 
+     if Changepage then
+        Changepage.BackgroundColor3 = bgColor
+        Changepage.BackgroundTransparency = bgTransparency
+    end
+
     if SpeedBox then
         SpeedBox.BackgroundColor3 = bgColor
         SpeedBox.BackgroundTransparency = bgTransparency
@@ -233,6 +245,18 @@ local function loadFavorites()
         end)
         if success and result then
             favoriteEmotes = result
+        end
+    end
+end
+
+local function loadFavoritesAnimations()
+    if readfile and isfile and isfile(favoriteAnimationsFileName) then
+        local success, result = pcall(function()
+            local fileContent = readfile(favoriteAnimationsFileName)
+            return HttpService:JSONDecode(fileContent)
+        end)
+        if success and result then
+            favoriteAnimations = result
         end
     end
 end
@@ -279,9 +303,100 @@ local function isInFavorites(emoteId)
     return false
 end
 
+local function updateAnimationImages(currentPageAnimations)
+    local success, frontFrame = pcall(function()
+        return game:GetService("CoreGui").RobloxGui.EmotesMenu.Children.Main.EmotesWheel.Front.EmotesButtons
+    end)
+    
+    if not success or not frontFrame then
+        return
+    end
+    
+    local buttonIndex = 1
+    for _, child in pairs(frontFrame:GetChildren()) do
+        if child:IsA("ImageLabel") and buttonIndex <= #currentPageAnimations then
+            local animationData = currentPageAnimations[buttonIndex]
+            child.Image = "rbxthumb://type=BundleThumbnail&id=" .. animationData.id .. "&w=420&h=420"
+            buttonIndex = buttonIndex + 1
+        elseif child:IsA("ImageLabel") then
+            child.Image = ""
+        end
+    end
+end
+
+local function updateAnimations()
+    local character, humanoid = getCharacterAndHumanoid()
+    if not character or not humanoid then
+        return
+    end
+
+    local humanoidDescription = humanoid.HumanoidDescription
+    if not humanoidDescription then
+        return
+    end
+
+    local currentPageAnimations = {}
+    local animationTable = {}
+    local equippedAnimations = {}
+
+    local favoritesToUse = _G.filteredFavoritesAnimationsForDisplay or favoriteAnimations
+    local hasFavorites = #favoritesToUse > 0
+    local favoritePagesCount = hasFavorites and math.ceil(#favoritesToUse / itemsPerPage) or 0
+    local isInFavoritesPages = currentPage <= favoritePagesCount
+
+    if isInFavoritesPages and hasFavorites then
+        local startIndex = (currentPage - 1) * itemsPerPage + 1
+        local endIndex = math.min(startIndex + itemsPerPage - 1, #favoritesToUse)
+
+        for i = startIndex, endIndex do
+            if favoritesToUse[i] then
+                table.insert(currentPageAnimations, {
+                    id = tonumber(favoritesToUse[i].id),
+                    name = favoritesToUse[i].name
+                })
+            end
+        end
+    else
+        local normalAnimations = {}
+        for _, animation in pairs(filteredAnimations) do
+            if not isInFavorites(animation.id) then
+                table.insert(normalAnimations, animation)
+            end
+        end
+
+        local adjustedPage = currentPage - favoritePagesCount
+        local startIndex = (adjustedPage - 1) * itemsPerPage + 1
+        local endIndex = math.min(startIndex + itemsPerPage - 1, #normalAnimations)
+
+        for i = startIndex, endIndex do
+            if normalAnimations[i] then
+                table.insert(currentPageAnimations, normalAnimations[i])
+            end
+        end
+    end
+
+    for _, animation in pairs(currentPageAnimations) do
+        local animationName = animation.name
+        local animationId = animation.id
+        animationTable[animationName] = {animationId}
+        table.insert(equippedAnimations, animationName)
+    end
+
+    humanoidDescription:SetEmotes(animationTable)
+    humanoidDescription:SetEquippedEmotes(equippedAnimations)
+    
+    task.wait(0.1)
+    updateAnimationImages(currentPageAnimations)
+end
+
 local function updateEmotes()
     local character, humanoid = getCharacterAndHumanoid()
     if not character or not humanoid then
+        return
+    end
+
+    if currentMode == "animation" then
+        updateAnimations()
         return
     end
 
@@ -342,6 +457,27 @@ local function updateEmotes()
 end
 
 local function calculateTotalPages()
+      if currentMode == "animation" then
+        local favoritesToUse = _G.filteredFavoritesAnimationsForDisplay or favoriteAnimations
+        local hasFavorites = #favoritesToUse > 0
+        local normalAnimationsCount = 0
+
+        for _, animation in pairs(filteredAnimations) do
+            if not isInFavorites(animation.id) then
+                normalAnimationsCount = normalAnimationsCount + 1
+            end
+        end
+
+        local pages = 0
+        if hasFavorites then
+            pages = pages + math.ceil(#favoritesToUse / itemsPerPage)
+        end
+        if normalAnimationsCount > 0 then
+            pages = pages + math.ceil(normalAnimationsCount / itemsPerPage)
+        end
+        return math.max(pages, 1)
+    end
+    
     local favoritesToUse = _G.filteredFavoritesForDisplay or favoriteEmotes
     local hasFavorites = #favoritesToUse > 0
     local normalEmotesCount = 0
@@ -408,6 +544,9 @@ local function createGUIElements()
     if emotesWheel:FindFirstChild("SpeedEmote") then
         emotesWheel.SpeedEmote:Destroy()
     end
+    if emotesWheel.Parent.Parent:FindFirstChild("Changepage") then
+        emotesWheel.Parent.Parent.Changepage:Destroy()
+    end
     if emotesWheel:FindFirstChild("SpeedBox") then
         emotesWheel.SpeedBox:Destroy()
     end
@@ -431,6 +570,8 @@ local function createGUIElements()
     UICorner_4 = Instance.new("UICorner")
     SpeedEmote = Instance.new("ImageButton")
     UICorner_2 = Instance.new("UICorner")
+    Changepage = Instance.new("ImageButton")
+     UICorner_5 = Instance.new("UICorner")
 
     Under.Name = "Under"
     Under.Parent = emotesWheel
@@ -619,6 +760,20 @@ local function createGUIElements()
     UICorner_2.CornerRadius = UDim.new(0, 10)
     UICorner_2.Parent = SpeedEmote
 
+Changepage.Name = "Changepage"
+Changepage.Parent = emotesWheel.Parent.Parent
+Changepage.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+Changepage.BackgroundTransparency = 0.400
+Changepage.BorderColor3 = Color3.fromRGB(0, 0, 0)
+Changepage.BorderSizePixel = 0
+Changepage.Position = UDim2.new(0.0037998734, 0, 0.949883461, 0)
+Changepage.Size = UDim2.new(0.0222292431, 0, 0.041958034, 0)
+Changepage.ZIndex = 3
+Changepage.Image = "rbxassetid://103834590453062"
+
+UICorner_5.CornerRadius = UDim.new(0, 10)
+UICorner_5.Parent = Changepage
+
     loadSpeedEmoteConfig()
 
     connectEvents()
@@ -785,6 +940,175 @@ local function setupEmoteClickDetection()
     end
 end
 
+local function applyAnimation(animationData)
+    local player = game.Players.LocalPlayer
+    local character = player.Character or player.CharacterAdded:Wait()
+    local humanoid = character:FindFirstChild("Humanoid")
+    local animate = character:FindFirstChild("Animate")
+    
+    if not animate or not humanoid then
+        getgenv().Notify({
+            Title = '7yd7 | Animation Error',
+            Content = '❌ Animate or Humanoid not found',
+            Duration = 3
+        })
+        return
+    end
+    
+    local bundleId = animationData.id
+    local bundledItems = animationData.bundledItems
+    
+    if not bundledItems then
+        getgenv().Notify({
+            Title = '7yd7 | Animation Error', 
+            Content = '❌ No bundled items found',
+            Duration = 3
+        })
+        return
+    end
+    
+    for _, track in pairs(humanoid:GetPlayingAnimationTracks()) do
+        track:Stop()
+    end
+    
+    for key, assetIds in pairs(bundledItems) do
+        for _, assetId in pairs(assetIds) do
+            spawn(function()
+                local success, objects = pcall(function()
+                    return game:GetObjects("rbxassetid://" .. assetId)
+                end)
+                
+                if success and objects then
+                    local function searchForAnimations(parent, parentPath)
+                        for _, child in pairs(parent:GetChildren()) do
+                            if child:IsA("Animation") then
+                                local animationPath = parentPath .. "." .. child.Name
+                                local pathParts = animationPath:split(".")
+                                
+                                if #pathParts >= 2 then
+                                    local animateCategory = pathParts[#pathParts - 1]
+                                    local animationName = pathParts[#pathParts]
+                                    
+                                    if animate:FindFirstChild(animateCategory) then
+                                        local categoryFolder = animate[animateCategory]
+                                        if categoryFolder:FindFirstChild(animationName) then
+                                            categoryFolder[animationName].AnimationId = child.AnimationId
+                                            
+                                            task.wait(0.1)
+                                            local animation = Instance.new("Animation")
+                                            animation.AnimationId = child.AnimationId
+                                            
+                                            local animTrack = humanoid.Animator:LoadAnimation(animation)
+                                            animTrack.Priority = Enum.AnimationPriority.Action
+                                            animTrack:Play()
+                                            
+                                            task.wait(0.1)
+                                            animTrack:Stop()
+                                            
+                                        end
+                                    end
+                                end
+                            elseif child:GetChildren() and #child:GetChildren() > 0 then
+                                searchForAnimations(child, parentPath .. "." .. child.Name)
+                            end
+                        end
+                    end
+                    
+                    for _, obj in pairs(objects) do
+                        searchForAnimations(obj, obj.Name)
+                        obj.Parent = workspace
+                    end
+                end
+            end)
+        end
+    end
+    
+    task.wait(.2)
+    spawn(function()
+        local humanoidDescription = humanoid:FindFirstChild("HumanoidDescription")
+        if humanoidDescription then
+            humanoid:ApplyDescription(humanoidDescription)
+        end
+    end)
+end
+
+local function monitorAnimations()
+    while currentMode == "animation" do
+        local success, frontFrame = pcall(function()
+            return game:GetService("CoreGui").RobloxGui.EmotesMenu.Children.Main.EmotesWheel.Front.EmotesButtons
+        end)
+        
+        if success and frontFrame then
+            for _, connection in pairs(emoteClickConnections) do
+                if connection then
+                    connection:Disconnect()
+                end
+            end
+            emoteClickConnections = {}
+            
+            local favoritesToUse = _G.filteredFavoritesAnimationsForDisplay or favoriteAnimations
+            local hasFavorites = #favoritesToUse > 0
+            local favoritePagesCount = hasFavorites and math.ceil(#favoritesToUse / itemsPerPage) or 0
+            local isInFavoritesPages = currentPage <= favoritePagesCount
+            
+            local currentPageAnimations = {}
+            
+            if isInFavoritesPages and hasFavorites then
+                local startIndex = (currentPage - 1) * itemsPerPage + 1
+                local endIndex = math.min(startIndex + itemsPerPage - 1, #favoritesToUse)
+                
+                for i = startIndex, endIndex do
+                    if favoritesToUse[i] then
+                        table.insert(currentPageAnimations, favoritesToUse[i])
+                    end
+                end
+            else
+                local normalAnimations = {}
+                for _, animation in pairs(filteredAnimations) do
+                    if not isInFavorites(animation.id) then
+                        table.insert(normalAnimations, animation)
+                    end
+                end
+                
+                local adjustedPage = currentPage - favoritePagesCount
+                local startIndex = (adjustedPage - 1) * itemsPerPage + 1
+                local endIndex = math.min(startIndex + itemsPerPage - 1, #normalAnimations)
+                
+                for i = startIndex, endIndex do
+                    if normalAnimations[i] then
+                        table.insert(currentPageAnimations, normalAnimations[i])
+                    end
+                end
+            end
+            
+            local buttonIndex = 1
+            for _, child in pairs(frontFrame:GetChildren()) do
+                if child:IsA("ImageLabel") and buttonIndex <= #currentPageAnimations then
+                    local clickDetector = child:FindFirstChild("ClickDetector") or Instance.new("TextButton")
+                    clickDetector.Name = "ClickDetector"
+                    clickDetector.Size = UDim2.new(1, 0, 1, 0)
+                    clickDetector.Position = UDim2.new(0, 0, 0, 0)
+                    clickDetector.BackgroundTransparency = 1
+                    clickDetector.Text = ""
+                    clickDetector.ZIndex = child.ZIndex + 1
+                    clickDetector.Parent = child
+                    
+                    local animationData = currentPageAnimations[buttonIndex]
+                    
+                    local connection = clickDetector.MouseButton1Click:Connect(function()
+                        applyAnimation(animationData)
+                    end)
+                    
+                    table.insert(emoteClickConnections, connection)
+                    buttonIndex = buttonIndex + 1
+                end
+            end
+        end
+        
+        task.wait(0.1)
+    end
+end
+
 local function stopEmoteClickDetection()
     isMonitoringClicks = false
     
@@ -871,6 +1195,42 @@ local function fetchAllEmotes()
         Duration = 5
     })
     
+    isLoading = false
+end
+
+local function fetchAllAnimations()
+    if isLoading then
+        return
+    end
+    isLoading = true
+    animationsData = {}
+    
+    local success, result = pcall(function()
+        local jsonContent = game:HttpGet("https://raw.githubusercontent.com/7yd7/sniper-Emote/refs/heads/test/AnimationSniper.json")
+        
+        if jsonContent and jsonContent ~= "" then
+            local data = HttpService:JSONDecode(jsonContent)
+            return data.data or {}
+        else
+            return nil
+        end
+    end)
+
+    if success and result then
+        for _, item in pairs(result) do
+            local animationData = {
+                id = tonumber(item.id),
+                name = item.name or ("Animation_" .. (item.id or "Unknown")),
+                bundledItems = item.bundledItems
+            }
+            if animationData.id and animationData.id > 0 then
+                table.insert(animationsData, animationData)
+            end
+        end
+    end
+
+    originalAnimationsData = animationsData
+    filteredAnimations = animationsData
     isLoading = false
 end
 
@@ -1192,6 +1552,17 @@ local function safeButtonClick(buttonName, callback)
     end
 end
 
+local function setupAnimationClickDetection()
+    if isMonitoringClicks then
+        return
+    end
+    
+    if currentMode == "animation" then
+        isMonitoringClicks = true
+        task.spawn(monitorAnimations)
+    end
+end
+
 function connectEvents()
     if _1left then
         _1left.MouseButton1Click:Connect(previousPage)
@@ -1238,6 +1609,51 @@ function connectEvents()
         end)
     end
 
+if Changepage then
+    Changepage.MouseButton1Click:Connect(function()
+        stopEmoteClickDetection()
+        
+        if currentMode == "emote" then
+            currentMode = "animation"
+            
+            spawn(function()
+                fetchAllAnimations()
+                task.wait(0.5)
+                currentPage = 1
+                totalPages = calculateTotalPages()
+                updatePageDisplay()
+                updateEmotes()
+                isMonitoringClicks = true
+                task.spawn(monitorAnimations)
+            end)
+            
+            getgenv().Notify({
+                Title = '7yd7 | Animation',
+                Content = '📄 Changed to Emote > Animation Mode',
+                Duration = 3
+            })
+
+         getgenv().Notify({
+            Title = '7yd7 | Animation',
+            Content = "⚠️ Click on any Animation ( Click to image )",
+            Duration = 5
+        })
+        else
+            currentMode = "emote"
+            currentPage = 1
+            totalPages = calculateTotalPages()
+            updatePageDisplay() 
+            updateEmotes()
+            
+            getgenv().Notify({
+                Title = '7yd7 | Emote', 
+                Content = '📄 Changed to Animation > Emote Mode',
+                Duration = 3
+            })
+        end
+    end)
+end
+
     if SpeedBox then
         SpeedBox.FocusLost:Connect(function()
             if writefile then
@@ -1259,7 +1675,8 @@ local function checkAndRecreateGUI()
 
     if not emotesWheel:FindFirstChild("Under") or not emotesWheel:FindFirstChild("Top") or
         not emotesWheel:FindFirstChild("EmoteWalkButton") or not emotesWheel:FindFirstChild("Favorite") or
-        not emotesWheel:FindFirstChild("SpeedEmote") or not emotesWheel:FindFirstChild("SpeedBox") then
+        not emotesWheel:FindFirstChild("SpeedEmote") or not emotesWheel:FindFirstChild("SpeedBox") or 
+        not emotesWheel.Parent.Parent:FindFirstChild("Changepage") then
         isGUICreated = false
         if createGUIElements() then
             updatePageDisplay()
@@ -1308,6 +1725,40 @@ local heartbeatConnection = RunService.Heartbeat:Connect(function()
         checkAndRecreateGUI()
     else
         updateGUIColors()
+    end
+end)
+
+
+local function safeFind(path, name)
+    if not path then return nil end
+    local ok, result = pcall(function()
+        return path:FindFirstChild(name)
+    end)
+    if ok then
+        return result
+    end
+    return nil
+end
+
+RunService.Heartbeat:Connect(function()
+    local robloxGui = safeFind(CoreGui, "RobloxGui")
+    if not robloxGui then return end
+
+    local emotesMenu = safeFind(robloxGui, "EmotesMenu")
+    if not emotesMenu then return end
+
+    local children = safeFind(emotesMenu, "Children")
+    if not children then return end
+
+    local main = safeFind(children, "Main")
+    if not main then return end
+
+    local changePageBtn = safeFind(children, "Changepage")
+
+    local emotesWheel = safeFind(main, "EmotesWheel")
+
+    if changePageBtn and emotesWheel then
+        changePageBtn.Visible = emotesWheel.Visible
     end
 end)
 
