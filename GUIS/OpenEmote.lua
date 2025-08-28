@@ -1,6 +1,7 @@
-local UIS = game:GetService("UserInputService")
+local UIS = game:GetService("UserInputService") 
 local TweenService = game:GetService("TweenService")
 local GuiService = game:GetService("GuiService")
+local RunService = game:GetService("RunService")
 
 local function makeDraggable(frame)
 	local dragging = false
@@ -41,11 +42,7 @@ end
 local function setupHoverEffect(button)
 	local originalSize = button.Size
 	
-	local tweenInfo = TweenInfo.new(
-		0.2, 
-		Enum.EasingStyle.Quad,
-		Enum.EasingDirection.Out
-	)
+	local tweenInfo = TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 	
 	button.MouseEnter:Connect(function()
 		local newSize = UDim2.new(
@@ -54,7 +51,6 @@ local function setupHoverEffect(button)
 			originalSize.Y.Scale * 1.1,
 			originalSize.Y.Offset * 1.1
 		)
-		
 		local tween = TweenService:Create(button, tweenInfo, {Size = newSize})
 		tween:Play()
 	end)
@@ -65,16 +61,16 @@ local function setupHoverEffect(button)
 	end)
 	
 	button.MouseButton1Click:Connect(function()
- local success, emotesMenu = pcall(function()
-        return game:GetService("CoreGui").RobloxGui.EmotesMenu.Children.Main.EmotesWheel
-    end)
-    
-    if success and emotesMenu then
-        local isVisible = emotesMenu.Visible
-        GuiService:SetEmotesMenuOpen(not isVisible)
-    else
-        GuiService:SetEmotesMenuOpen(true)
-    end
+		local success, emotesMenu = pcall(function()
+			return game:GetService("CoreGui").RobloxGui.EmotesMenu.Children.Main.EmotesWheel
+		end)
+		
+		if success and emotesMenu then
+			local isVisible = emotesMenu.Visible
+			GuiService:SetEmotesMenuOpen(not isVisible)
+		else
+			GuiService:SetEmotesMenuOpen(true)
+		end
 	end)
 end
 
@@ -94,11 +90,9 @@ button.Name = "button"
 button.Parent = OpenEmoteMobile
 button.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
 button.BackgroundTransparency = 0.400
-button.BorderColor3 = Color3.fromRGB(0, 0, 0)
 button.BorderSizePixel = 0
 button.Position = UDim2.new(0.500268757, 0, 0, 30)
 button.AnchorPoint = Vector2.new(0.5, 0.5)
-button.Selectable = false
 button.Size = UDim2.new(0.0390930399, 0, 0.0694444478, 0)
 button.ZIndex = 99999999
 button.AutoButtonColor = false
@@ -108,12 +102,9 @@ UICorner.CornerRadius = UDim.new(0, 99999)
 UICorner.Parent = button
 
 ImageLabel.Parent = button
-ImageLabel.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 ImageLabel.BackgroundTransparency = 1.000
-ImageLabel.BorderColor3 = Color3.fromRGB(0, 0, 0)
-ImageLabel.BorderSizePixel = 0
-ImageLabel.Position = UDim2.new(0.100000001, 0, 0.100000001, 0)
-ImageLabel.Size = UDim2.new(0.800000072, 0, 0.799999952, 0)
+ImageLabel.Position = UDim2.new(0.1, 0, 0.1, 0)
+ImageLabel.Size = UDim2.new(0.8, 0, 0.8, 0)
 ImageLabel.Image = "rbxassetid://85867483111516"
 
 UIListLayout.Parent = button
@@ -126,3 +117,19 @@ UIAspectRatioConstraint.AspectRatio = 1.000
 
 makeDraggable(button)
 setupHoverEffect(button)
+
+RunService.Heartbeat:Connect(function()
+	local success, mainMenu = pcall(function()
+		return game:GetService("CoreGui").RobloxGui.EmotesMenu.Children.Main.EmotesWheel
+	end)
+
+	if success and mainMenu then
+		if mainMenu.Visible then
+			button.Visible = false
+		else
+			button.Visible = true 
+		end
+	else
+		button.Visible = true 
+	end
+end)
