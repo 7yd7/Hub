@@ -544,8 +544,8 @@ local function createGUIElements()
     if emotesWheel:FindFirstChild("SpeedEmote") then
         emotesWheel.SpeedEmote:Destroy()
     end
-    if emotesWheel.Parent.Parent:FindFirstChild("Changepage") then
-        emotesWheel.Parent.Parent.Changepage:Destroy()
+    if emotesWheel:FindFirstChild("Changepage") then
+        emotesWheel.Changepage:Destroy()
     end
     if emotesWheel:FindFirstChild("SpeedBox") then
         emotesWheel.SpeedBox:Destroy()
@@ -761,15 +761,15 @@ local function createGUIElements()
     UICorner_2.Parent = SpeedEmote
 
 Changepage.Name = "Changepage"
-Changepage.Parent = emotesWheel.Parent.Parent
+Changepage.Parent = emotesWheel
 Changepage.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
 Changepage.BackgroundTransparency = 0.400
 Changepage.BorderColor3 = Color3.fromRGB(0, 0, 0)
 Changepage.BorderSizePixel = 0
-Changepage.Position = UDim2.new(0.0037998734, 0, 0.949883461, 0)
-Changepage.Size = UDim2.new(0.0222292431, 0, 0.041958034, 0)
+Changepage.Position = UDim2.new(0.019, 0,1.021, 0)
+Changepage.Size = UDim2.new(0.087, 0,0.087, 0)
 Changepage.ZIndex = 3
-Changepage.Image = "rbxassetid://103834590453062"
+Changepage.Image = "rbxassetid://13285615740"
 
 UICorner_5.CornerRadius = UDim.new(0, 10)
 UICorner_5.Parent = Changepage
@@ -1676,7 +1676,7 @@ local function checkAndRecreateGUI()
     if not emotesWheel:FindFirstChild("Under") or not emotesWheel:FindFirstChild("Top") or
         not emotesWheel:FindFirstChild("EmoteWalkButton") or not emotesWheel:FindFirstChild("Favorite") or
         not emotesWheel:FindFirstChild("SpeedEmote") or not emotesWheel:FindFirstChild("SpeedBox") or 
-        not emotesWheel.Parent.Parent:FindFirstChild("Changepage") then
+        not emotesWheel:FindFirstChild("Changepage") then
         isGUICreated = false
         if createGUIElements() then
             updatePageDisplay()
@@ -1753,9 +1753,9 @@ RunService.Heartbeat:Connect(function()
     local main = safeFind(children, "Main")
     if not main then return end
 
-    local changePageBtn = safeFind(children, "Changepage")
-
     local emotesWheel = safeFind(main, "EmotesWheel")
+
+        local changePageBtn = safeFind(emotesWheel, "Changepage")
 
     if changePageBtn and emotesWheel then
         changePageBtn.Visible = emotesWheel.Visible
