@@ -1618,7 +1618,6 @@ if Changepage then
             
             spawn(function()
                 fetchAllAnimations()
-                task.wait(0.5)
                 currentPage = 1
                 totalPages = calculateTotalPages()
                 updatePageDisplay()
