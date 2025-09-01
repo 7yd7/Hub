@@ -174,7 +174,7 @@ end
 local function startContinuousLoop()
     task.spawn(function()
         while true do
-            task.wait(0.3)
+            task.wait(2)
             
             applyPlayerChanges()
             
