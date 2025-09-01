@@ -1,4 +1,5 @@
 --[[ Hide some client information or cheat bypass I don't know
+
 getgenv().IdentityConfig = getgenv().IdentityConfig or {
     FakeName = "???",
     FakeUserId = 1,
@@ -9,7 +10,7 @@ getgenv().IdentityConfig = getgenv().IdentityConfig or {
     FakeGameName = "???",
 }
 
-
+loadstring(game:HttpGet("https://raw.githubusercontent.com/7yd7/Hub/refs/heads/Branch/other/Hide-identity.lua"))()
 ]]
 
 local Players = game:GetService("Players")
