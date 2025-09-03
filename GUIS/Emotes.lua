@@ -1420,7 +1420,7 @@ local function onCharacterAdded(character)
     local humanoid = character:WaitForChild("Humanoid")
     local animator = humanoid:WaitForChild("Animator")
 
- if getgenv().autoReloadEnabled and getgenv().lastPlayedAnimation and currentMode == "animation" then
+ if getgenv().autoReloadEnabled and getgenv().lastPlayedAnimation then
     task.wait(.3)
     applyAnimation(getgenv().lastPlayedAnimation)
     getgenv().Notify({
