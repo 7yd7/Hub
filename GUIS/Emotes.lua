@@ -43,6 +43,9 @@ local filteredAnimations = {}
 local favoriteAnimations = {}
 local favoriteAnimationsFileName = "FavoriteAnimations.json"
 
+getgenv().lastPlayedAnimation = getgenv().lastPlayedAnimation or nil
+getgenv().autoReloadEnabled = getgenv().autoReloadEnabled or false
+
 RunService.Heartbeat:Connect(function()
     if player.Character and player.Character.Humanoid.RigType == Enum.HumanoidRigType.R6 then
         local errorMsg = CoreGui.RobloxGui.EmotesMenu.Children.ErrorMessage
@@ -98,7 +101,8 @@ local speedEmoteEnabled = false
 local speedEmoteConfigFile = "SpeedEmoteConfig.json"
 
 local Under, UIListLayout, _1left, _9right, _4pages, _3TextLabel, _2Routenumber, Top, EmoteWalkButton, UICorner1,
-    UIListLayout_2, UICorner, Search, Favorite, UICorner2, UICorner_2, SpeedEmote, UICorner_4, SpeedBox, UICorner_5, Changepage
+    UIListLayout_2, UICorner, Search, Favorite, UICorner2, UICorner_2, SpeedEmote, UICorner_4, SpeedBox, UICorner_5, Changepage,
+    Reload, UICorner_6
 
 local defaultButtonImage = "rbxassetid://71408678974152"
 local enabledButtonImage = "rbxassetid://106798555684020"
@@ -222,6 +226,12 @@ local function updateGUIColors()
         Favorite.BackgroundColor3 = bgColor
         Favorite.BackgroundTransparency = bgTransparency
     end
+
+if Reload then
+    Reload.BackgroundColor3 = bgColor
+    Reload.BackgroundTransparency = bgTransparency
+    Reload.Visible = (currentMode == "animation")
+end
 end
 
 local function urlToId(animationId)
@@ -550,6 +560,9 @@ local function createGUIElements()
     if emotesWheel:FindFirstChild("SpeedBox") then
         emotesWheel.SpeedBox:Destroy()
     end
+    if emotesWheel:FindFirstChild("Reload") then
+        emotesWheel.Reload:Destroy()
+    end
 
     Under = Instance.new("Frame")
     UIListLayout = Instance.new("UIListLayout")
@@ -572,6 +585,8 @@ local function createGUIElements()
     UICorner_2 = Instance.new("UICorner")
     Changepage = Instance.new("ImageButton")
      UICorner_5 = Instance.new("UICorner")
+     Reload = Instance.new("ImageButton")
+     UICorner_6 = Instance.new("UICorner")
 
     Under.Name = "Under"
     Under.Parent = emotesWheel
@@ -774,6 +789,20 @@ Changepage.Image = "rbxassetid://13285615740"
 UICorner_5.CornerRadius = UDim.new(0, 10)
 UICorner_5.Parent = Changepage
 
+Reload.Name = "Reload"
+Reload.Parent = emotesWheel
+Reload.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+Reload.BackgroundTransparency = 0.400
+Reload.BorderColor3 = Color3.fromRGB(0, 0, 0)
+Reload.BorderSizePixel = 0
+Reload.Position = UDim2.new(0.888999999, 0, 1.02100003, 0)
+Reload.Size = UDim2.new(0.0869999975, 0, 0.0869999975, 0)
+Reload.ZIndex = 3
+Reload.Image = "rbxassetid://127493377027615"
+
+UICorner_6.CornerRadius = UDim.new(0, 10)
+UICorner_6.Parent = Reload
+
     loadSpeedEmoteConfig()
 
     connectEvents()
@@ -957,6 +986,8 @@ local function applyAnimation(animationData)
     
     local bundleId = animationData.id
     local bundledItems = animationData.bundledItems
+
+    getgenv().lastPlayedAnimation = animationData
     
     if not bundledItems then
         getgenv().Notify({
@@ -1004,11 +1035,10 @@ local function applyAnimation(animationData)
                                             
                                             task.wait(0.1)
                                             animTrack:Stop()
-                                            
                                         end
                                     end
                                 end
-                            elseif child:GetChildren() and #child:GetChildren() > 0 then
+                            elseif #child:GetChildren() > 0 then
                                 searchForAnimations(child, parentPath .. "." .. child.Name)
                             end
                         end
@@ -1017,6 +1047,9 @@ local function applyAnimation(animationData)
                     for _, obj in pairs(objects) do
                         searchForAnimations(obj, obj.Name)
                         obj.Parent = workspace
+                        task.delay(1, function()
+                            if obj then obj:Destroy() end
+                        end)
                     end
                 end
             end)
@@ -1031,6 +1064,7 @@ local function applyAnimation(animationData)
         end
     end)
 end
+
 
 local function monitorAnimations()
     while currentMode == "animation" do
@@ -1386,6 +1420,16 @@ local function onCharacterAdded(character)
     local humanoid = character:WaitForChild("Humanoid")
     local animator = humanoid:WaitForChild("Animator")
 
+ if getgenv().autoReloadEnabled and getgenv().lastPlayedAnimation and currentMode == "animation" then
+    task.wait(.3)
+    applyAnimation(getgenv().lastPlayedAnimation)
+    getgenv().Notify({
+        Title = '7yd7 | Auto Reload Animation',
+        Content = '🔄 The last animation was automatically \n reapplied',
+        Duration = 3
+    })
+end
+
     animator.AnimationPlayed:Connect(function(animationTrack)
         if isDancing(character, animationTrack) then
             local playedEmoteId = urlToId(animationTrack.Animation.AnimationId)
@@ -1479,7 +1523,7 @@ local function toggleEmoteWalk()
         end
     end
 end
-
+print(Players.LocalPlayer.Name)
 local function toggleSpeedEmote()
     speedEmoteEnabled = not speedEmoteEnabled
 
@@ -1563,6 +1607,24 @@ local function setupAnimationClickDetection()
     end
 end
 
+local function toggleAutoReload()
+    getgenv().autoReloadEnabled = not getgenv().autoReloadEnabled
+    
+    if getgenv().autoReloadEnabled then
+        getgenv().Notify({
+            Title = '7yd7 | Auto Reload Animation',
+            Content = "🔄 Auto Reload ON",
+            Duration = 5
+        })
+    else
+        getgenv().Notify({
+            Title = '7yd7 | Auto Reload Animation',
+            Content = '🔄 Auto Reload OFF',
+            Duration = 3
+        })
+    end
+end
+
 function connectEvents()
     if _1left then
         _1left.MouseButton1Click:Connect(previousPage)
@@ -1608,6 +1670,12 @@ function connectEvents()
             safeButtonClick("SpeedEmote", toggleSpeedEmote)
         end)
     end
+
+    if Reload then
+    Reload.MouseButton1Click:Connect(function()
+        safeButtonClick("AutoReload", toggleAutoReload)
+    end)
+end
 
 if Changepage then
     Changepage.MouseButton1Click:Connect(function()
@@ -1674,8 +1742,8 @@ local function checkAndRecreateGUI()
 
     if not emotesWheel:FindFirstChild("Under") or not emotesWheel:FindFirstChild("Top") or
         not emotesWheel:FindFirstChild("EmoteWalkButton") or not emotesWheel:FindFirstChild("Favorite") or
-        not emotesWheel:FindFirstChild("SpeedEmote") or not emotesWheel:FindFirstChild("SpeedBox") or 
-        not emotesWheel:FindFirstChild("Changepage") then
+        not emotesWheel:FindFirstChild("SpeedEmote") or not emotesWheel:FindFirstChild("SpeedBox") or
+        not emotesWheel:FindFirstChild("Changepage") or not emotesWheel:FindFirstChild("Reload") then
         isGUICreated = false
         if createGUIElements() then
             updatePageDisplay()
@@ -1738,28 +1806,6 @@ local function safeFind(path, name)
     end
     return nil
 end
-
-RunService.Heartbeat:Connect(function()
-    local robloxGui = safeFind(CoreGui, "RobloxGui")
-    if not robloxGui then return end
-
-    local emotesMenu = safeFind(robloxGui, "EmotesMenu")
-    if not emotesMenu then return end
-
-    local children = safeFind(emotesMenu, "Children")
-    if not children then return end
-
-    local main = safeFind(children, "Main")
-    if not main then return end
-
-    local emotesWheel = safeFind(main, "EmotesWheel")
-
-        local changePageBtn = safeFind(emotesWheel, "Changepage")
-
-    if changePageBtn and emotesWheel then
-        changePageBtn.Visible = emotesWheel.Visible
-    end
-end)
 
 RunService.Stepped:Connect(function()
     if humanoid and currentEmoteTrack and currentEmoteTrack.IsPlaying then
