@@ -16,6 +16,9 @@ end
 
 getgenv().update = function()
     local text = [[
+1.0.5 | 2025/9/5
+  * added Evasion of a bomb New Mode > Go to Up + Spin
+
 1.0.4 | 2025/8/20
   * Improve Auto Join
   * Improve Player Evasion
@@ -945,7 +948,7 @@ getgenv().SmartEvasion = false
 
 local EvasionModeDropdown = Tabs.Gameworks:AddDropdown("EvasionMode", {
     Title = "Evasion of a bomb Mode",
-    Values = {"Player Evasion"--[[, "Go to Up + Spin"]]},
+    Values = {"Player Evasion", "Go to Up + Spin"},
     Multi = false,
     Default = 1
 })
@@ -972,20 +975,97 @@ EvasionToggle:OnChanged(function()
 end)
 
 local function goToUpAndSpin()
-    local character = localPlayer.Character
-    if not character or not character:FindFirstChild("HumanoidRootPart") then return end
-    
-    local root = character.HumanoidRootPart
-    local targetPos = Vector3.new(116.876785, 47, 34.0727844)
+    spawn(function()
+        local targetCenter = Vector3.new(116.876785, 47, 34.0727844)
+        local circleRadius = 30
+        local circleSpeed = 0.1 
+        local currentAngle = 0
+        local isAtTarget = false
+        local emergencyMode = false
+        
+        local function touchingLavaCopy(character)
+            if not character or not character:FindFirstChild("HumanoidRootPart") then return false end
+            local hrp = character.HumanoidRootPart
+            local touchingParts = hrp:GetTouchingParts()
+            for _, part in ipairs(touchingParts) do
+                if part.Name:sub(1, 8) == "LavaCopy" then
+                    return true
+                end
+            end
+            return false
+        end
 
-    local tweenInfo = TweenInfo.new(1, Enum.EasingStyle.Linear, Enum.EasingDirection.Out)
-    local tween = TweenService:Create(root, tweenInfo, {CFrame = CFrame.new(targetPos)})
-    tween:Play()
-    tween.Completed:Wait()
+        local function moveToTargetHeight()
+            local character = localPlayer.Character
+            if not character or not character:FindFirstChild("HumanoidRootPart") then return false end
+            
+            local root = character.HumanoidRootPart
+            local currentPos = root.Position
+            
+            if math.abs(currentPos.Y - targetCenter.Y) < 2 then
+                isAtTarget = true
+                return true
+            end
+            
+            root.CFrame = CFrame.new(targetCenter)
+            isAtTarget = true
+            
+            return true
+        end
 
-    if spinConnection then spinConnection:Disconnect() end
-    spinConnection = RunService.Heartbeat:Connect(function()
-        root.CFrame = root.CFrame * CFrame.Angles(0, math.rad(30), 0) 
+        local function performCircularMovement()
+            local character = localPlayer.Character
+            if not character or not character:FindFirstChild("HumanoidRootPart") then return end
+            
+            local root = character.HumanoidRootPart
+            currentAngle = currentAngle + circleSpeed
+            
+            local x = targetCenter.X + math.cos(currentAngle) * circleRadius
+            local z = targetCenter.Z + math.sin(currentAngle) * circleRadius
+            local circlePos = Vector3.new(x, targetCenter.Y, z)
+            
+            root.CFrame = CFrame.new(circlePos)
+        end
+
+        while getgenv().SmartEvasion do
+            task.wait(0.01) 
+
+            if not isInGame() then
+                task.wait(0.2)
+                continue
+            end
+
+            local character = localPlayer.Character
+            if not character or not character:FindFirstChild("HumanoidRootPart") then
+                task.wait()
+                continue
+            end
+
+            local humanoidRootPart = character.HumanoidRootPart
+            local currentPosition = humanoidRootPart.Position
+
+            if touchingLavaCopy(character) then
+                emergencyMode = true
+                humanoidRootPart.CFrame = humanoidRootPart.CFrame + Vector3.new(0, 60, 0)
+                task.wait(0.1)
+                continue
+            end
+
+            local enemies, currentArena = detectEnemyPlayers()
+            local enemiesWithBombs = getEnemiesWithBombs(enemies)
+
+            if #enemiesWithBombs > 0 and not isUsingBomb then
+                emergencyMode = false
+                
+                if not isAtTarget then
+                    moveToTargetHeight()
+                else
+                    performCircularMovement()
+                end
+            else
+                emergencyMode = false
+            end
+        end
     end)
 end
 
@@ -1594,8 +1674,6 @@ end)
          workspace.Arenas.Arena5ICED.Map.Ice.CustomPhysicalProperties = PhysicalProperties.new(0, 0, 0)
     end
 })
-
-
 end
 
 loadstring(game:HttpGet("https://raw.githubusercontent.com/7yd7/Hub/refs/heads/Branch/NoGame.lua"))()
