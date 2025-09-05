@@ -16,6 +16,9 @@ end
 
 getgenv().update = function()
     local text = [[
+1.0.4 | 2025/9/5
+  * added Hit Mode > Hit When Fully Grown
+
 1.0.3 | 2025/7/5
   * improvement Contribute To Expand
 
@@ -138,13 +141,11 @@ function getInitialResourcesList()
 end
 
 local Toggle = Tabs.Gameworks:AddToggle("AutoHitResource", {
-    Title = "Auto Hit Resource", 
+    Title = "Auto Hit Resource",
     Default = false
 })
-
 Toggle:OnChanged(function()
     getgenv().AutoA = Options.AutoHitResource.Value
-
     if getgenv().AutoA then
         startAutoHitResourceLoop()
     else
@@ -152,13 +153,27 @@ Toggle:OnChanged(function()
     end
 end)
 
+getgenv().HitModeDropdown = Tabs.Gameworks:AddDropdown("HitModeSelection", {
+    Title = "Hit Mode",
+    Description = "Choose when to hit resources",
+    Values = {"Hit When Growing", "Hit When Fully Grown"},
+    Multi = false,
+    Default = 1,
+})
+
+getgenv().HitMode = "Hit When Growing" 
+
+getgenv().HitModeDropdown:OnChanged(function(Value)
+    getgenv().HitMode = Value
+end)
+
 local initialValues = getInitialResourcesList()
 getgenv().ResourcesList = initialValues
 
 getgenv().ResourcesDropdown = Tabs.Gameworks:AddDropdown("ResourcesSelection", {
     Title = "Select Resources to Hit",
-    Description = "Choose which resources to automatically hit. 'All' will hit everything.",
-    Values = initialValues, 
+    Description = "Choose which resources to automatically hit.",
+    Values = initialValues,
     Multi = true,
     Default = {"All"},
 })
@@ -170,49 +185,120 @@ getgenv().ResourcesDropdown:OnChanged(function(Value)
             table.insert(selectedValues, resourceName)
         end
     end
-    
+   
     getgenv().SelectedResources = selectedValues
-    
-
 end)
 
 function shouldHitResource(resourceName)
-    for _, selected in ipairs(getgenv().SelectedResources) do
+    for _, selected in ipairs(getgenv().SelectedResources or {}) do
         if selected == "All" then
             return true
         end
-    end
-    
-    for _, selected in ipairs(getgenv().SelectedResources) do
         if selected == resourceName then
             return true
+        end
+    end
+    return false
+end
+
+function isResourceFullyGrown(resource)
+    local highestNumber = -1
+    
+    for _, child in ipairs(resource:GetChildren()) do
+        local number = tonumber(child.Name)
+        if number and number > highestNumber then
+            highestNumber = number
+        end
+    end
+    
+    if highestNumber >= 0 then
+        local highestChild = resource:FindFirstChild(tostring(highestNumber))
+        if highestChild then
+            for _, part in ipairs(highestChild:GetChildren()) do
+                if part:IsA("Part") then
+                    return part.Transparency == 0
+                end
+            end
         end
     end
     
     return false
 end
 
+function hitWhenFullyGrown(resource)
+    local numbers = {}
+    for _, child in ipairs(resource:GetChildren()) do
+        local number = tonumber(child.Name)
+        if number and number >= 0 then
+            table.insert(numbers, number)
+        end
+    end
+    
+    if #numbers == 0 then return false end
+    
+    table.sort(numbers, function(a, b) return a > b end)
+    
+    local highestNumber = numbers[1]
+    local highestChild = resource:FindFirstChild(tostring(highestNumber))
+    if not highestChild then return false end
+    
+    local highestPart = nil
+    for _, part in ipairs(highestChild:GetChildren()) do
+        if part:IsA("Part") then
+            highestPart = part
+            break
+        end
+    end
+    
+    if not highestPart or highestPart.Transparency ~= 0 then
+        return false 
+    end
+    
+    for _, number in ipairs(numbers) do
+        local numberChild = resource:FindFirstChild(tostring(number))
+        if numberChild then
+            for _, part in ipairs(numberChild:GetChildren()) do
+                if part:IsA("Part") then
+                    if part.Transparency == 1 then
+                        return true
+                    elseif part.Transparency == 0 then
+                        local success, errorMsg = pcall(function()
+                            game:GetService("ReplicatedStorage").Communication.HitResource:FireServer(resource)
+                        end)
+                    end
+                    break 
+                end
+            end
+        end
+    end
+    
+    return true
+end
+
 function startAutoHitResourceLoop()
     spawn(function()
-        while getgenv().AutoA do 
+        while getgenv().AutoA do
             wait(getgenv().SpeedAutoHitResource)
-            
+           
             local Players = game:GetService("Players")
             local ReplicatedStorage = game:GetService("ReplicatedStorage")
-            
+           
             local localPlayer = Players.LocalPlayer
             local plotName = localPlayer.Name
             local plot = workspace:FindFirstChild("Plots"):FindFirstChild(plotName)
-            
+           
             if plot and plot:FindFirstChild("Resources") then
                 for _, resource in ipairs(plot.Resources:GetChildren()) do
                     if shouldHitResource(resource.Name) then
                         if resource and resource.Parent then
-                            local success, errorMsg = pcall(function()
-                                ReplicatedStorage.Communication.HitResource:FireServer(resource)
-                            end)
-                            
-                         end
+                            if getgenv().HitMode == "Hit When Growing" then
+                                local success, errorMsg = pcall(function()
+                                    ReplicatedStorage.Communication.HitResource:FireServer(resource)
+                                end)
+                            elseif getgenv().HitMode == "Hit When Fully Grown" then
+                                hitWhenFullyGrown(resource)
+                            end
+                        end
                     end
                 end
             end
@@ -220,11 +306,10 @@ function startAutoHitResourceLoop()
     end)
 end
 
-
 function startResourcesUpdateLoop()
     spawn(function()
         while true do
-            wait(1) 
+            wait(1)
             updateResourcesList()
         end
     end)
