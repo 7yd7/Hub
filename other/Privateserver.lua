@@ -1,4 +1,7 @@
 --[[
+loadstring(game:HttpGet("https://raw.githubusercontent.com/7yd7/Hub/refs/heads/Branch/other/Privateserver.lua"))()
+
+
  Script not made by me, My process has been made easy.
  
  By: HeardKometa ( unsure )
