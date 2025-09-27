@@ -7,10 +7,91 @@ loadstring(game:HttpGet("https://raw.githubusercontent.com/7yd7/Hub/refs/heads/B
  By: HeardKometa ( unsure )
 ]]
 
-local CONFIG = {
-    AUTO_COPY_TO_CLIPBOARD = false,
-    AUTO_TELEPORT = true 
+getgenv().CONFIG = getgenv().CONFIG or {
+    placeId = nil,
+    accessCode = nil
 }
+
+local Loading = Instance.new("ScreenGui")
+local Frame = Instance.new("Frame")
+local ImageLoading = Instance.new("ImageLabel")
+local UIAspectRatioConstraint = Instance.new("UIAspectRatioConstraint")
+local UICorner = Instance.new("UICorner")
+local ErrorText = Instance.new("TextLabel")
+local UITextSizeConstraint = Instance.new("UITextSizeConstraint")
+local UIAspectRatioConstraint_2 = Instance.new("UIAspectRatioConstraint")
+local UIAspectRatioConstraint_3 = Instance.new("UIAspectRatioConstraint")
+
+Loading.Name = "Loading"
+Loading.Parent = game.CoreGui
+Loading.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+
+Frame.Parent = Loading
+Frame.BackgroundColor3 = Color3.fromRGB(18, 18, 18)
+Frame.BorderColor3 = Color3.fromRGB(0, 0, 0)
+Frame.BorderSizePixel = 0
+Frame.Position = UDim2.new(0.40234375, 0, 0.326388896, 0)
+Frame.Size = UDim2.new(0.1953125, 0, 0.347222179, 0)
+
+ImageLoading.Name = "ImageLoading"
+ImageLoading.Parent = Frame
+ImageLoading.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+ImageLoading.BackgroundTransparency = 1.000
+ImageLoading.BorderColor3 = Color3.fromRGB(0, 0, 0)
+ImageLoading.BorderSizePixel = 0
+ImageLoading.Position = UDim2.new(0.300000012, 0, 0.300000012, 0)
+ImageLoading.Size = UDim2.new(0.400000006, 0, 0.400000036, 0)
+ImageLoading.Image = "rbxassetid://2459243309"
+
+UIAspectRatioConstraint.Parent = ImageLoading
+
+UICorner.CornerRadius = UDim.new(0, 20)
+UICorner.Parent = Frame
+
+ErrorText.Name = "ErrorText"
+ErrorText.Parent = Frame
+ErrorText.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+ErrorText.BackgroundTransparency = 1.000
+ErrorText.BorderColor3 = Color3.fromRGB(0, 0, 0)
+ErrorText.BorderSizePixel = 0
+ErrorText.Position = UDim2.new(0.0971999988, 0, 0.7524001, 0)
+ErrorText.Size = UDim2.new(0.800000072, 0, 0.200000033, 0)
+ErrorText.Font = Enum.Font.SourceSansBold
+ErrorText.TextColor3 = Color3.fromRGB(255, 0, 0)
+ErrorText.TextScaled = true
+ErrorText.TextSize = 30.000
+ErrorText.TextWrapped = true
+ErrorText.Visible = false
+
+UITextSizeConstraint.Parent = ErrorText
+UITextSizeConstraint.MaxTextSize = 30
+
+UIAspectRatioConstraint_2.Parent = ErrorText
+UIAspectRatioConstraint_2.AspectRatio = 4.000
+
+UIAspectRatioConstraint_3.Parent = Frame
+UIAspectRatioConstraint_3.AspectRatio = 1.000
+
+local TweenService = game:GetService("TweenService")
+local function startLoadingAnimation()
+    local rotationTween = TweenService:Create(
+        ImageLoading,
+        TweenInfo.new(1, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut, -1),
+        {Rotation = 360}
+    )
+    rotationTween:Play()
+    return rotationTween
+end
+
+local function showError(errorMessage)
+    ErrorText.Text = errorMessage
+    ErrorText.Visible = true
+    
+    task.wait(3)
+    if Loading then
+        Loading:Destroy()
+    end
+end
 
 local md5 = {}
 local hmac = {}
@@ -154,14 +235,6 @@ do
     end
 end
 
-local function generateSecureUUID()
-    local template = 'xxxx-xxxx-4xxx-yxxx-xxxx'
-    return string.gsub(template, '[xy]', function(c)
-        local v = (c == 'x') and math.random(0, 0xf) or math.random(8, 0xb)
-        return string.format('%x', v)
-    end)
-end
-
 local function GenerateReservedServerCode(placeId)
     if not placeId or placeId <= 0 then
         error("Invalid Place ID provided")
@@ -193,7 +266,6 @@ local function GenerateReservedServerCode(placeId)
     end
 
     local content = firstBytes .. placeIdBytes
-
     local ROBLOX_SECRET_KEY = "e4Yn8ckbCJtw2sv7qmbg"
     local signature = hmac.new(ROBLOX_SECRET_KEY, content, md5.sum)
 
@@ -218,21 +290,15 @@ local function TeleportToPrivateServer(placeId, accessCode)
         game.RobloxReplicatedStorage.ContactListIrisInviteTeleport:FireServer(placeId, "", accessCode)
     end)
     
-
-        return false
+    if not success then
+        return false, err
+    end
+    return true
 end
 
-local function safeCopyToClipboard(text)
-    if not CONFIG.AUTO_COPY_TO_CLIPBOARD then return false end
-    
-    local success, err = pcall(function()
-        setclipboard(text)
-    end)
-    
-        return false
-    end
-
 local function main()
+    local rotationTween = startLoadingAnimation()
+    
     local success, result = pcall(function()
         local currentPlaceId = game.PlaceId
         
@@ -240,58 +306,39 @@ local function main()
             error("Cannot get valid Place ID")
         end
 
-        
+        if getgenv().CONFIG.placeId and getgenv().CONFIG.accessCode and 
+           getgenv().CONFIG.placeId == currentPlaceId then
+            
+            
+            local teleportSuccess, teleportError = TeleportToPrivateServer(getgenv().CONFIG.placeId, getgenv().CONFIG.accessCode)
+            
+            if teleportSuccess then
+                return true
+            else
+            end
+        end
+
+
         local accessCode, gameCode = GenerateReservedServerCode(currentPlaceId)
         
-        print("=== PRIVATE SERVER INFO ===")
-        print("Place ID: " .. currentPlaceId)
-        print("Access Code: " .. accessCode)
-        print("Game Code: " .. gameCode)
-        print("==========================")
+        local teleportSuccess, teleportError = TeleportToPrivateServer(currentPlaceId, accessCode)
         
-        safeCopyToClipboard(accessCode)
-        
-        if CONFIG.AUTO_TELEPORT then
-            TeleportToPrivateServer(currentPlaceId, accessCode)
+        if teleportSuccess then
+            getgenv().CONFIG.placeId = currentPlaceId
+            getgenv().CONFIG.accessCode = accessCode
+            
+            return true
+        else
+            return false
         end
-        
-        return accessCode
     end)
     
-    if success then
-        return result
-    else
-        error("Script failed: " .. tostring(result))
+    if not success then
+        if rotationTween then
+            rotationTween:Cancel()
+        end
+        showError("Error: " .. tostring(result))
     end
 end
 
-local function manualTeleport(accessCode)
-    if not accessCode or accessCode == "" then
-        return false
-    end
-    
-    return TeleportToPrivateServer(game.PlaceId, accessCode)
-end
-
-local generatedAccessCode = main()
-
-
-_G.TeleportToPrivateServer = manualTeleport
-_G.GenerateNewServerCode = main
-_G.GetLastAccessCode = function() return generatedAccessCode end
-
---[[
-==============================================
-USAGE EXAMPLES:
-
-1. Manual teleport with custom code:
-   _G.TeleportToPrivateServer("your_access_code_here")
-
-2. Generate new server code:
-   local newCode = _G.GenerateNewServerCode()
-
-3. Get last generated code:
-   local lastCode = _G.GetLastAccessCode()
-
-==============================================
-]]--
+main()
