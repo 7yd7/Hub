@@ -42,6 +42,8 @@ local originalAnimationsData = {}
 local filteredAnimations = {}
 local favoriteAnimations = {}
 local favoriteAnimationsFileName = "FavoriteAnimations.json"
+local emoteSearchTerm = ""
+local animationSearchTerm = ""
 
 getgenv().lastPlayedAnimation = getgenv().lastPlayedAnimation or nil
 getgenv().autoReloadEnabled = getgenv().autoReloadEnabled or false
@@ -247,6 +249,13 @@ local function saveFavorites()
     end
 end
 
+local function saveFavoritesAnimations()
+    if writefile then
+        local jsonData = HttpService:JSONEncode(favoriteAnimations)
+        writefile(favoriteAnimationsFileName, jsonData)
+    end
+end
+
 local function loadFavorites()
     if readfile and isfile and isfile(favoriteFileName) then
         local success, result = pcall(function()
@@ -304,9 +313,16 @@ local function getEmoteName(assetId)
     end
 end
 
-local function isInFavorites(emoteId)
-    for _, favorite in pairs(favoriteEmotes) do
-        if favorite.id == tostring(emoteId) then
+local function isInFavorites(assetId)
+    local favoriteList
+    if currentMode == "animation" then
+        favoriteList = favoriteAnimations
+    else
+        favoriteList = favoriteEmotes
+    end
+
+    for _, favorite in pairs(favoriteList) do
+        if tostring(favorite.id) == tostring(assetId) then
             return true
         end
     end
@@ -324,12 +340,74 @@ local function updateAnimationImages(currentPageAnimations)
     
     local buttonIndex = 1
     for _, child in pairs(frontFrame:GetChildren()) do
-        if child:IsA("ImageLabel") and buttonIndex <= #currentPageAnimations then
-            local animationData = currentPageAnimations[buttonIndex]
-            child.Image = "rbxthumb://type=BundleThumbnail&id=" .. animationData.id .. "&w=420&h=420"
-            buttonIndex = buttonIndex + 1
-        elseif child:IsA("ImageLabel") then
-            child.Image = ""
+        if child:IsA("ImageLabel") then
+            if buttonIndex <= #currentPageAnimations then
+                local animationData = currentPageAnimations[buttonIndex]
+                child.Image = "rbxthumb://type=BundleThumbnail&id=" .. animationData.id .. "&w=420&h=420"
+                
+                local idValue = child:FindFirstChild("AnimationID") or Instance.new("IntValue")
+                idValue.Name = "AnimationID"
+                idValue.Value = animationData.id
+                idValue.Parent = child
+
+                buttonIndex = buttonIndex + 1
+            else
+                child.Image = ""
+                local idValue = child:FindFirstChild("AnimationID")
+                if idValue then 
+                    idValue:Destroy() 
+                end
+            end
+        end
+    end
+end
+
+
+local function updateFavoriteIcon(imageLabel, assetId, isFavorite)
+    local favoriteIcon = imageLabel:FindFirstChild("FavoriteIcon")
+    
+    if not favoriteIcon then
+        favoriteIcon = Instance.new("ImageLabel")
+        favoriteIcon.Name = "FavoriteIcon"
+        favoriteIcon.Size = UDim2.new(0.3, 0, 0.3, 0) 
+        favoriteIcon.Position = UDim2.new(0.7, 0, 0, 0)
+        favoriteIcon.AnchorPoint = Vector2.new(0, 0)
+        favoriteIcon.BackgroundTransparency = 1
+        favoriteIcon.ZIndex = imageLabel.ZIndex + 5
+        favoriteIcon.ScaleType = Enum.ScaleType.Fit
+        favoriteIcon.Parent = imageLabel
+    end
+    
+    if isFavorite then
+        favoriteIcon.Image = favoriteIconId
+    else
+        favoriteIcon.Image = notFavoriteIconId 
+    end
+end
+
+local function updateAllFavoriteIcons()
+    local success, frontFrame = pcall(function()
+        return game:GetService("CoreGui").RobloxGui.EmotesMenu.Children.Main.EmotesWheel.Front.EmotesButtons
+    end)
+    
+    if success and frontFrame then
+        for _, child in pairs(frontFrame:GetChildren()) do
+            if child:IsA("ImageLabel") and child.Image ~= "" then
+                local assetId
+                if currentMode == "animation" then
+                    local idValue = child:FindFirstChild("AnimationID")
+                    if idValue then
+                        assetId = idValue.Value
+                    end
+                else
+                    assetId = extractAssetId(child.Image)
+                end
+                
+                if assetId then
+                    local isFavorite = isInFavorites(assetId)
+                    updateFavoriteIcon(child, assetId, isFavorite)
+                end
+            end
         end
     end
 end
@@ -397,6 +475,12 @@ local function updateAnimations()
     
     task.wait(0.1)
     updateAnimationImages(currentPageAnimations)
+
+    task.delay(0.2, function()
+        if favoriteEnabled then
+            updateAllFavoriteIcons()
+        end
+    end)
 end
 
 local function updateEmotes()
@@ -464,6 +548,12 @@ local function updateEmotes()
 
     humanoidDescription:SetEmotes(emoteTable)
     humanoidDescription:SetEquippedEmotes(equippedEmotes)
+    
+    task.delay(0.2, function()
+        if favoriteEnabled then
+            updateAllFavoriteIcons()
+        end
+    end)
 end
 
 local function calculateTotalPages()
@@ -818,48 +908,6 @@ local function updatePageDisplay()
     end
 end
 
-local function updateFavoriteIcon(imageLabel, assetId, isFavorite)
-    local favoriteIcon = imageLabel:FindFirstChild("FavoriteIcon")
-    
-    if not favoriteIcon then
-        favoriteIcon = Instance.new("ImageLabel")
-        favoriteIcon.Name = "FavoriteIcon"
-        favoriteIcon.Size = UDim2.new(0.3, 0, 0.3, 0) 
-        favoriteIcon.Position = UDim2.new(0.7, 0, 0, 0)
-        favoriteIcon.AnchorPoint = Vector2.new(0, 0)
-        favoriteIcon.BackgroundTransparency = 1
-        favoriteIcon.ZIndex = imageLabel.ZIndex + 5
-        favoriteIcon.ScaleType = Enum.ScaleType.Fit
-        favoriteIcon.Parent = imageLabel
-    end
-    
-    if isFavorite then
-        favoriteIcon.Image = favoriteIconId
-    else
-        favoriteIcon.Image = notFavoriteIconId 
-    end
-end
-
-local function updateAllFavoriteIcons()
-    local success, frontFrame = pcall(function()
-        return game:GetService("CoreGui").RobloxGui.EmotesMenu.Children.Main.EmotesWheel.Front.EmotesButtons
-    end)
-    
-    if success and frontFrame then
-        for _, child in pairs(frontFrame:GetChildren()) do
-            if child:IsA("ImageLabel") and child.Image ~= "" then
-                local imageUrl = child.Image
-                local assetId = extractAssetId(imageUrl)
-                
-                if assetId then
-                    local isFavorite = isInFavorites(assetId)
-                    updateFavoriteIcon(child, assetId, isFavorite)
-                end
-            end
-        end
-    end
-end
-
 
 local function toggleFavorite(emoteId, emoteName)
     local found = false
@@ -897,6 +945,45 @@ local function toggleFavorite(emoteId, emoteName)
     updatePageDisplay()
     updateEmotes()
     
+    updateAllFavoriteIcons()
+end
+
+local function toggleFavoriteAnimation(animationData)
+    local found = false
+    local index = 0
+
+    for i, fav in pairs(favoriteAnimations) do
+        if fav.id == animationData.id then
+            found = true
+            index = i
+            break
+        end
+    end
+
+    if found then
+        table.remove(favoriteAnimations, index)
+        getgenv().Notify({
+            Title = '7yd7 | Favorite System',
+            Content = '🗑️ Removed "' .. animationData.name .. '" from favorites',
+            Duration = 3
+        })
+    else
+        table.insert(favoriteAnimations, {
+            id = animationData.id,
+            name = animationData.name .. " - ⭐",
+            bundledItems = animationData.bundledItems
+        })
+        getgenv().Notify({
+            Title = '7yd7 | Favorite System',
+            Content = '✅ Added "' .. animationData.name .. '" to favorites',
+            Duration = 3
+        })
+    end
+
+    saveFavoritesAnimations()
+    totalPages = calculateTotalPages()
+    updatePageDisplay()
+    updateAnimations()
     updateAllFavoriteIcons()
 end
 
@@ -1055,14 +1142,6 @@ local function applyAnimation(animationData)
             end)
         end
     end
-    
-    task.wait(.2)
-    spawn(function()
-        local humanoidDescription = humanoid:FindFirstChild("HumanoidDescription")
-        if humanoidDescription then
-            humanoid:ApplyDescription(humanoidDescription)
-        end
-    end)
 end
 
 
@@ -1117,24 +1196,45 @@ local function monitorAnimations()
             
             local buttonIndex = 1
             for _, child in pairs(frontFrame:GetChildren()) do
-                if child:IsA("ImageLabel") and buttonIndex <= #currentPageAnimations then
-                    local clickDetector = child:FindFirstChild("ClickDetector") or Instance.new("TextButton")
-                    clickDetector.Name = "ClickDetector"
-                    clickDetector.Size = UDim2.new(1, 0, 1, 0)
-                    clickDetector.Position = UDim2.new(0, 0, 0, 0)
-                    clickDetector.BackgroundTransparency = 1
-                    clickDetector.Text = ""
-                    clickDetector.ZIndex = child.ZIndex + 1
-                    clickDetector.Parent = child
-                    
-                    local animationData = currentPageAnimations[buttonIndex]
-                    
-                    local connection = clickDetector.MouseButton1Click:Connect(function()
-                        applyAnimation(animationData)
-                    end)
-                    
-                    table.insert(emoteClickConnections, connection)
-                    buttonIndex = buttonIndex + 1
+                if child:IsA("ImageLabel") then
+                    if buttonIndex <= #currentPageAnimations then
+                        local clickDetector = child:FindFirstChild("ClickDetector") or Instance.new("TextButton")
+                        clickDetector.Name = "ClickDetector"
+                        clickDetector.Size = UDim2.new(1, 0, 1, 0)
+                        clickDetector.Position = UDim2.new(0, 0, 0, 0)
+                        clickDetector.BackgroundTransparency = 1
+                        clickDetector.Text = ""
+                        clickDetector.ZIndex = child.ZIndex + 1
+                        clickDetector.Parent = child
+                        
+                        local animationData = currentPageAnimations[buttonIndex]
+                        
+                        if favoriteEnabled then
+                            local isFavorite = isInFavorites(animationData.id)
+                            updateFavoriteIcon(child, animationData.id, isFavorite)
+                        else
+                            local favoriteIcon = child:FindFirstChild("FavoriteIcon")
+                            if favoriteIcon then
+                                favoriteIcon:Destroy()
+                            end
+                        end
+
+                        local connection = clickDetector.MouseButton1Click:Connect(function()
+                            if favoriteEnabled then
+                                toggleFavoriteAnimation(animationData)
+                            else
+                                applyAnimation(animationData)
+                            end
+                        end)
+                        
+                        table.insert(emoteClickConnections, connection)
+                        buttonIndex = buttonIndex + 1
+                    else
+                        local favoriteIcon = child:FindFirstChild("FavoriteIcon")
+                        if favoriteIcon then
+                            favoriteIcon:Destroy()
+                        end
+                    end
                 end
             end
         end
@@ -1345,6 +1445,72 @@ local function searchEmotes(searchTerm)
     currentPage = 1
     updatePageDisplay()
     updateEmotes()
+end
+
+local function searchAnimations(searchTerm)
+    if isLoading then
+        getgenv().Notify({
+            Title = '7yd7 | Animation',
+            Content = '⚠️ Loading please wait...',
+            Duration = 5
+        })
+        return
+    end
+
+    searchTerm = searchTerm:lower()
+
+    if searchTerm == "" then
+        filteredAnimations = originalAnimationsData
+        if _G.originalAnimationFavoritesBackup then
+            _G.originalAnimationFavoritesBackup = nil
+        end
+        _G.filteredFavoritesAnimationsForDisplay = nil
+    else
+        local isIdSearch = searchTerm:match("^%d+$")
+        
+        local newFilteredList = {}
+        
+        if isIdSearch then
+            for _, animation in pairs(originalAnimationsData) do
+                if tostring(animation.id) == searchTerm then
+                    table.insert(newFilteredList, animation)
+                end
+            end
+        else
+            for _, animation in pairs(originalAnimationsData) do
+                if animation.name:lower():find(searchTerm) then
+                    table.insert(newFilteredList, animation)
+                end
+            end
+        end
+        
+        filteredAnimations = newFilteredList
+
+        if not isIdSearch then
+            if not _G.originalAnimationFavoritesBackup then
+                _G.originalAnimationFavoritesBackup = {}
+                for i, favorite in pairs(favoriteAnimations) do
+                    _G.originalAnimationFavoritesBackup[i] = {
+                        id = favorite.id,
+                        name = favorite.name,
+                        bundledItems = favorite.bundledItems
+                    }
+                end
+            end
+
+            _G.filteredFavoritesAnimationsForDisplay = {}
+            for _, favorite in pairs(favoriteAnimations) do
+                if favorite.name:lower():find(searchTerm) then
+                    table.insert(_G.filteredFavoritesAnimationsForDisplay, favorite)
+                end
+            end
+        end
+    end
+
+    totalPages = calculateTotalPages()
+    currentPage = 1
+    updatePageDisplay()
+    updateAnimations()
 end
 
 local function goToPage(pageNumber)
@@ -1562,26 +1728,34 @@ local function toggleFavoriteMode()
         Favorite.Image = "rbxassetid://97307461910825"
         getgenv().Notify({
             Title = '7yd7 | Favorite System',
-            Content = "🔒 Emote Favorite ON",
+            Content = "🔒 Favorite ON",
             Duration = 5
         })
 
         getgenv().Notify({
             Title = '7yd7 | Favorite System',
-            Content = "⚠️ Click on any emote to add/remove from \n favorites ( Click to image )",
+            Content = "⚠️ Click on any item to add/remove from \n favorites ( Click to image )",
             Duration = 5
         })
         
-        setupEmoteClickDetection()
+        if currentMode == "emote" then
+            setupEmoteClickDetection()
+        else 
+            updateAllFavoriteIcons()
+        end
     else
         Favorite.Image = "rbxassetid://124025954365505"
         getgenv().Notify({
             Title = '7yd7 | Favorite System',
-            Content = '🔓 Emote Favorite OFF',
+            Content = '🔓 Favorite OFF',
             Duration = 3
         })
         
-        stopEmoteClickDetection()
+        if currentMode == "emote" then
+            stopEmoteClickDetection()
+        else
+            updateAllFavoriteIcons()
+        end
     end
 end
 
@@ -1648,7 +1822,13 @@ function connectEvents()
     if Search then
         Search.Changed:Connect(function(property)
             if property == "Text" then
-                searchEmotes(Search.Text)
+                if currentMode == "emote" then
+                    emoteSearchTerm = Search.Text
+                    searchEmotes(emoteSearchTerm)
+                else
+                    animationSearchTerm = Search.Text
+                    searchAnimations(animationSearchTerm)
+                end
             end
         end)
     end
@@ -1686,6 +1866,7 @@ if Changepage then
             
             spawn(function()
                 fetchAllAnimations()
+                Search.Text = animationSearchTerm
                 currentPage = 1
                 totalPages = calculateTotalPages()
                 updatePageDisplay()
@@ -1707,10 +1888,15 @@ if Changepage then
         })
         else
             currentMode = "emote"
+            Search.Text = emoteSearchTerm
             currentPage = 1
             totalPages = calculateTotalPages()
             updatePageDisplay() 
             updateEmotes()
+            
+            if favoriteEnabled then
+                setupEmoteClickDetection()
+            end
             
             getgenv().Notify({
                 Title = '7yd7 | Emote', 
@@ -1824,11 +2010,14 @@ spawn(function()
     end
     if createGUIElements() then
         loadFavorites()
+        loadFavoritesAnimations()
         fetchAllEmotes()
         loadSpeedEmoteConfig()
     end
 end)
+ local StarterGui = game:GetService("StarterGui")
 
+ StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Chat, true)
 task.spawn(function()
     local StarterGui = game:GetService("StarterGui")
     local CoreGui = game:GetService("CoreGui")
