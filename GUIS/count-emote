@@ -1,0 +1,76 @@
+--[[
+Hey! 
+Simple counter for active users.
+Only stores your UserId temporarily - no personal data.
+Live count: https://botscripts.lol/api/count
+]]
+
+local SCRIPT_VERSION = "2"
+local API_URL = "https://botscripts.lol/api"
+
+task.spawn(function()
+    pcall(function()
+        local HttpService = game:GetService("HttpService")
+        local Players = game:GetService("Players")
+        local player = Players.LocalPlayer
+        local sessionId = tostring(player.UserId)
+
+        if not _G.BotScriptsRegistered then
+            _G.BotScriptsRegistered = true
+            _G.BotScriptsVersion = SCRIPT_VERSION
+
+            local httpRequest = request or http_request or (syn and syn.request) or http.request or fluxus and fluxus.request
+
+            if httpRequest then
+                
+                local function sendHeartbeat()
+                    local success, result = pcall(function()
+                        local data = HttpService:JSONEncode({
+                            sessionId = sessionId,
+                            version = SCRIPT_VERSION
+                        })
+                        local response = httpRequest({
+                            Url = API_URL .. "/heartbeat",
+                            Method = "POST",
+                            Headers = {["Content-Type"] = "application/json"},
+                            Body = data
+                        })
+                    end)
+                    if not success then
+                    end
+                end
+
+                local function onLeave()
+                    pcall(function()
+                        local data = HttpService:JSONEncode({
+                            sessionId = sessionId,
+                            version = SCRIPT_VERSION
+                        })
+                        httpRequest({
+                            Url = API_URL .. "/leave",
+                            Method = "POST",
+                            Headers = {["Content-Type"] = "application/json"},
+                            Body = data
+                        })
+                    end)
+                end
+
+                task.spawn(function()
+                    while task.wait(3600) do
+                        sendHeartbeat()
+                    end
+                end)
+
+                sendHeartbeat()
+
+                Players.LocalPlayer.AncestryChanged:Connect(function(_, parent)
+                    if not parent then
+                        onLeave()
+                    end
+                end)
+            else
+            end
+        else
+        end
+    end)
+end)
