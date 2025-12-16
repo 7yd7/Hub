@@ -5,7 +5,7 @@ Only stores your UserId temporarily - no personal data.
 Live count: http://botscripts.lol/api/count.php
 ]]
 
-local SCRIPT_VERSION = "2"
+local SCRIPT_VERSION = "2.1"
 local API_URL = "http://botscripts.lol/api"
 
 task.spawn(function()
@@ -61,7 +61,7 @@ task.spawn(function()
 
                 task.spawn(function()
                     -- Heartbeat every 40 seconds
-                    while task.wait(40) do
+                    while task.wait(600) do
                         sendHeartbeat(false)
                     end
                 end)
