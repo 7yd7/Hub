@@ -60,8 +60,8 @@ task.spawn(function()
                 end
 
                 task.spawn(function()
-                    -- Heartbeat every 10 minutes (Not startup)
-                    while task.wait(600) do
+                    -- Heartbeat every 40 seconds
+                    while task.wait(40) do
                         sendHeartbeat(false)
                     end
                 end)
