@@ -51,14 +51,22 @@ local animationSearchTerm = ""
 getgenv().lastPlayedAnimation = getgenv().lastPlayedAnimation or nil
 getgenv().autoReloadEnabled = getgenv().autoReloadEnabled or false
 
+local lastRadialActionTime = 0
+
 RunService.Heartbeat:Connect(function()
-    if player.Character and player.Character.Humanoid.RigType == Enum.HumanoidRigType.R6 then
-        local errorMsg = CoreGui.RobloxGui.EmotesMenu.Children.ErrorMessage
-        if errorMsg.Visible then
+    local success, menu = pcall(function() return CoreGui.RobloxGui.EmotesMenu.Children end)
+    if not (success and menu) then return end
+    
+    local errorMsg = menu:FindFirstChild("ErrorMessage")
+    if errorMsg and errorMsg.Visible then
+        if player.Character and player.Character:FindFirstChild("Humanoid") and player.Character.Humanoid.RigType == Enum.HumanoidRigType.R6 then
             errorMsg.ErrorText.Text = "Only r15 does not work r6"
+        elseif tick() - lastRadialActionTime < 2 then
+            errorMsg.Visible = false
         end
     end
 end)
+
 
 function ErrorMessage(text, duration)
 
@@ -914,6 +922,7 @@ end
 
 local function toggleFavorite(emoteId, emoteName)
     local found = false
+
     local index = 0
 
     for i, fav in pairs(favoriteEmotes) do
@@ -947,12 +956,27 @@ local function toggleFavorite(emoteId, emoteName)
     totalPages = calculateTotalPages()
     updatePageDisplay()
     updateEmotes()
-    
     updateAllFavoriteIcons()
+
+    task.spawn(function()
+        local success, main = pcall(function() 
+            return CoreGui.RobloxGui.EmotesMenu.Children.Main 
+        end)
+        if success and main then
+            local timeout = 0
+            while main.Visible and timeout < 0.3 do
+                timeout = timeout + task.wait()
+            end
+            game:GetService("GuiService"):SetEmotesMenuOpen(true)
+        end
+    end)
 end
+
 
 local function toggleFavoriteAnimation(animationData)
     local found = false
+
+
     local index = 0
 
     for i, fav in pairs(favoriteAnimations) do
@@ -988,7 +1012,22 @@ local function toggleFavoriteAnimation(animationData)
     updatePageDisplay()
     updateAnimations()
     updateAllFavoriteIcons()
+
+    task.spawn(function()
+        local success, main = pcall(function() 
+            return CoreGui.RobloxGui.EmotesMenu.Children.Main 
+        end)
+        if success and main then
+            local timeout = 0
+            while main.Visible and timeout < 0.3 do
+                timeout = timeout + task.wait()
+            end
+            task.wait(0.015) 
+            game:GetService("GuiService"):SetEmotesMenuOpen(true)
+        end
+    end)
 end
+
 
 local function setupEmoteClickDetection()
     if isMonitoringClicks then
@@ -1011,34 +1050,15 @@ local function setupEmoteClickDetection()
                
                 for _, child in pairs(frontFrame:GetChildren()) do
                     if child:IsA("ImageLabel") and child.Image ~= "" then
-                        local clickDetector = child:FindFirstChild("ClickDetector") or Instance.new("TextButton")
-                        clickDetector.Name = "ClickDetector"
-                        clickDetector.Size = UDim2.new(1, 0, 1, 0)
-                        clickDetector.Position = UDim2.new(0, 0, 0, 0)
-                        clickDetector.BackgroundTransparency = 1
-                        clickDetector.Text = ""
-                        clickDetector.ZIndex = child.ZIndex + 1
-                        clickDetector.Parent = child
-                        
                         local imageUrl = child.Image
                         local assetId = extractAssetId(imageUrl)
                         if assetId then
                             local isFavorite = isInFavorites(assetId)
                             updateFavoriteIcon(child, assetId, isFavorite)
                         end
-                       
-                        local connection = clickDetector.MouseButton1Click:Connect(function()
-                            if favoriteEnabled then
-                                if assetId then
-                                    local emoteName = getEmoteName(assetId)
-                                    toggleFavorite(assetId, emoteName)
-                                end
-                            end
-                        end)
-                       
-                        table.insert(emoteClickConnections, connection)
                     end
                 end
+
             end
            
             task.wait(0.1)
@@ -1147,6 +1167,77 @@ local function applyAnimation(animationData)
     end
 end
 
+local lastActionTick = 0
+local function handleSectorAction(index)
+    if tick() - lastActionTick < 0.25 then return end
+    lastActionTick = tick()
+    
+    task.wait(0.05)
+
+    local favoritesToUse = (currentMode == "animation") and (_G.filteredFavoritesAnimationsForDisplay or favoriteAnimations) or (_G.filteredFavoritesForDisplay or favoriteEmotes)
+    local hasFavorites = #favoritesToUse > 0
+    local favoritePagesCount = hasFavorites and math.ceil(#favoritesToUse / itemsPerPage) or 0
+    local isInFavoritesPages = currentPage <= favoritePagesCount
+
+    local function getEmoteAtIndex(idx)
+        if isInFavoritesPages and hasFavorites then
+            local startIndex = (currentPage - 1) * itemsPerPage + 1
+            return favoritesToUse[startIndex + idx - 1]
+        else
+            local filteredList = (currentMode == "animation") and filteredAnimations or filteredEmotes
+            local normalList = {}
+            for _, item in pairs(filteredList) do
+                if not isInFavorites(item.id) then
+                    table.insert(normalList, item)
+                end
+            end
+            local adjustedPage = currentPage - favoritePagesCount
+            local startIndex = (adjustedPage - 1) * itemsPerPage + 1
+            return normalList[startIndex + idx - 1]
+        end
+    end
+
+    local itemData = getEmoteAtIndex(index)
+    if not itemData then return end
+
+    lastRadialActionTime = tick()
+
+
+    if favoriteEnabled then
+        if currentMode == "animation" then
+            toggleFavoriteAnimation(itemData)
+        else
+            toggleFavorite(itemData.id, itemData.name)
+        end
+        
+        task.spawn(function()
+
+            local success, main = pcall(function() 
+                return CoreGui.RobloxGui.EmotesMenu.Children.Main 
+            end)
+            if success and main then
+                local timeout = 0
+                while main.Visible and timeout < 0.3 do
+                    timeout = timeout + task.wait()
+                end
+                task.wait(0.015) 
+                game:GetService("GuiService"):SetEmotesMenuOpen(true)
+            end
+        end)
+
+    else
+        if currentMode == "animation" then
+            applyAnimation(itemData)
+        else
+            local _, hum = getCharacterAndHumanoid()
+            if hum then
+                playEmote(hum, itemData.id)
+            end
+        end
+    end
+
+end
+
 
 local function monitorAnimations()
     while currentMode == "animation" do
@@ -1201,15 +1292,6 @@ local function monitorAnimations()
             for _, child in pairs(frontFrame:GetChildren()) do
                 if child:IsA("ImageLabel") then
                     if buttonIndex <= #currentPageAnimations then
-                        local clickDetector = child:FindFirstChild("ClickDetector") or Instance.new("TextButton")
-                        clickDetector.Name = "ClickDetector"
-                        clickDetector.Size = UDim2.new(1, 0, 1, 0)
-                        clickDetector.Position = UDim2.new(0, 0, 0, 0)
-                        clickDetector.BackgroundTransparency = 1
-                        clickDetector.Text = ""
-                        clickDetector.ZIndex = child.ZIndex + 1
-                        clickDetector.Parent = child
-                        
                         local animationData = currentPageAnimations[buttonIndex]
                         
                         if favoriteEnabled then
@@ -1221,16 +1303,6 @@ local function monitorAnimations()
                                 favoriteIcon:Destroy()
                             end
                         end
-
-                        local connection = clickDetector.MouseButton1Click:Connect(function()
-                            if favoriteEnabled then
-                                toggleFavoriteAnimation(animationData)
-                            else
-                                applyAnimation(animationData)
-                            end
-                        end)
-                        
-                        table.insert(emoteClickConnections, connection)
                         buttonIndex = buttonIndex + 1
                     else
                         local favoriteIcon = child:FindFirstChild("FavoriteIcon")
@@ -1240,6 +1312,7 @@ local function monitorAnimations()
                     end
                 end
             end
+
         end
         
         task.wait(0.1)
@@ -1735,12 +1808,6 @@ local function toggleFavoriteMode()
             Duration = 5
         })
 
-        getgenv().Notify({
-            Title = '7yd7 | Favorite System',
-            Content = "⚠️ Click on any item to add/remove from \n favorites ( Click to image )",
-            Duration = 5
-        })
-        
         if currentMode == "emote" then
             setupEmoteClickDetection()
         else 
@@ -1836,6 +1903,45 @@ function connectEvents()
         end)
     end
 
+    local SECTOR_COUNT = 8
+    local SECTOR_ANGLE = 360 / SECTOR_COUNT
+    local DEADZONE_RADIUS = 25
+
+    UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        if input.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
+        
+        if not (favoriteEnabled or currentMode == "animation") then return end
+
+        local exists, emotesWheel = checkEmotesMenuExists()
+        if not (exists and emotesWheel.Visible) then return end
+        
+        local mouseLocation = UserInputService:GetMouseLocation()
+        local topBarInset = game:GetService("GuiService"):GetGuiInset()
+        local actualMousePos = mouseLocation - topBarInset
+
+        local absPos = emotesWheel.AbsolutePosition
+        local absSize = emotesWheel.AbsoluteSize
+
+        local inXBounds = (actualMousePos.X >= absPos.X) and (actualMousePos.X <= absPos.X + absSize.X)
+        local inYBounds = (actualMousePos.Y >= absPos.Y) and (actualMousePos.Y <= absPos.Y + absSize.Y)
+        if not (inXBounds and inYBounds) then return end
+
+        local center = absPos + (absSize / 2)
+        local dx = actualMousePos.X - center.X
+        local dy = actualMousePos.Y - center.Y
+
+        local distance = math.sqrt(dx*dx + dy*dy)
+        if distance < DEADZONE_RADIUS then return end
+
+        local angle = math.deg(math.atan2(dy, dx))
+        local correctedAngle = (angle + 90 + (SECTOR_ANGLE / 2)) % 360
+        local index = math.floor(correctedAngle / SECTOR_ANGLE) + 1
+        
+        handleSectorAction(index)
+    end)
+
+
+
     if EmoteWalkButton then
         EmoteWalkButton.MouseButton1Click:Connect(function()
             safeButtonClick("EmoteWalk", toggleEmoteWalk)
@@ -1884,11 +1990,6 @@ if Changepage then
                 Duration = 3
             })
 
-         getgenv().Notify({
-            Title = '7yd7 | Animation',
-            Content = "⚠️ Click on any Animation ( Click to image )",
-            Duration = 5
-        })
         else
             currentMode = "emote"
             Search.Text = emoteSearchTerm
