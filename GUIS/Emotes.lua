@@ -52,12 +52,21 @@ getgenv().lastPlayedAnimation = getgenv().lastPlayedAnimation or nil
 getgenv().autoReloadEnabled = getgenv().autoReloadEnabled or false
 
 local lastRadialActionTime = 0
+local lastWheelVisibleTime = 0
+
 
 RunService.Heartbeat:Connect(function()
     local success, menu = pcall(function() return CoreGui.RobloxGui.EmotesMenu.Children end)
     if not (success and menu) then return end
     
+    pcall(function()
+        if menu.Main.EmotesWheel.Visible then
+            lastWheelVisibleTime = tick()
+        end
+    end)
+
     local errorMsg = menu:FindFirstChild("ErrorMessage")
+
     if errorMsg and errorMsg.Visible then
         if player.Character and player.Character:FindFirstChild("Humanoid") and player.Character.Humanoid.RigType == Enum.HumanoidRigType.R6 then
             errorMsg.ErrorText.Text = "Only r15 does not work r6"
@@ -1905,33 +1914,33 @@ function connectEvents()
 
     local SECTOR_COUNT = 8
     local SECTOR_ANGLE = 360 / SECTOR_COUNT
-    local DEADZONE_RADIUS = 25
 
     UserInputService.InputBegan:Connect(function(input, gameProcessed)
-        if input.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
+        if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then return end
         
         if not (favoriteEnabled or currentMode == "animation") then return end
 
         local exists, emotesWheel = checkEmotesMenuExists()
-        if not (exists and emotesWheel.Visible) then return end
+        local isRecentlyVisible = (tick() - lastWheelVisibleTime < 0.15)
+        if not (exists and (emotesWheel.Visible or isRecentlyVisible)) then return end
+
         
-        local mouseLocation = UserInputService:GetMouseLocation()
-        local topBarInset = game:GetService("GuiService"):GetGuiInset()
-        local actualMousePos = mouseLocation - topBarInset
+        local actualPos = Vector2.new(input.Position.X, input.Position.Y)
 
         local absPos = emotesWheel.AbsolutePosition
         local absSize = emotesWheel.AbsoluteSize
 
-        local inXBounds = (actualMousePos.X >= absPos.X) and (actualMousePos.X <= absPos.X + absSize.X)
-        local inYBounds = (actualMousePos.Y >= absPos.Y) and (actualMousePos.Y <= absPos.Y + absSize.Y)
+        local inXBounds = (actualPos.X >= absPos.X) and (actualPos.X <= absPos.X + absSize.X)
+        local inYBounds = (actualPos.Y >= absPos.Y) and (actualPos.Y <= absPos.Y + absSize.Y)
         if not (inXBounds and inYBounds) then return end
 
         local center = absPos + (absSize / 2)
-        local dx = actualMousePos.X - center.X
-        local dy = actualMousePos.Y - center.Y
+        local dx = actualPos.X - center.X
+        local dy = actualPos.Y - center.Y
 
         local distance = math.sqrt(dx*dx + dy*dy)
-        if distance < DEADZONE_RADIUS then return end
+        local dynamicDeadzone = absSize.X * 0.1 
+        if distance < dynamicDeadzone then return end
 
         local angle = math.deg(math.atan2(dy, dx))
         local correctedAngle = (angle + 90 + (SECTOR_ANGLE / 2)) % 360
@@ -1939,8 +1948,6 @@ function connectEvents()
         
         handleSectorAction(index)
     end)
-
-
 
     if EmoteWalkButton then
         EmoteWalkButton.MouseButton1Click:Connect(function()
