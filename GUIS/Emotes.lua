@@ -370,6 +370,8 @@ local function updateAnimationImages(currentPageAnimations)
                 idValue.Value = animationData.id
                 idValue.Parent = child
 
+                child.Active = not favoriteEnabled
+
                 buttonIndex = buttonIndex + 1
             else
                 child.Image = ""
@@ -377,9 +379,12 @@ local function updateAnimationImages(currentPageAnimations)
                 if idValue then 
                     idValue:Destroy() 
                 end
+                child.Active = true
             end
         end
     end
+    
+    frontFrame.Active = not favoriteEnabled
 end
 
 
@@ -427,8 +432,10 @@ local function updateAllFavoriteIcons()
                     local isFavorite = isInFavorites(assetId)
                     updateFavoriteIcon(child, assetId, isFavorite)
                 end
+                child.Active = not favoriteEnabled
             end
         end
+        frontFrame.Active = not favoriteEnabled
     end
 end
 
@@ -966,19 +973,6 @@ local function toggleFavorite(emoteId, emoteName)
     updatePageDisplay()
     updateEmotes()
     updateAllFavoriteIcons()
-
-    task.spawn(function()
-        local success, main = pcall(function() 
-            return CoreGui.RobloxGui.EmotesMenu.Children.Main 
-        end)
-        if success and main then
-            local timeout = 0
-            while main.Visible and timeout < 0.3 do
-                timeout = timeout + task.wait()
-            end
-            game:GetService("GuiService"):SetEmotesMenuOpen(true)
-        end
-    end)
 end
 
 
@@ -1021,20 +1015,6 @@ local function toggleFavoriteAnimation(animationData)
     updatePageDisplay()
     updateAnimations()
     updateAllFavoriteIcons()
-
-    task.spawn(function()
-        local success, main = pcall(function() 
-            return CoreGui.RobloxGui.EmotesMenu.Children.Main 
-        end)
-        if success and main then
-            local timeout = 0
-            while main.Visible and timeout < 0.3 do
-                timeout = timeout + task.wait()
-            end
-            task.wait(0.015) 
-            game:GetService("GuiService"):SetEmotesMenuOpen(true)
-        end
-    end)
 end
 
 
@@ -1065,9 +1045,10 @@ local function setupEmoteClickDetection()
                             local isFavorite = isInFavorites(assetId)
                             updateFavoriteIcon(child, assetId, isFavorite)
                         end
+                        child.Active = not favoriteEnabled
                     end
                 end
-
+                frontFrame.Active = not favoriteEnabled
             end
            
             task.wait(0.1)
@@ -1218,22 +1199,6 @@ local function handleSectorAction(index)
         else
             toggleFavorite(itemData.id, itemData.name)
         end
-        
-        task.spawn(function()
-
-            local success, main = pcall(function() 
-                return CoreGui.RobloxGui.EmotesMenu.Children.Main 
-            end)
-            if success and main then
-                local timeout = 0
-                while main.Visible and timeout < 0.3 do
-                    timeout = timeout + task.wait()
-                end
-                task.wait(0.015) 
-                game:GetService("GuiService"):SetEmotesMenuOpen(true)
-            end
-        end)
-
     else
         if currentMode == "animation" then
             applyAnimation(itemData)
@@ -1836,6 +1801,16 @@ local function toggleFavoriteMode()
             updateAllFavoriteIcons()
         end
     end
+
+    pcall(function()
+        local frontFrame = CoreGui.RobloxGui.EmotesMenu.Children.Main.EmotesWheel.Front.EmotesButtons
+        frontFrame.Active = not favoriteEnabled
+        for _, child in pairs(frontFrame:GetChildren()) do
+            if child:IsA("GuiObject") then
+                child.Active = not favoriteEnabled
+            end
+        end
+    end)
 end
 
 local clickCooldown = {}
