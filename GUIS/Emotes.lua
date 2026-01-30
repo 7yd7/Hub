@@ -36,6 +36,7 @@ local UserInputService = game:GetService("UserInputService")
 local CoreGui = game:GetService("CoreGui")
 
 local emoteClickConnections = {}
+local guiConnections = {}
 local isMonitoringClicks = false
 local currentTimer = nil
 
@@ -298,6 +299,15 @@ local function loadFavoritesAnimations()
             favoriteAnimations = result
         end
     end
+end
+
+local function disconnectAllConnections()
+    for _, connection in pairs(guiConnections) do
+        if connection then
+            connection:Disconnect()
+        end
+    end
+    guiConnections = {}
 end
 
 local function loadSpeedEmoteConfig()
@@ -1854,27 +1864,33 @@ local function toggleAutoReload()
 end
 
 function connectEvents()
+    disconnectAllConnections()
+
     if _1left then
-        _1left.MouseButton1Click:Connect(previousPage)
+        table.insert(guiConnections, _1left.MouseButton1Click:Connect(function()
+            safeButtonClick("PrevPage", previousPage)
+        end))
     end
 
     if _9right then
-        _9right.MouseButton1Click:Connect(nextPage)
+        table.insert(guiConnections, _9right.MouseButton1Click:Connect(function()
+            safeButtonClick("NextPage", nextPage)
+        end))
     end
 
       if _2Routenumber then
-        _2Routenumber.FocusLost:Connect(function(enterPressed)
+        table.insert(guiConnections, _2Routenumber.FocusLost:Connect(function(enterPressed)
             local pageNum = tonumber(_2Routenumber.Text)
             if pageNum then
                 goToPage(pageNum)
             else
                 _2Routenumber.Text = tostring(currentPage)
             end
-        end)
+        end))
     end
 
     if Search then
-        Search.Changed:Connect(function(property)
+        table.insert(guiConnections, Search.Changed:Connect(function(property)
             if property == "Text" then
                 if currentMode == "emote" then
                     emoteSearchTerm = Search.Text
@@ -1884,13 +1900,13 @@ function connectEvents()
                     searchAnimations(animationSearchTerm)
                 end
             end
-        end)
+        end))
     end
 
     local SECTOR_COUNT = 8
     local SECTOR_ANGLE = 360 / SECTOR_COUNT
 
-    UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    table.insert(guiConnections, UserInputService.InputBegan:Connect(function(input, gameProcessed)
         if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then return end
         
         if not (favoriteEnabled or currentMode == "animation") then return end
@@ -1922,34 +1938,35 @@ function connectEvents()
         local index = math.floor(correctedAngle / SECTOR_ANGLE) + 1
         
         handleSectorAction(index)
-    end)
+    end))
 
     if EmoteWalkButton then
-        EmoteWalkButton.MouseButton1Click:Connect(function()
+        table.insert(guiConnections, EmoteWalkButton.MouseButton1Click:Connect(function()
             safeButtonClick("EmoteWalk", toggleEmoteWalk)
-        end)
+        end))
     end
 
     if Favorite then
-        Favorite.MouseButton1Click:Connect(function()
+        table.insert(guiConnections, Favorite.MouseButton1Click:Connect(function()
             safeButtonClick("Favorite", toggleFavoriteMode)
-        end)
+        end))
     end
 
     if SpeedEmote then
-        SpeedEmote.MouseButton1Click:Connect(function()
+        table.insert(guiConnections, SpeedEmote.MouseButton1Click:Connect(function()
             safeButtonClick("SpeedEmote", toggleSpeedEmote)
-        end)
+        end))
     end
 
     if Reload then
-    Reload.MouseButton1Click:Connect(function()
+    table.insert(guiConnections, Reload.MouseButton1Click:Connect(function()
         safeButtonClick("AutoReload", toggleAutoReload)
-    end)
+    end))
 end
 
 if Changepage then
-    Changepage.MouseButton1Click:Connect(function()
+    table.insert(guiConnections, Changepage.MouseButton1Click:Connect(function()
+        safeButtonClick("ChangePage", function()
         stopEmoteClickDetection()
         
         if currentMode == "emote" then
@@ -1990,18 +2007,19 @@ if Changepage then
                 Duration = 3
             })
         end
-    end)
+        end)
+    end))
 end
 
     if SpeedBox then
-        SpeedBox.FocusLost:Connect(function()
+        table.insert(guiConnections, SpeedBox.FocusLost:Connect(function()
             if writefile then
                 writefile(speedEmoteConfigFile, HttpService:JSONEncode({
                     Enabled = speedEmoteEnabled,
                     SpeedValue = tonumber(SpeedBox.Text) or 1
                 }))
             end
-        end)
+        end))
     end
 end
 
