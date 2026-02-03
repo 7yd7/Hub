@@ -500,4 +500,12 @@ Components:AddColorPicker(ThemeTab, "Accent Color", Theme.Accent, function(c)
 end)
 ]]
 
-return SettingsUI
+local Library = {
+    UI = SettingsUI,
+    CreateTab = CreateTab,
+    AddToggle = function(...) return Components:AddToggle(...) end,
+    AddDropdown = function(...) return Components:AddDropdown(...) end,
+    AddColorPicker = function(...) return Components:AddColorPicker(...) end
+}
+
+return Library
