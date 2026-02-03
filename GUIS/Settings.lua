@@ -41,53 +41,6 @@ local Theme = {
     FontRegular = Enum.Font.Gotham
 }
 
-local ThemedObjects = {}
-local function UpdateTheme(newTheme)
-    for k, v in pairs(newTheme) do
-        Theme[k] = v
-    end
-    for _, item in pairs(ThemedObjects) do
-        pcall(function()
-            item.obj[item.prop] = Theme[item.key]
-        end)
-    end
-end
-
-local function RegisterThemed(obj, prop, key)
-    table.insert(ThemedObjects, {obj = obj, prop = prop, key = key})
-    if Theme[key] then
-        pcall(function() obj[prop] = Theme[key] end)
-    end
-end
-
-local ConfigPath = "7yd7/Themes.json"
-local function SaveThemes(themes)
-    if not isfolder("7yd7") then makefolder("7yd7") end
-    writefile(ConfigPath, HttpService:JSONEncode(themes))
-end
-
-local function LoadThemes()
-    if isfile(ConfigPath) then
-        local success, decoded = pcall(function() return HttpService:JSONDecode(readfile(ConfigPath)) end)
-        if success and type(decoded) == "table" then
-            return decoded
-        end
-    end
-    return {
-        Default = {
-            Background = {28, 30, 32},
-            Accent = {0, 255, 150},
-            Header = {35, 38, 41},
-            Section = {35, 38, 41},
-            Text = {255, 255, 255},
-            TextDim = {140, 140, 140}
-        }
-    }
-end
-
-local function ColorToTable(c) return {math.round(c.R*255), math.round(c.G*255), math.round(c.B*255)} end
-local function TableToColor(t) return Color3.fromRGB(t[1], t[2], t[3]) end
-
 local Lib = {}
 
 function Lib:Tween(obj, info, goal)
@@ -119,7 +72,6 @@ local MainFrame = Lib:Create("Frame", {
 }, {
     Lib:Create("UICorner", {CornerRadius = Theme.CornerRadius})
 })
-RegisterThemed(MainFrame, "BackgroundColor3", "Background")
 
 local Dragging, DragInput, DragStart, StartPos
 MainFrame.InputBegan:Connect(function(input)
@@ -356,7 +308,6 @@ function Components:AddSection(container, title)
         TextSize = 11,
         TextXAlignment = Enum.TextXAlignment.Center
     })
-    RegisterThemed(lbl, "TextColor3", "Accent")
     return lbl
 end
 
@@ -372,9 +323,6 @@ function Components:AddButton(container, title, callback)
         TextColor3 = Theme.Background,
         TextSize = 12
     }, { Lib:Create("UICorner", {CornerRadius = UDim.new(0, 6)}) })
-    
-    RegisterThemed(Btn, "BackgroundColor3", "Accent")
-    RegisterThemed(Btn, "TextColor3", "Background")
     
     Btn.MouseButton1Click:Connect(callback)
     return Btn
@@ -703,195 +651,7 @@ local Library = {
     AddSection = function(...) return Components:AddSection(...) end,
     AddTextArea = function(...) return Components:AddTextArea(...) end,
     AddIconButton = function(...) return Components:AddIconButton(...) end,
-    AddFolder = function(...) return Components:AddFolder(...) end,
-    CreateThemeTab = function(self)
-        local ThemeTab = self.CreateTab("Theme", 4)
-        local MgmtSection = Components:AddSection(ThemeTab, "Management")
-        
-        local BtnRow = Lib:Create("Frame", {
-            Parent = ThemeTab,
-            BackgroundTransparency = 1,
-            Size = UDim2.new(0.95, 0, 0, 40)
-        }, {
-            Lib:Create("UIListLayout", {
-                FillDirection = Enum.FillDirection.Horizontal,
-                Padding = UDim.new(0, 15),
-                HorizontalAlignment = Enum.HorizontalAlignment.Center,
-                VerticalAlignment = Enum.VerticalAlignment.Center
-            })
-        })
-        
-        local themes = LoadThemes()
-        local function GetNames()
-            local n = {}
-            for name, _ in pairs(themes) do table.insert(n, name) end
-            table.sort(n)
-            return n
-        end
-        
-        local currentThemeName = "Default"
-        local Dropdown
-        
-        local function RefreshDrop()
-            if Dropdown then
-                Dropdown.Refresh(GetNames())
-            end
-        end
-
-        -- Add Button
-        Components:AddIconButton(BtnRow, "132703748384380", function()
-            local InputPanel = Lib:Create("Frame", {
-                Parent = SettingsUI,
-                BackgroundColor3 = Theme.Background,
-                Position = UDim2.fromScale(0.5, 0.5),
-                AnchorPoint = Vector2.new(0.5, 0.5),
-                Size = UDim2.fromOffset(200, 100),
-                ZIndex = 1000
-            }, {
-                Lib:Create("UICorner", {CornerRadius = Theme.CornerRadius}),
-                Lib:Create("UIStroke", {Color = Theme.Accent, Thickness = 1})
-            })
-            
-            local In = Lib:Create("TextBox", {
-                Parent = InputPanel,
-                Size = UDim2.new(0.8, 0, 0, 30),
-                Position = UDim2.new(0.1, 0, 0.2, 0),
-                BackgroundColor3 = Theme.Section,
-                TextColor3 = Theme.Text,
-                PlaceholderText = "Theme Name...",
-                Text = ""
-            }, { Lib:Create("UICorner", {CornerRadius = UDim.new(0, 4)}) })
-            
-            local Save = Lib:Create("TextButton", {
-                Parent = InputPanel,
-                Size = UDim2.new(0.4, 0, 0, 25),
-                Position = UDim2.new(0.1, 0, 0.65, 0),
-                BackgroundColor3 = Theme.Accent,
-                TextColor3 = Theme.Background,
-                Text = "Save"
-            }, { Lib:Create("UICorner", {CornerRadius = UDim.new(0, 4)}) })
-            
-            local Cancel = Lib:Create("TextButton", {
-                Parent = InputPanel,
-                Size = UDim2.new(0.4, 0, 0, 25),
-                Position = UDim2.new(0.5, 0, 0.65, 0),
-                BackgroundColor3 = Theme.Header,
-                TextColor3 = Theme.Text,
-                Text = "Cancel"
-            }, { Lib:Create("UICorner", {CornerRadius = UDim.new(0, 4)}) })
-            
-            Save.MouseButton1Click:Connect(function()
-                if In.Text ~= "" and not themes[In.Text] then
-                    local newThemeData = {}
-                    for k, v in pairs(Theme) do
-                        if typeof(v) == "Color3" then
-                            newThemeData[k] = ColorToTable(v)
-                        end
-                    end
-                    themes[In.Text] = newThemeData
-                    SaveThemes(themes)
-                    RefreshDrop()
-                    InputPanel:Destroy()
-                end
-            end)
-            Cancel.MouseButton1Click:Connect(function() InputPanel:Destroy() end)
-        end)
-        
-        -- Delete Button
-        Components:AddIconButton(BtnRow, "75735986214273", function()
-            if currentThemeName ~= "Default" then
-                themes[currentThemeName] = nil
-                SaveThemes(themes)
-                currentThemeName = "Default"
-                RefreshDrop()
-                Dropdown.Button.Text = "Default  ▼"
-            end
-        end)
-        
-        -- Rename Button
-        Components:AddIconButton(BtnRow, "71590943900322", function()
-            if currentThemeName == "Default" then return end
-            -- Similar InputPanel logic for rename
-            local InputPanel = Lib:Create("Frame", {
-                Parent = SettingsUI, BackgroundColor3 = Theme.Background, Position = UDim2.fromScale(0.5, 0.5), AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromOffset(200, 100), ZIndex = 1000
-            }, { Lib:Create("UICorner", {CornerRadius = Theme.CornerRadius}), Lib:Create("UIStroke", {Color = Theme.Accent, Thickness = 1}) })
-            local In = Lib:Create("TextBox", { Parent = InputPanel, Size = UDim2.new(0.8, 0, 0, 30), Position = UDim2.new(0.1, 0, 0.2, 0), BackgroundColor3 = Theme.Section, TextColor3 = Theme.Text, Text = currentThemeName })
-            local Save = Lib:Create("TextButton", { Parent = InputPanel, Size = UDim2.new(0.4, 0, 0, 25), Position = UDim2.new(0.1, 0, 0.65, 0), BackgroundColor3 = Theme.Accent, TextColor3 = Theme.Background, Text = "Rename" })
-            Save.MouseButton1Click:Connect(function()
-                if In.Text ~= "" and not themes[In.Text] then
-                    themes[In.Text] = themes[currentThemeName]
-                    themes[currentThemeName] = nil
-                    currentThemeName = In.Text
-                    SaveThemes(themes)
-                    RefreshDrop()
-                    Dropdown.Button.Text = In.Text .. "  ▼"
-                    InputPanel:Destroy()
-                end
-            end)
-            local Cancel = Lib:Create("TextButton", { Parent = InputPanel, Size = UDim2.new(0.4, 0, 0, 25), Position = UDim2.new(0.5, 0, 0.65, 0), BackgroundColor3 = Theme.Header, TextColor3 = Theme.Text, Text = "Cancel" })
-            Cancel.MouseButton1Click:Connect(function() InputPanel:Destroy() end)
-        end)
-        
-        -- Import Button
-        Components:AddIconButton(BtnRow, "125970262144752", function()
-            local panel = Lib:Create("Frame", { Parent = SettingsUI, BackgroundColor3 = Theme.Background, Position = UDim2.fromScale(0.5, 0.5), AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromOffset(250, 150), ZIndex = 1000 })
-            local box = Lib:Create("TextBox", { Parent = panel, Size = UDim2.new(0.9, 0, 0.6, 0), Position = UDim2.fromOffset(12, 12), MultiLine = true, TextWrapped = true, BackgroundColor3 = Theme.Section, TextColor3 = Theme.Text, Text = "", PlaceholderText = "Paste JSON here..." })
-            local importBtn = Lib:Create("TextButton", { Parent = panel, Size = UDim2.new(0.9, 0, 0, 25), Position = UDim2.new(0.05, 0, 0.75, 0), BackgroundColor3 = Theme.Accent, Text = "Import" })
-            importBtn.MouseButton1Click:Connect(function()
-                local s, d = pcall(function() return HttpService:JSONDecode(box.Text) end)
-                if s and type(d) == "table" and d.name then
-                    themes[d.name] = d.data
-                    SaveThemes(themes)
-                    RefreshDrop()
-                    panel:Destroy()
-                end
-            end)
-        end)
-        
-        -- Export Button
-        Components:AddIconButton(BtnRow, "75021596852918", function()
-            local exportData = { name = currentThemeName, data = themes[currentThemeName] }
-            local json = HttpService:JSONEncode(exportData)
-            local panel = Lib:Create("Frame", { Parent = SettingsUI, BackgroundColor3 = Theme.Background, Position = UDim2.fromScale(0.5, 0.5), AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromOffset(250, 150), ZIndex = 1000 })
-            local box = Lib:Create("TextBox", { Parent = panel, Size = UDim2.new(0.9, 0, 0.6, 0), Position = UDim2.fromOffset(12, 12), MultiLine = true, TextWrapped = true, BackgroundColor3 = Theme.Section, TextColor3 = Theme.Text, Text = json })
-            local copyBtn = Lib:Create("TextButton", { Parent = panel, Size = UDim2.new(0.9, 0, 0, 25), Position = UDim2.new(0.05, 0, 0.75, 0), BackgroundColor3 = Theme.Accent, Text = "Copy to Clipboard" })
-            copyBtn.MouseButton1Click:Connect(function()
-                setclipboard(json)
-                copyBtn.Text = "Copied!"
-                task.delay(1, function() copyBtn.Text = "Copy to Clipboard" end)
-            end)
-        end)
-        
-        Dropdown = Components:AddDropdown(ThemeTab, "Select Theme", GetNames(), "Default", function(v)
-            currentThemeName = v
-            local selected = themes[v]
-            if selected then
-                local converted = {}
-                for k, col in pairs(selected) do
-                    if type(col) == "table" then
-                        converted[k] = TableToColor(col)
-                    end
-                end
-                UpdateTheme(converted)
-            end
-        end)
-        
-        local bgFolder = Components:AddFolder(ThemeTab, "Colors & Background")
-        Components:AddColorPicker(bgFolder, "Background", Theme.Background, function(c) 
-            UpdateTheme({Background = c}) 
-            if themes[currentThemeName] then themes[currentThemeName].Background = ColorToTable(c); SaveThemes(themes) end
-        end)
-        Components:AddColorPicker(bgFolder, "Accent", Theme.Accent, function(c) 
-            UpdateTheme({Accent = c}) 
-            if themes[currentThemeName] then themes[currentThemeName].Accent = ColorToTable(c); SaveThemes(themes) end
-        end)
-        
-        local imageFolder = Components:AddFolder(ThemeTab, "Images & Emotes")
-        Components:AddColorPicker(imageFolder, "Image Color", Color3.new(1,1,1), function(c)
-            -- This will be used in Emotes.lua to color images
-            _G.ImageColor = c
-        end)
-    end
+    AddFolder = function(...) return Components:AddFolder(...) end
 }
 
 return Library
