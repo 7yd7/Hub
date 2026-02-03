@@ -273,18 +273,64 @@ function Components:AddDropdown(container, title, options, default, callback)
     
     SearchBox:GetPropertyChangedSignal("Text"):Connect(function() RefreshOptions(SearchBox.Text) end)
     
+    local Dropdown = {
+        Button = DropBtn,
+        Refresh = RefreshOptions
+    }
+    
+    RefreshOptions()
+    
     DropBtn.MouseButton1Click:Connect(function()
         IsOpen = not IsOpen
         if IsOpen then
             local scale = UIScale.Scale
             DropList.Position = UDim2.fromOffset(DropBtn.AbsolutePosition.X / scale, (DropBtn.AbsolutePosition.Y + DropBtn.AbsoluteSize.Y + 2) / scale)
             DropList.Visible = true
-            RefreshOptions()
+            RefreshOptions(SearchBox.Text)
             DropList.Size = UDim2.fromOffset(100, math.min(#options * 24 + 28, 140))
         else
             DropList.Visible = false
         end
     end)
+    
+    return Dropdown
+end
+
+function Components:AddButton(container, title, callback)
+    local item = self:AddItem(container, title, nil)
+    local Btn = Lib:Create("TextButton", {
+        Parent = item,
+        BackgroundColor3 = Theme.Accent,
+        Position = UDim2.new(1, -75, 0.5, -12),
+        Size = UDim2.new(0, 65, 0, 24),
+        Font = Theme.FontBold,
+        Text = "Click",
+        TextColor3 = Theme.Background,
+        TextSize = 12
+    }, { Lib:Create("UICorner", {CornerRadius = UDim.new(0, 6)}) })
+    
+    Btn.MouseButton1Click:Connect(callback)
+    return Btn
+end
+
+function Components:AddInput(container, title, placeholder, default, callback)
+    local item = self:AddItem(container, title, nil)
+    local Input = Lib:Create("TextBox", {
+        Parent = item,
+        BackgroundColor3 = Color3.fromRGB(25, 27, 30),
+        Position = UDim2.new(1, -110, 0.5, -12),
+        Size = UDim2.new(0, 100, 0, 24),
+        Font = Theme.FontRegular,
+        PlaceholderText = placeholder or "...",
+        Text = default or "",
+        TextColor3 = Theme.Text,
+        TextSize = 12
+    }, { Lib:Create("UICorner", {CornerRadius = UDim.new(0, 6)}) })
+    
+    Input.FocusLost:Connect(function()
+        callback(Input.Text)
+    end)
+    return Input
 end
 
 function Components:AddColorPicker(container, title, default, callback)
@@ -505,7 +551,9 @@ local Library = {
     CreateTab = CreateTab,
     AddToggle = function(...) return Components:AddToggle(...) end,
     AddDropdown = function(...) return Components:AddDropdown(...) end,
-    AddColorPicker = function(...) return Components:AddColorPicker(...) end
+    AddColorPicker = function(...) return Components:AddColorPicker(...) end,
+    AddButton = function(...) return Components:AddButton(...) end,
+    AddInput = function(...) return Components:AddInput(...) end
 }
 
 return Library
