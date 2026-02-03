@@ -296,6 +296,19 @@ function Components:AddDropdown(container, title, options, default, callback)
     return Dropdown
 end
 
+function Components:AddSection(container, title)
+    return Lib:Create("TextLabel", {
+        Parent = container,
+        BackgroundTransparency = 1,
+        Size = UDim2.new(0.95, 0, 0, 25),
+        Font = Theme.FontBold,
+        Text = " — " .. title:upper() .. " — ",
+        TextColor3 = Theme.Accent,
+        TextSize = 11,
+        TextXAlignment = Enum.TextXAlignment.Center
+    })
+end
+
 function Components:AddButton(container, title, callback)
     local item = self:AddItem(container, title, nil)
     local Btn = Lib:Create("TextButton", {
@@ -553,7 +566,8 @@ local Library = {
     AddDropdown = function(...) return Components:AddDropdown(...) end,
     AddColorPicker = function(...) return Components:AddColorPicker(...) end,
     AddButton = function(...) return Components:AddButton(...) end,
-    AddInput = function(...) return Components:AddInput(...) end
+    AddInput = function(...) return Components:AddInput(...) end,
+    AddSection = function(...) return Components:AddSection(...) end
 }
 
 return Library
