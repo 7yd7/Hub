@@ -919,6 +919,162 @@ Components:AddColorPicker(ThemeTab, "Accent Color", Theme.Accent, function(c)
 end)
 ]]
 
+function Components:AddAssetColor(container, title, placeholder, defaultText, defaultColor, callback)
+    local item = self:AddItem(container, title, nil)
+    local color = defaultColor or Color3.fromRGB(255, 255, 255)
+    local text = defaultText or ""
+    
+    local ColorBtn = Lib:Create("TextButton", {
+        Parent = item,
+        BackgroundColor3 = color,
+        Position = UDim2.new(1, -42, 0.5, -10),
+        Size = UDim2.new(0, 22, 0, 22),
+        Text = ""
+    }, { Lib:Create("UICorner", {CornerRadius = UDim.new(0, 5)}) })
+
+    local EditBtn = Lib:Create("ImageButton", {
+        Parent = item,
+        BackgroundTransparency = 1,
+        Position = UDim2.new(1, -75, 0.5, -10),
+        Size = UDim2.new(0, 20, 0, 20),
+        Image = "rbxassetid://117761881427472", -- Edit icon
+        ImageColor3 = Color3.fromRGB(200, 200, 200),
+        ScaleType = Enum.ScaleType.Fit
+    })
+
+    -- Asset Input Panel (Mini)
+    local InputPanel = Lib:Create("Frame", {
+        Parent = item:FindFirstAncestor("SettingsUI"),
+        BackgroundColor3 = Theme.Background,
+        Position = UDim2.fromScale(0.5, 0.5),
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Size = UDim2.fromOffset(220, 80),
+        Visible = false,
+        ZIndex = 1100
+    }, {
+        Lib:Create("UICorner", {CornerRadius = UDim.new(0, 8)}),
+        Lib:Create("UIStroke", {Color = Theme.Section, Thickness = 2})
+    })
+
+    local In = Lib:Create("TextBox", {
+        Parent = InputPanel,
+        Size = UDim2.new(0.9, 0, 0, 30),
+        Position = UDim2.new(0.05, 0, 0.2, 0),
+        BackgroundColor3 = Color3.fromRGB(40, 40, 40),
+        TextColor3 = Color3.new(1,1,1),
+        PlaceholderText = placeholder or "Asset ID...",
+        Text = text,
+        Font = Theme.FontRegular,
+        TextSize = 12
+    }, { Lib:Create("UICorner", {CornerRadius = UDim.new(0, 6)}) })
+
+    local Save = Lib:Create("TextButton", {
+        Parent = InputPanel,
+        Size = UDim2.new(0.4, 0, 0, 25),
+        Position = UDim2.new(0.05, 0, 0.2 + 0.45, 0), -- Adjusted
+        BackgroundColor3 = Theme.Accent,
+        Text = "Apply",
+        Font = Theme.FontBold,
+        TextSize = 12
+    }, { Lib:Create("UICorner", {CornerRadius = UDim.new(0, 6)}) })
+
+    local Cancel = Lib:Create("TextButton", {
+        Parent = InputPanel,
+        Size = UDim2.new(0.4, 0, 0, 25),
+        Position = UDim2.new(0.55, 0, 0.2 + 0.45, 0), -- Adjusted
+        BackgroundColor3 = Theme.Section,
+        Text = "Cancel",
+        TextColor3 = Theme.Text,
+        Font = Theme.FontBold,
+        TextSize = 12
+    }, { Lib:Create("UICorner", {CornerRadius = UDim.new(0, 6)}) })
+
+    EditBtn.MouseButton1Click:Connect(function() 
+        InputPanel.Visible = true 
+        In.Text = text
+    end)
+    
+    Cancel.MouseButton1Click:Connect(function() InputPanel.Visible = false end)
+    
+    Save.MouseButton1Click:Connect(function()
+        text = In.Text
+        InputPanel.Visible = false
+        callback(text, color)
+    end)
+
+    -- Reuse Picker Logic
+    local h, s, v = color:ToHSV()
+    local SettingsUI = item:FindFirstAncestor("SettingsUI") or game.CoreGui:FindFirstChild("RobloxGui"):FindFirstChild("7yd7-Settings"):FindFirstChild("SettingsUI")
+    
+    local PickerFrame = Lib:Create("Frame", {
+        Parent = SettingsUI,
+        BackgroundColor3 = Theme.Background,
+        Position = UDim2.fromScale(0.5, 0.5),
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Size = UDim2.fromOffset(260, 200),
+        Visible = false,
+        ZIndex = 500
+    }, {
+        Lib:Create("UICorner", {CornerRadius = UDim.new(0, 10)}),
+        Lib:Create("UIStroke", {Color = Theme.Section, Thickness = 2}),
+        Lib:Create("TextLabel", { Position = UDim2.fromOffset(12, 8), Size = UDim2.new(1, -30, 0, 18), BackgroundTransparency = 1, Font = Theme.FontBold, Text = "COLOR SELECTOR", TextColor3 = Theme.Text, TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left })
+    })
+
+    local closePicker = Lib:Create("TextButton", { Parent = PickerFrame, BackgroundTransparency = 1, Position = UDim2.new(1, -30, 0, 5), Size = UDim2.fromOffset(25, 25), Font = Theme.FontBold, Text = "×", TextColor3 = Theme.TextDim, TextSize = 22 })
+    closePicker.MouseButton1Click:Connect(function() PickerFrame.Visible = false end)
+    
+    local SatValArea = Lib:Create("ImageButton", { Parent = PickerFrame, BackgroundColor3 = Color3.fromHSV(h, 1, 1), Position = UDim2.fromOffset(12, 35), Size = UDim2.fromOffset(140, 140), Image = "rbxassetid://4155801252", BorderSizePixel = 0 }, { Lib:Create("UICorner", {CornerRadius = UDim.new(0, 6)}) })
+    local SatValCursor = Lib:Create("Frame", { Parent = SatValArea, BackgroundColor3 = Color3.new(1, 1, 1), Size = UDim2.fromOffset(4, 4), Position = UDim2.fromScale(s, 1-v) }, { Lib:Create("UICorner", {CornerRadius = UDim.new(1, 0)}), Lib:Create("UIStroke", {Thickness = 1}) })
+    local HueSlider = Lib:Create("ImageButton", { Parent = PickerFrame, Position = UDim2.fromOffset(162, 35), Size = UDim2.fromOffset(18, 140), Image = "rbxassetid://4155806652", BorderSizePixel = 0 }, { Lib:Create("UICorner", {CornerRadius = UDim.new(0, 6)}) })
+    local HueCursor = Lib:Create("Frame", { Parent = HueSlider, BackgroundColor3 = Color3.new(1, 1, 1), Size = UDim2.new(1, 0, 0, 2), Position = UDim2.fromScale(0, 1-h) }, { Lib:Create("UIStroke", {Thickness = 1}) })
+    
+    local mDown, hDown = false, false
+    SatValArea.MouseButton1Down:Connect(function() mDown = true end)
+    HueSlider.MouseButton1Down:Connect(function() hDown = true end)
+    
+    local function UpdatePicker()
+        local c = Color3.fromHSV(h, s, v)
+        SatValArea.BackgroundColor3 = Color3.fromHSV(h, 1, 1)
+        SatValCursor.Position = UDim2.fromScale(s, 1-v)
+        HueCursor.Position = UDim2.fromScale(0, 1-h)
+        ColorBtn.BackgroundColor3 = c
+        color = c
+        callback(text, color)
+    end
+    
+    UserInputService.InputEnded:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then mDown, hDown = false, false end end)
+    RunService.RenderStepped:Connect(function()
+        if not PickerFrame.Visible then return end
+        if mDown then
+            local pos = UserInputService:GetMouseLocation()
+            local relX, relY = (pos.X - SatValArea.AbsolutePosition.X) / SatValArea.AbsoluteSize.X, (pos.Y - SatValArea.AbsolutePosition.Y - 36) / SatValArea.AbsoluteSize.Y
+            s, v = math.clamp(relX, 0, 1), 1 - math.clamp(relY, 0, 1)
+            UpdatePicker()
+        end
+        if hDown then
+            local pos = UserInputService:GetMouseLocation()
+            local relY = (pos.Y - HueSlider.AbsolutePosition.Y - 36) / HueSlider.AbsoluteSize.Y
+            h = 1 - math.clamp(relY, 0, 1)
+            UpdatePicker()
+        end
+    end)
+    
+    ColorBtn.MouseButton1Click:Connect(function() PickerFrame.Visible = true end)
+
+    return {
+        SetValue = function(t, c)
+            text = t or ""
+            color = c or Color3.fromRGB(255, 255, 255)
+            ColorBtn.BackgroundColor3 = color
+            In.Text = text
+            h, s, v = color:ToHSV()
+            SatValArea.BackgroundColor3 = Color3.fromHSV(h, 1, 1)
+            SatValCursor.Position = UDim2.fromScale(s, 1-v)
+            HueCursor.Position = UDim2.fromScale(0, 1-h)
+        end
+    }
+end
+
 local Library = {
     UI = SettingsUI,
     CreateTab = CreateTab,
@@ -932,7 +1088,8 @@ local Library = {
     AddIconButton = function(...) return Components:AddIconButton(...) end,
     AddFolder = function(...) return Components:AddFolder(...) end,
     AddItem = function(...) return Components:AddItem(...) end,
-    AddInputWithColor = function(...) return Components:AddInputWithColor(...) end
+    AddInputWithColor = function(...) return Components:AddInputWithColor(...) end,
+    AddAssetColor = function(...) return Components:AddAssetColor(...) end
 }
 
 return Library
