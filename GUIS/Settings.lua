@@ -397,13 +397,34 @@ function Components:AddTextArea(container, title, placeholder, default, callback
 end
 
 function Components:AddIconButton(container, imageId, callback)
-    local Btn = Lib:Create("ImageButton", {
+    local BtnHolder = Lib:Create("Frame", {
         Parent = container,
+        BackgroundColor3 = Color3.fromRGB(45, 48, 55),
+        Size = UDim2.new(0, 38, 0, 38)
+    }, {
+        Lib:Create("UICorner", {CornerRadius = UDim.new(0, 10)})
+    })
+    
+    local Btn = Lib:Create("ImageButton", {
+        Parent = BtnHolder,
         BackgroundTransparency = 1,
-        Size = UDim2.new(0, 24, 0, 24),
+        Position = UDim2.fromScale(0.5, 0.5),
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Size = UDim2.new(0, 22, 0, 22),
         Image = "rbxassetid://" .. tostring(imageId):gsub("rbxassetid://", ""),
+        ImageColor3 = Color3.fromRGB(200, 200, 200),
         ScaleType = Enum.ScaleType.Fit
     })
+    
+    -- Hover effects
+    BtnHolder.MouseEnter:Connect(function()
+        Lib:Tween(BtnHolder, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(0, 200, 120)})
+        Lib:Tween(Btn, TweenInfo.new(0.15), {ImageColor3 = Color3.fromRGB(255, 255, 255)})
+    end)
+    BtnHolder.MouseLeave:Connect(function()
+        Lib:Tween(BtnHolder, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(45, 48, 55)})
+        Lib:Tween(Btn, TweenInfo.new(0.15), {ImageColor3 = Color3.fromRGB(200, 200, 200)})
+    end)
     
     Btn.MouseButton1Click:Connect(callback)
     return Btn
@@ -796,6 +817,7 @@ function Components:AddInputWithColor(container, title, placeholder, defaultText
         HueCursor.Position = UDim2.fromScale(0, 1-h)
         ColorBtn.BackgroundColor3 = c
         color = c
+        text = Input.Text -- Always sync text from input before callback
         callback(text, color)
     end
     
