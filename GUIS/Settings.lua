@@ -31,6 +31,7 @@ end
 local SettingsUI = Instance.new("ScreenGui")
 SettingsUI.Name = "SettingsUI"
 SettingsUI.ResetOnSpawn = false
+SettingsUI.IgnoreGuiInset = true
 SettingsUI.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 SettingsUI.DisplayOrder = 999
 SettingsUI.Parent = GetUIContainer()
@@ -153,7 +154,7 @@ function Lib:OpenPicker(default, callback, includeAlpha)
         Parent = MainArea,
         Size = UDim2.fromOffset(170, 170),
         Position = UDim2.fromOffset(0, 5),
-        Image = "rbxassetid://6039290073",
+        Image = "rbxassetid://4155801252", -- Improved Hue Wheel
         BackgroundTransparency = 1
     })
 
@@ -265,8 +266,8 @@ function Lib:OpenPicker(default, callback, includeAlpha)
         return btn
     end
 
-    local Apply = CreateBtn("rbxassetid://11419713314", 200, ActionArea, Theme.Accent)
-    local Cancel = CreateBtn("rbxassetid://11419719547", 245, ActionArea, Theme.Error)
+    local Apply = CreateBtn("rbxassetid://6031094678", 200, ActionArea, Theme.Accent)
+    local Cancel = CreateBtn("rbxassetid://6031094663", 245, ActionArea, Theme.Error)
 
     -- Numeric Grid
     local Grid = Lib:Create("Frame", {
@@ -387,7 +388,7 @@ function Lib:OpenPicker(default, callback, includeAlpha)
         local mouse = UserInputService:GetMouseLocation()
         
         if wheelDown then
-            local rel = Vector2.new(mouse.X - Wheel.AbsolutePosition.X, mouse.Y - Wheel.AbsolutePosition.Y - 36)
+            local rel = Vector2.new(mouse.X - Wheel.AbsolutePosition.X, mouse.Y - Wheel.AbsolutePosition.Y)
             local center = Vector2.new(85, 85)
             local diff = rel - center
             local angle = math.atan2(diff.Y, diff.X)
@@ -397,12 +398,12 @@ function Lib:OpenPicker(default, callback, includeAlpha)
             SyncAll("Wheel")
         end
         if valDown then
-            local relY = math.clamp((mouse.Y - ValueSlider.AbsolutePosition.Y - 36) / ValueSlider.AbsoluteSize.Y, 0, 1)
+            local relY = math.clamp((mouse.Y - ValueSlider.AbsolutePosition.Y) / ValueSlider.AbsoluteSize.Y, 0, 1)
             v = 1 - relY
             SyncAll("Slider")
         end
         if alphaDown then
-            local relY = math.clamp((mouse.Y - AlphaSlider.AbsolutePosition.Y - 36) / AlphaSlider.AbsoluteSize.Y, 0, 1)
+            local relY = math.clamp((mouse.Y - AlphaSlider.AbsolutePosition.Y) / AlphaSlider.AbsoluteSize.Y, 0, 1)
             alpha = 1 - relY
             SyncAll("Alpha")
         end
