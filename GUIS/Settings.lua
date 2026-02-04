@@ -164,7 +164,8 @@ function Lib:OpenPicker(default, callback, includeAlpha)
         Size = UDim2.fromOffset(14, 14),
         AnchorPoint = Vector2.new(0.5, 0.5),
         BackgroundColor3 = Color3.new(1, 1, 1),
-        ZIndex = 5
+        ZIndex = 11,
+        Active = false -- Let inputs pass through
     }, { Lib:Create("UICorner", {CornerRadius = UDim.new(1, 0)}), Lib:Create("UIStroke", {Thickness = 2, Color = Color3.new(0,0,0)}) })
 
     -- Value Slider (Vibrancy)
@@ -173,7 +174,8 @@ function Lib:OpenPicker(default, callback, includeAlpha)
         Parent = MainArea,
         Position = UDim2.fromOffset(180, 0),
         Size = UDim2.fromOffset(30, 160),
-        BackgroundColor3 = Color3.new(1,1,1)
+        BackgroundColor3 = Color3.new(1,1,1),
+        ZIndex = 10
     }, { Lib:Create("UICorner", {CornerRadius = UDim.new(0, 10)}) })
 
     local ValGradient = Lib:Create("UIGradient", {
@@ -186,9 +188,9 @@ function Lib:OpenPicker(default, callback, includeAlpha)
         Parent = ValueSlider,
         Size = UDim2.new(1.3, 0, 0, 6),
         AnchorPoint = Vector2.new(0.15, 0.5),
-        Position = UDim2.fromScale(0, 1-v),
         BackgroundColor3 = Color3.new(1, 1, 1),
-        ZIndex = 10
+        ZIndex = 11,
+        Active = false
     }, { Lib:Create("UICorner", {CornerRadius = UDim.new(1, 0)}), Lib:Create("UIStroke", {Thickness = 1}) })
 
     -- Alpha Slider (conditional)
@@ -198,7 +200,8 @@ function Lib:OpenPicker(default, callback, includeAlpha)
         Position = UDim2.fromOffset(230, 0),
         Size = UDim2.fromOffset(30, 160),
         BackgroundColor3 = Color3.new(1,1,1),
-        Visible = includeAlpha == true
+        Visible = includeAlpha == true,
+        ZIndex = 10
     }, { Lib:Create("UICorner", {CornerRadius = UDim.new(0, 10)}) })
 
     local AlphaGradient = Lib:Create("UIGradient", {
@@ -211,9 +214,9 @@ function Lib:OpenPicker(default, callback, includeAlpha)
         Parent = AlphaSlider,
         Size = UDim2.new(1.3, 0, 0, 6),
         AnchorPoint = Vector2.new(0.15, 0.5),
-        Position = UDim2.fromScale(0, 1-alpha),
         BackgroundColor3 = Color3.new(1, 1, 1),
-        ZIndex = 10
+        ZIndex = 11,
+        Active = false
     }, { Lib:Create("UICorner", {CornerRadius = UDim.new(1, 0)}), Lib:Create("UIStroke", {Thickness = 1}) })
 
     if not includeAlpha then
@@ -440,9 +443,13 @@ function Lib:OpenPicker(default, callback, includeAlpha)
 
     UserInputService.InputChanged:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-            if wheelDown then UpdateWheel(input) end
-            if valDown then UpdateValue(input) end
-            if alphaDown then UpdateAlpha(input) end
+            if wheelDown then 
+                UpdateWheel({Position = input.Position}) 
+            elseif valDown then 
+                UpdateValue({Position = input.Position}) 
+            elseif alphaDown then 
+                UpdateAlpha({Position = input.Position}) 
+            end
         end
     end)
 
