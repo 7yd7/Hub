@@ -248,8 +248,13 @@ function Lib:OpenPicker(default, callback, includeAlpha)
             BackgroundColor3 = Theme.Section,
             Image = img,
             ImageColor3 = color or Theme.Text,
-            PaddingLeft = UDim.new(0, 6), PaddingRight = UDim.new(0, 6), PaddingTop = UDim.new(0, 6), PaddingBottom = UDim.new(0, 6)
-        }, { Lib:Create("UICorner", {CornerRadius = UDim.new(0, 10)}) })
+            ScaleType = Enum.ScaleType.Fit
+        }, { 
+            Lib:Create("UICorner", {CornerRadius = UDim.new(0, 10)}),
+            Lib:Create("UIPadding", {
+                PaddingLeft = UDim.new(0, 6), PaddingRight = UDim.new(0, 6), PaddingTop = UDim.new(0, 6), PaddingBottom = UDim.new(0, 6)
+            })
+        })
         return btn
     end
 
