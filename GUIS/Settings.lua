@@ -654,7 +654,8 @@ local Library = {
     AddSection = function(...) return Components:AddSection(...) end,
     AddTextArea = function(...) return Components:AddTextArea(...) end,
     AddIconButton = function(...) return Components:AddIconButton(...) end,
-    AddFolder = function(...) return Components:AddFolder(...) end
+    AddFolder = function(...) return Components:AddFolder(...) end,
+    AddItem = function(...) return Components:AddItem(...) end
 }
 
 return Library
