@@ -141,64 +141,67 @@ function Lib:OpenPicker(default, callback, includeAlpha)
     })
     closeBtn.MouseButton1Click:Connect(function() PickerFrame:Destroy(); PickerFrame = nil end)
 
-    -- Main Area (Wheel + Slider)
+    -- Main Area (Square + Sliders)
     local MainArea = Lib:Create("Frame", {
         Parent = PickerFrame,
         BackgroundTransparency = 1,
-        Position = UDim2.fromOffset(20, 45),
+        Position = UDim2.fromOffset(20, 50),
         Size = UDim2.new(1, -40, 0, 160)
     })
 
-    -- Hue/Saturation Wheel
-    local Wheel = Lib:Create("ImageButton", {
+    -- Saturation/Value Square
+    local SVSquare = Lib:Create("Frame", {
+        Name = "SVSquare",
         Parent = MainArea,
         Size = UDim2.fromOffset(160, 160),
-        Position = UDim2.fromOffset(0, 0),
-        Image = "rbxassetid://4155801252",
-        BackgroundTransparency = 1
+        BackgroundColor3 = Color3.fromHSV(h, 1, 1),
+        BorderSizePixel = 0
+    }, {
+        Lib:Create("UICorner", {CornerRadius = UDim.new(0, 6)}),
+        Lib:Create("ImageLabel", { -- Saturation Overlay (White-Transparent)
+            Size = UDim2.fromScale(1, 1),
+            BackgroundTransparency = 1,
+            Image = "rbxassetid://4695575676", -- Standard SV Map overlay
+            ZIndex = 2
+        }),
+        Lib:Create("UICorner", {CornerRadius = UDim.new(0, 6)}) -- Ensure second corner for overlay
     })
 
-    local WheelCursor = Lib:Create("Frame", {
-        Parent = Wheel,
+    local SVCursor = Lib:Create("Frame", {
+        Parent = SVSquare,
         Size = UDim2.fromOffset(14, 14),
         AnchorPoint = Vector2.new(0.5, 0.5),
         BackgroundColor3 = Color3.new(1, 1, 1),
         ZIndex = 5
     }, { Lib:Create("UICorner", {CornerRadius = UDim.new(1, 0)}), Lib:Create("UIStroke", {Thickness = 2, Color = Color3.new(0,0,0)}) })
 
-    -- Value Slider
-    local ValueSlider = Lib:Create("ImageButton", {
-        Name = "ValueSlider",
+    -- Hue Slider (Rainbow)
+    local HueSlider = Lib:Create("ImageButton", {
+        Name = "HueSlider",
         Parent = MainArea,
-        Position = UDim2.fromOffset(180, 5),
-        Size = UDim2.fromOffset(30, 150),
-        BackgroundColor3 = Color3.new(1,1,1)
-    }, { Lib:Create("UICorner", {CornerRadius = UDim.new(0, 15)}) })
+        Position = UDim2.fromOffset(180, 0),
+        Size = UDim2.fromOffset(30, 160),
+        Image = "rbxassetid://3683937225" -- Vertical Rainbow
+    }, { Lib:Create("UICorner", {CornerRadius = UDim.new(0, 10)}) })
 
-    local ValGradient = Lib:Create("UIGradient", {
-        Parent = ValueSlider,
-        Rotation = 90,
-        Color = ColorSequence.new(Color3.new(1, 1, 1), Color3.new(0, 0, 0))
-    })
-
-    local ValCursor = Lib:Create("Frame", {
-        Parent = ValueSlider,
+    local HueCursor = Lib:Create("Frame", {
+        Parent = HueSlider,
         Size = UDim2.new(1.3, 0, 0, 6),
         AnchorPoint = Vector2.new(0.15, 0.5),
-        Position = UDim2.fromScale(0, 1-v),
+        Position = UDim2.fromScale(0, 1-h),
         BackgroundColor3 = Color3.new(1, 1, 1),
-        ZIndex = 5
+        ZIndex = 10
     }, { Lib:Create("UICorner", {CornerRadius = UDim.new(1, 0)}), Lib:Create("UIStroke", {Thickness = 1}) })
 
-    -- Alpha Slider (conditional)
+    -- Alpha Slider
     local AlphaSlider = Lib:Create("ImageButton", {
         Name = "AlphaSlider",
         Parent = MainArea,
-        Position = UDim2.fromOffset(235, 5),
-        Size = UDim2.fromOffset(30, 150),
+        Position = UDim2.fromOffset(230, 0),
+        Size = UDim2.fromOffset(30, 160),
         BackgroundColor3 = Color3.new(1,1,1),
         Visible = includeAlpha == true
-    }, { Lib:Create("UICorner", {CornerRadius = UDim.new(0, 15)}) })
+    }, { Lib:Create("UICorner", {CornerRadius = UDim.new(0, 10)}) })
 
     local AlphaGradient = Lib:Create("UIGradient", {
         Parent = AlphaSlider,
@@ -212,12 +215,12 @@ function Lib:OpenPicker(default, callback, includeAlpha)
         AnchorPoint = Vector2.new(0.15, 0.5),
         Position = UDim2.fromScale(0, 1-alpha),
         BackgroundColor3 = Color3.new(1, 1, 1),
-        ZIndex = 5
+        ZIndex = 10
     }, { Lib:Create("UICorner", {CornerRadius = UDim.new(1, 0)}), Lib:Create("UIStroke", {Thickness = 1}) })
 
     if not includeAlpha then
-        ValueSlider.Position = UDim2.fromOffset(200, 5)
-        ValueSlider.Size = UDim2.fromOffset(40, 150)
+        HueSlider.Position = UDim2.fromOffset(200, 0)
+        HueSlider.Size = UDim2.fromOffset(40, 160)
     end
 
     -- Feedback and Actions
@@ -330,20 +333,32 @@ function Lib:OpenPicker(default, callback, includeAlpha)
         })
     })
 
+    -- Palette Logic
+    for i, color in ipairs(ColorHistory) do
+        local swatch = Lib:Create("TextButton", {
+            Parent = Palette,
+            Size = UDim2.fromOffset(28, 28),
+            BackgroundColor3 = color,
+            Text = ""
+        }, { Lib:Create("UICorner", {CornerRadius = UDim.new(0, 6)}) })
+        swatch.MouseButton1Click:Connect(function()
+            h, s, v = color:ToHSV()
+            SyncAll("Palette")
+        end)
+    end
+
     local function SyncAll(source)
         pickerColor = Color3.fromHSV(h, s, v)
         Preview.BackgroundColor3 = pickerColor
         Preview.BackgroundTransparency = 1 - alpha
-        ValGradient.Color = ColorSequence.new(Color3.fromHSV(h, s, 1), Color3.new(0, 0, 0))
+        SVSquare.BackgroundColor3 = Color3.fromHSV(h, 1, 1)
         AlphaGradient.Color = ColorSequence.new(pickerColor, pickerColor)
         
-        if source ~= "Wheel" then
-            local angle = math.rad(h * 360)
-            local dist = s * 80
-            WheelCursor.Position = UDim2.fromOffset(80 + math.cos(angle) * dist, 80 + math.sin(angle) * dist)
+        if source ~= "SV" then
+            SVCursor.Position = UDim2.fromScale(s, 1-v)
         end
-        if source ~= "Slider" then
-            ValCursor.Position = UDim2.fromScale(0, 1-v)
+        if source ~= "Hue" then
+            HueCursor.Position = UDim2.fromScale(0, 1-h)
         end
         if source ~= "Alpha" then
             AlphaCursor.Position = UDim2.fromScale(0, 1-alpha)
@@ -362,38 +377,21 @@ function Lib:OpenPicker(default, callback, includeAlpha)
         end
     end
 
-    -- Palette Logic
-    for i, color in ipairs(ColorHistory) do
-        local swatch = Lib:Create("TextButton", {
-            Parent = Palette,
-            Size = UDim2.fromOffset(28, 28),
-            BackgroundColor3 = color,
-            Text = ""
-        }, { Lib:Create("UICorner", {CornerRadius = UDim.new(0, 6)}) })
-        swatch.MouseButton1Click:Connect(function()
-            h, s, v = color:ToHSV()
-            SyncAll("Palette")
-        end)
-    end
-
-    -- Interaction Refactored
-    local function UpdateWheel(input)
+    -- Interaction Refactored (Linear)
+    local function UpdateSV(input)
         local pos = input.Position
-        local rel = Vector2.new(pos.X - Wheel.AbsolutePosition.X, pos.Y - Wheel.AbsolutePosition.Y) / UIScale.Scale
-        local center = Vector2.new(80, 80)
-        local diff = rel - center
-        local angle = math.atan2(diff.Y, diff.X)
-        local dist = math.min(diff.Magnitude, 80)
-        h = (math.deg(angle) % 360) / 360
-        s = dist / 80
-        SyncAll("Wheel")
-    end
-
-    local function UpdateValue(input)
-        local pos = input.Position
-        local relY = math.clamp((pos.Y - ValueSlider.AbsolutePosition.Y) / ValueSlider.AbsoluteSize.Y, 0, 1)
+        local relX = math.clamp((pos.X - SVSquare.AbsolutePosition.X) / SVSquare.AbsoluteSize.X, 0, 1)
+        local relY = math.clamp((pos.Y - SVSquare.AbsolutePosition.Y) / SVSquare.AbsoluteSize.Y, 0, 1)
+        s = relX
         v = 1 - relY
-        SyncAll("Slider")
+        SyncAll("SV")
+    end
+
+    local function UpdateHue(input)
+        local pos = input.Position
+        local relY = math.clamp((pos.Y - HueSlider.AbsolutePosition.Y) / HueSlider.AbsoluteSize.Y, 0, 1)
+        h = 1 - relY
+        SyncAll("Hue")
     end
 
     local function UpdateAlpha(input)
@@ -403,47 +401,50 @@ function Lib:OpenPicker(default, callback, includeAlpha)
         SyncAll("Alpha")
     end
 
-    local wheelDown, valDown, alphaDown = false, false, false
+    local svDown, hueDown, alphaDown = false, false, false
 
-    Wheel.InputBegan:Connect(function(input)
+    -- SVSquare Input
+    Lib:Create("TextButton", { -- Interaction overlay for SVSquare
+        Parent = SVSquare,
+        Size = UDim2.fromScale(1, 1),
+        BackgroundTransparency = 1,
+        Text = "",
+        ZIndex = 10
+    }).InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            wheelDown = true
-            UpdateWheel(input)
-        end
-    end)
-    Wheel.InputChanged:Connect(function(input)
-        if wheelDown and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-            UpdateWheel(input)
+            svDown = true
+            UpdateSV(input)
         end
     end)
 
-    ValueSlider.InputBegan:Connect(function(input)
+    -- Hue Slider Input
+    HueSlider.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            valDown = true
-            UpdateValue(input)
-        end
-    end)
-    ValueSlider.InputChanged:Connect(function(input)
-        if valDown and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-            UpdateValue(input)
+            hueDown = true
+            UpdateHue(input)
         end
     end)
 
+    -- Alpha Slider Input
     AlphaSlider.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             alphaDown = true
             UpdateAlpha(input)
         end
     end)
-    AlphaSlider.InputChanged:Connect(function(input)
-        if alphaDown and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-            UpdateAlpha(input)
+
+    -- Global Move/End Logic
+    UserInputService.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+            if svDown then UpdateSV(input) end
+            if hueDown then UpdateHue(input) end
+            if alphaDown then UpdateAlpha(input) end
         end
     end)
 
     UserInputService.InputEnded:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            wheelDown, valDown, alphaDown = false, false, false
+            svDown, hueDown, alphaDown = false, false, false
         end
     end)
 
