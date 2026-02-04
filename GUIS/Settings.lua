@@ -832,6 +832,17 @@ function Components:AddInputWithColor(container, title, placeholder, defaultText
         end
     end
     
+    -- Visual-only update (no callback) for smooth dragging
+    local function UpdatePickerVisual()
+        local c = Color3.fromHSV(h, s, v)
+        SatValArea.BackgroundColor3 = Color3.fromHSV(h, 1, 1)
+        SatValCursor.Position = UDim2.fromScale(s, 1-v)
+        HueCursor.Position = UDim2.fromScale(0, 1-h)
+        ColorBtn.BackgroundColor3 = c
+        color = c
+        text = Input.Text
+    end
+    
     RunService.RenderStepped:Connect(function()
         if not PickerFrame.Visible then return end
         if mDown then
@@ -840,13 +851,24 @@ function Components:AddInputWithColor(container, title, placeholder, defaultText
             local relY = (pos.Y - SatValArea.AbsolutePosition.Y - 36) / SatValArea.AbsoluteSize.Y
             s = math.clamp(relX, 0, 1)
             v = 1 - math.clamp(relY, 0, 1)
-            UpdatePicker()
+            UpdatePickerVisual() -- Visual only during drag
         end
         if hDown then
             local pos = UserInputService:GetMouseLocation()
             local relY = (pos.Y - HueSlider.AbsolutePosition.Y - 36) / HueSlider.AbsoluteSize.Y
             h = 1 - math.clamp(relY, 0, 1)
-            UpdatePicker()
+            UpdatePickerVisual() -- Visual only during drag
+        end
+    end)
+    
+    -- Call callback only when mouse is released (after dragging)
+    UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            if PickerFrame.Visible and (mDown or hDown) then
+                task.defer(function() -- Defer to let mDown/hDown reset first
+                    UpdatePicker() -- Now call with callback
+                end)
+            end
         end
     end)
     
