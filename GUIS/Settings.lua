@@ -276,7 +276,10 @@ function Components:AddDropdown(container, title, options, default, callback)
     
     local Dropdown = {
         Button = DropBtn,
-        Refresh = RefreshOptions
+        Refresh = function(newOptions)
+            if newOptions then options = newOptions end
+            RefreshOptions(SearchBox.Text)
+        end
     }
     
     RefreshOptions()
