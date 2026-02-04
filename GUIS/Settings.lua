@@ -141,20 +141,20 @@ function Lib:OpenPicker(default, callback, includeAlpha)
     })
     closeBtn.MouseButton1Click:Connect(function() PickerFrame:Destroy(); PickerFrame = nil end)
 
-    -- Container for interactive elements
+    -- Main Area (Wheel + Slider)
     local MainArea = Lib:Create("Frame", {
         Parent = PickerFrame,
         BackgroundTransparency = 1,
-        Position = UDim2.fromOffset(20, 55),
-        Size = UDim2.new(1, -40, 0, 180)
+        Position = UDim2.fromOffset(20, 45),
+        Size = UDim2.new(1, -40, 0, 160)
     })
 
     -- Hue/Saturation Wheel
     local Wheel = Lib:Create("ImageButton", {
         Parent = MainArea,
-        Size = UDim2.fromOffset(170, 170),
-        Position = UDim2.fromOffset(0, 5),
-        Image = "rbxassetid://4155801252", -- Improved Hue Wheel
+        Size = UDim2.fromOffset(160, 160),
+        Position = UDim2.fromOffset(0, 0),
+        Image = "rbxassetid://4155801252",
         BackgroundTransparency = 1
     })
 
@@ -170,10 +170,10 @@ function Lib:OpenPicker(default, callback, includeAlpha)
     local ValueSlider = Lib:Create("ImageButton", {
         Name = "ValueSlider",
         Parent = MainArea,
-        Position = UDim2.fromOffset(190, 10),
-        Size = UDim2.fromOffset(28, 160),
+        Position = UDim2.fromOffset(180, 5),
+        Size = UDim2.fromOffset(30, 150),
         BackgroundColor3 = Color3.new(1,1,1)
-    }, { Lib:Create("UICorner", {CornerRadius = UDim.new(0, 14)}) })
+    }, { Lib:Create("UICorner", {CornerRadius = UDim.new(0, 15)}) })
 
     local ValGradient = Lib:Create("UIGradient", {
         Parent = ValueSlider,
@@ -194,11 +194,11 @@ function Lib:OpenPicker(default, callback, includeAlpha)
     local AlphaSlider = Lib:Create("ImageButton", {
         Name = "AlphaSlider",
         Parent = MainArea,
-        Position = UDim2.fromOffset(235, 10),
-        Size = UDim2.fromOffset(28, 160),
+        Position = UDim2.fromOffset(235, 5),
+        Size = UDim2.fromOffset(30, 150),
         BackgroundColor3 = Color3.new(1,1,1),
         Visible = includeAlpha == true
-    }, { Lib:Create("UICorner", {CornerRadius = UDim.new(0, 14)}) })
+    }, { Lib:Create("UICorner", {CornerRadius = UDim.new(0, 15)}) })
 
     local AlphaGradient = Lib:Create("UIGradient", {
         Parent = AlphaSlider,
@@ -216,15 +216,15 @@ function Lib:OpenPicker(default, callback, includeAlpha)
     }, { Lib:Create("UICorner", {CornerRadius = UDim.new(1, 0)}), Lib:Create("UIStroke", {Thickness = 1}) })
 
     if not includeAlpha then
-        ValueSlider.Position = UDim2.fromOffset(210, 10)
-        ValueSlider.Size = UDim2.fromOffset(35, 160)
+        ValueSlider.Position = UDim2.fromOffset(200, 5)
+        ValueSlider.Size = UDim2.fromOffset(40, 150)
     end
 
     -- Feedback and Actions
     local ActionArea = Lib:Create("Frame", {
         Parent = PickerFrame,
         BackgroundTransparency = 1,
-        Position = UDim2.fromOffset(20, 250),
+        Position = UDim2.fromOffset(20, 215),
         Size = UDim2.new(1, -40, 0, 40)
     })
 
@@ -273,7 +273,7 @@ function Lib:OpenPicker(default, callback, includeAlpha)
     local Grid = Lib:Create("Frame", {
         Parent = PickerFrame,
         BackgroundTransparency = 1,
-        Position = UDim2.fromOffset(20, 305),
+        Position = UDim2.fromOffset(20, 265),
         Size = UDim2.new(1, -40, 0, 90)
     })
 
@@ -320,7 +320,7 @@ function Lib:OpenPicker(default, callback, includeAlpha)
     local Palette = Lib:Create("Frame", {
         Parent = PickerFrame,
         BackgroundTransparency = 1,
-        Position = UDim2.fromOffset(20, 410),
+        Position = UDim2.fromOffset(20, 365),
         Size = UDim2.new(1, -40, 0, 45)
     }, {
         Lib:Create("UIListLayout", {
@@ -339,8 +339,8 @@ function Lib:OpenPicker(default, callback, includeAlpha)
         
         if source ~= "Wheel" then
             local angle = math.rad(h * 360)
-            local dist = s * 85
-            WheelCursor.Position = UDim2.fromOffset(85 + math.cos(angle) * dist, 85 + math.sin(angle) * dist)
+            local dist = s * 80
+            WheelCursor.Position = UDim2.fromOffset(80 + math.cos(angle) * dist, 80 + math.sin(angle) * dist)
         end
         if source ~= "Slider" then
             ValCursor.Position = UDim2.fromScale(0, 1-v)
@@ -376,41 +376,73 @@ function Lib:OpenPicker(default, callback, includeAlpha)
         end)
     end
 
-    -- Interaction
+    -- Interaction Refactored
+    local function UpdateWheel(input)
+        local pos = input.Position
+        local rel = Vector2.new(pos.X - Wheel.AbsolutePosition.X, pos.Y - Wheel.AbsolutePosition.Y) / UIScale.Scale
+        local center = Vector2.new(80, 80)
+        local diff = rel - center
+        local angle = math.atan2(diff.Y, diff.X)
+        local dist = math.min(diff.Magnitude, 80)
+        h = (math.deg(angle) % 360) / 360
+        s = dist / 80
+        SyncAll("Wheel")
+    end
+
+    local function UpdateValue(input)
+        local pos = input.Position
+        local relY = math.clamp((pos.Y - ValueSlider.AbsolutePosition.Y) / ValueSlider.AbsoluteSize.Y, 0, 1)
+        v = 1 - relY
+        SyncAll("Slider")
+    end
+
+    local function UpdateAlpha(input)
+        local pos = input.Position
+        local relY = math.clamp((pos.Y - AlphaSlider.AbsolutePosition.Y) / AlphaSlider.AbsoluteSize.Y, 0, 1)
+        alpha = 1 - relY
+        SyncAll("Alpha")
+    end
+
     local wheelDown, valDown, alphaDown = false, false, false
-    Wheel.MouseButton1Down:Connect(function() wheelDown = true end)
-    ValueSlider.MouseButton1Down:Connect(function() valDown = true end)
-    AlphaSlider.MouseButton1Down:Connect(function() alphaDown = true end)
-    
-    local Connection
-    Connection = RunService.RenderStepped:Connect(function()
-        if not PickerFrame or not PickerFrame.Parent then Connection:Disconnect(); return end
-        local mouse = UserInputService:GetMouseLocation()
-        
-        if wheelDown then
-            local rel = Vector2.new(mouse.X - Wheel.AbsolutePosition.X, mouse.Y - Wheel.AbsolutePosition.Y)
-            local center = Vector2.new(85, 85)
-            local diff = rel - center
-            local angle = math.atan2(diff.Y, diff.X)
-            local dist = math.min(diff.Magnitude, 85)
-            h = (math.deg(angle) % 360) / 360
-            s = dist / 85
-            SyncAll("Wheel")
+
+    Wheel.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            wheelDown = true
+            UpdateWheel(input)
         end
-        if valDown then
-            local relY = math.clamp((mouse.Y - ValueSlider.AbsolutePosition.Y) / ValueSlider.AbsoluteSize.Y, 0, 1)
-            v = 1 - relY
-            SyncAll("Slider")
-        end
-        if alphaDown then
-            local relY = math.clamp((mouse.Y - AlphaSlider.AbsolutePosition.Y) / AlphaSlider.AbsoluteSize.Y, 0, 1)
-            alpha = 1 - relY
-            SyncAll("Alpha")
+    end)
+    Wheel.InputChanged:Connect(function(input)
+        if wheelDown and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            UpdateWheel(input)
         end
     end)
 
-    UserInputService.InputEnded:Connect(function(i)
-        if i.UserInputType == Enum.UserInputType.MouseButton1 then
+    ValueSlider.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            valDown = true
+            UpdateValue(input)
+        end
+    end)
+    ValueSlider.InputChanged:Connect(function(input)
+        if valDown and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            UpdateValue(input)
+        end
+    end)
+
+    AlphaSlider.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            alphaDown = true
+            UpdateAlpha(input)
+        end
+    end)
+    AlphaSlider.InputChanged:Connect(function(input)
+        if alphaDown and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            UpdateAlpha(input)
+        end
+    end)
+
+    UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             wheelDown, valDown, alphaDown = false, false, false
         end
     end)
