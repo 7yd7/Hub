@@ -17,16 +17,23 @@ local function HexToColor(hex)
     return success and result or nil
 end
 
-local _7yd7Settings = Instance.new("Folder")
-_7yd7Settings.Name = "7yd7-Settings"
-_7yd7Settings.Parent = game.CoreGui:FindFirstChild("RobloxGui") or Player:WaitForChild("PlayerGui")
+local function GetUIContainer()
+    if game:GetService("RunService"):IsStudio() then
+        return Player:WaitForChild("PlayerGui")
+    end
+    local success, coreGui = pcall(function() return game:GetService("CoreGui") end)
+    if success and coreGui:FindFirstChild("RobloxGui") then
+        return coreGui.RobloxGui
+    end
+    return Player:WaitForChild("PlayerGui")
+end
 
 local SettingsUI = Instance.new("ScreenGui")
 SettingsUI.Name = "SettingsUI"
 SettingsUI.ResetOnSpawn = false
-SettingsUI.ZIndexBehavior = Enum.ZIndexBehavior.Global
+SettingsUI.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 SettingsUI.DisplayOrder = 999
-SettingsUI.Parent = _7yd7Settings
+SettingsUI.Parent = GetUIContainer()
 
 local UIScale = Instance.new("UIScale")
 UIScale.Parent = SettingsUI
