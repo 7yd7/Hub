@@ -90,52 +90,65 @@ function Lib:OpenPicker(default, callback)
         BackgroundColor3 = Theme.Background,
         Position = UDim2.fromScale(0.5, 0.5),
         AnchorPoint = Vector2.new(0.5, 0.5),
-        Size = UDim2.fromOffset(280, 360),
+        Size = UDim2.fromOffset(300, 380), -- Slightly wider for better breathing room
         ZIndex = 2000
     }, {
         Lib:Create("UICorner", {CornerRadius = Theme.CornerRadius}),
         Lib:Create("UIStroke", {Color = Theme.Section, Thickness = 2}),
         Lib:Create("TextLabel", {
-            Position = UDim2.fromOffset(15, 10),
+            Position = UDim2.fromOffset(15, 12),
             Size = UDim2.new(1, -30, 0, 25),
             BackgroundTransparency = 1,
             Font = Theme.FontBold,
-            Text = "Color",
+            Text = "COLOR SELECTOR",
             TextColor3 = Theme.Text,
-            TextSize = 18,
+            TextSize = 14,
             TextXAlignment = Enum.TextXAlignment.Left
         })
     })
 
+    local closeBtn = Lib:Create("TextButton", {
+        Parent = PickerFrame,
+        BackgroundTransparency = 1,
+        Position = UDim2.new(1, -35, 0, 10),
+        Size = UDim2.fromOffset(25, 25),
+        Font = Theme.FontBold,
+        Text = "×",
+        TextColor3 = Theme.TextDim,
+        TextSize = 24
+    })
+    closeBtn.MouseButton1Click:Connect(function() PickerFrame:Destroy(); PickerFrame = nil end)
+
+    -- Main Area (Wheel + Slider)
     local MainArea = Lib:Create("Frame", {
         Parent = PickerFrame,
         BackgroundTransparency = 1,
-        Position = UDim2.fromOffset(15, 45),
+        Position = UDim2.fromOffset(15, 50),
         Size = UDim2.new(1, -30, 0, 160)
     })
 
     local Wheel = Lib:Create("ImageButton", {
         Parent = MainArea,
-        Size = UDim2.fromOffset(150, 150),
-        Image = "rbxassetid://6039290073", -- Circular Picker
+        Size = UDim2.fromOffset(160, 160),
+        Position = UDim2.fromOffset(10, 0),
+        Image = "rbxassetid://6039290073",
         BackgroundTransparency = 1
     })
 
     local WheelCursor = Lib:Create("Frame", {
         Parent = Wheel,
-        Size = UDim2.fromOffset(10, 10),
+        Size = UDim2.fromOffset(12, 12),
         AnchorPoint = Vector2.new(0.5, 0.5),
         BackgroundColor3 = Color3.new(1, 1, 1),
         ZIndex = 5
-    }, { Lib:Create("UICorner", {CornerRadius = UDim.new(1, 0)}), Lib:Create("UIStroke", {Thickness = 1}) })
+    }, { Lib:Create("UICorner", {CornerRadius = UDim.new(1, 0)}), Lib:Create("UIStroke", {Thickness = 2, Color = Color3.new(0,0,0)}) })
 
     local Slider = Lib:Create("ImageButton", {
         Parent = MainArea,
-        Position = UDim2.new(1, -30, 0, 10),
-        Size = UDim2.fromOffset(20, 130),
-        Image = "rbxassetid://0", -- Gradient will be applied via UIGradient
+        Position = UDim2.fromOffset(210, 5),
+        Size = UDim2.fromOffset(25, 150),
         BackgroundColor3 = Color3.new(1,1,1)
-    }, { Lib:Create("UICorner", {CornerRadius = UDim.new(0, 10)}) })
+    }, { Lib:Create("UICorner", {CornerRadius = UDim.new(0, 12)}) })
 
     local SliderGradient = Lib:Create("UIGradient", {
         Parent = Slider,
@@ -145,101 +158,100 @@ function Lib:OpenPicker(default, callback)
 
     local SliderCursor = Lib:Create("Frame", {
         Parent = Slider,
-        Size = UDim2.new(1.4, 0, 0, 4),
-        Position = UDim2.fromScale(-0.2, 1-v),
+        Size = UDim2.new(1.2, 0, 0, 6),
+        AnchorPoint = Vector2.new(0.1, 0.5),
+        Position = UDim2.fromScale(0, 1-v),
         BackgroundColor3 = Color3.new(1, 1, 1),
         ZIndex = 5
     }, { Lib:Create("UICorner", {CornerRadius = UDim.new(1, 0)}), Lib:Create("UIStroke", {Thickness = 1}) })
 
-    -- Bottom Controls
-    local Controls = Lib:Create("Frame", {
+    -- Hex and Actions row
+    local ActionsRow = Lib:Create("Frame", {
         Parent = PickerFrame,
         BackgroundTransparency = 1,
-        Position = UDim2.fromOffset(15, 215),
-        Size = UDim2.new(1, -30, 0, 40)
+        Position = UDim2.fromOffset(20, 220),
+        Size = UDim2.new(1, -40, 0, 35)
     })
 
     local ColorPreview = Lib:Create("Frame", {
-        Parent = Controls,
-        Size = UDim2.fromOffset(35, 30),
+        Parent = ActionsRow,
+        Size = UDim2.fromOffset(45, 30),
         BackgroundColor3 = pickerColor
-    }, { Lib:Create("UICorner", {CornerRadius = UDim.new(0, 8)}) })
-
-    local ApplyBtn = Lib:Create("ImageButton", {
-        Parent = Controls,
-        Position = UDim2.fromOffset(50, 0),
-        Size = UDim2.fromOffset(30, 30),
-        BackgroundTransparency = 1,
-        Image = "rbxassetid://11419713314", -- Checkmark
-        ImageColor3 = Theme.Text
-    })
-
-    local CancelBtn = Lib:Create("ImageButton", {
-        Parent = Controls,
-        Position = UDim2.fromOffset(100, 0),
-        Size = UDim2.fromOffset(30, 30),
-        BackgroundTransparency = 1,
-        Image = "rbxassetid://11419719547", -- Close
-        ImageColor3 = Theme.Text
-    })
+    }, { Lib:Create("UICorner", {CornerRadius = UDim.new(0, 8)}), Lib:Create("UIStroke", {Thickness = 1, Color = Theme.Section}) })
 
     local HexBox = Lib:Create("TextBox", {
-        Parent = Controls,
-        Position = UDim2.new(1, -85, 0, 0),
-        Size = UDim2.fromOffset(85, 30),
+        Parent = ActionsRow,
+        Position = UDim2.fromOffset(55, 0),
+        Size = UDim2.fromOffset(90, 30),
         BackgroundColor3 = Theme.Section,
         Font = Theme.FontRegular,
         Text = ColorToHex(pickerColor),
         TextColor3 = Theme.Text,
-        TextSize = 12
-    }, { Lib:Create("UICorner", {CornerRadius = UDim.new(0, 6)}) })
+        TextSize = 13
+    }, { Lib:Create("UICorner", {CornerRadius = Theme.CornerRadius}) })
 
-    -- Inputs Grid
-    local InputsGrid = Lib:Create("Frame", {
+    local function CreateActionBtn(img, x, parent, color)
+        local btn = Lib:Create("ImageButton", {
+            Parent = parent,
+            Position = UDim2.fromOffset(x, 0),
+            Size = UDim2.fromOffset(30, 30),
+            BackgroundColor3 = Theme.Section,
+            Image = img,
+            ImageColor3 = color or Theme.Text,
+            PaddingLeft = UDim.new(0, 5), PaddingRight = UDim.new(0, 5), PaddingTop = UDim.new(0, 5), PaddingBottom = UDim.new(0, 5)
+        }, { Lib:Create("UICorner", {CornerRadius = UDim.new(0, 8)}) })
+        return btn
+    end
+
+    local ApplyBtn = CreateActionBtn("rbxassetid://11419713314", 190, ActionsRow, Theme.Accent)
+    local CancelBtn = CreateActionBtn("rbxassetid://11419719547", 230, ActionsRow, Theme.Error)
+
+    -- Numeric Inputs Grid
+    local Grid = Lib:Create("Frame", {
         Parent = PickerFrame,
         BackgroundTransparency = 1,
-        Position = UDim2.fromOffset(15, 255),
-        Size = UDim2.new(1, -30, 0, 90)
+        Position = UDim2.fromOffset(20, 265),
+        Size = UDim2.new(1, -40, 0, 95)
     })
 
-    local function CreateInput(parent, label, pos, default)
+    local function CreateInput(label, x, y, parent, default)
         local container = Lib:Create("Frame", {
             Parent = parent,
-            Position = pos,
-            Size = UDim2.fromOffset(70, 35),
+            Position = UDim2.fromOffset(x, y),
+            Size = UDim2.fromOffset(80, 40),
             BackgroundColor3 = Theme.Section
         }, {
-            Lib:Create("UICorner", {CornerRadius = UDim.new(0, 6)}),
+            Lib:Create("UICorner", {CornerRadius = Theme.CornerRadius}),
             Lib:Create("TextLabel", {
-                Position = UDim2.new(0, -15, 0, 0),
-                Size = UDim2.new(0, 15, 1, 0),
+                Position = UDim2.new(0, 8, 0, -14),
+                Size = UDim2.fromOffset(20, 15),
                 BackgroundTransparency = 1,
                 Font = Theme.FontBold,
                 Text = label,
-                TextColor3 = Theme.Text,
-                TextSize = 12
+                TextColor3 = Theme.TextDim,
+                TextSize = 10
             })
         })
         local box = Lib:Create("TextBox", {
             Parent = container,
-            Size = UDim2.new(1, 0, 1, 0),
+            Size = UDim2.fromScale(1, 1),
             BackgroundTransparency = 1,
             Font = Theme.FontRegular,
             Text = tostring(default),
             TextColor3 = Theme.Text,
-            TextSize = 12,
+            TextSize = 13,
             ClearTextOnFocus = false
         })
         return box
     end
 
-    local rI = CreateInput(InputsGrid, "R", UDim2.fromOffset(25, 5), math.round(pickerColor.R*255))
-    local gI = CreateInput(InputsGrid, "G", UDim2.fromOffset(115, 5), math.round(pickerColor.G*255))
-    local bI = CreateInput(InputsGrid, "B", UDim2.fromOffset(205, 5), math.round(pickerColor.B*255))
+    local rI = CreateInput("R", 0, 5, Grid, math.round(pickerColor.R*255))
+    local gI = CreateInput("G", 90, 5, Grid, math.round(pickerColor.G*255))
+    local bI = CreateInput("B", 180, 5, Grid, math.round(pickerColor.B*255))
     
-    local hI = CreateInput(InputsGrid, "H", UDim2.fromOffset(25, 45), math.round(h*360))
-    local sI = CreateInput(InputsGrid, "S", UDim2.fromOffset(115, 45), string.format("%.2f", s))
-    local vI = CreateInput(InputsGrid, "V", UDim2.fromOffset(205, 45), string.format("%.2f", v))
+    local hI = CreateInput("H", 0, 50, Grid, math.round(h*360))
+    local sI = CreateInput("S", 90, 50, Grid, string.format("%.2f", s))
+    local vI = CreateInput( "V", 180, 50, Grid, string.format("%.2f", v))
 
     local function SyncAll(source)
         pickerColor = Color3.fromHSV(h, s, v)
@@ -248,8 +260,8 @@ function Lib:OpenPicker(default, callback)
         
         if source ~= "Wheel" then
             local angle = math.rad(h * 360)
-            local dist = s * 75
-            WheelCursor.Position = UDim2.fromOffset(75 + math.cos(angle) * dist, 75 + math.sin(angle) * dist)
+            local dist = s * 80
+            WheelCursor.Position = UDim2.fromOffset(80 + math.cos(angle) * dist, 80 + math.sin(angle) * dist)
         end
         if source ~= "Slider" then
             SliderCursor.Position = UDim2.fromScale(-0.2, 1-v)
@@ -279,13 +291,13 @@ function Lib:OpenPicker(default, callback)
         if wheelDown then
             local mouse = UserInputService:GetMouseLocation()
             local rel = Vector2.new(mouse.X - Wheel.AbsolutePosition.X, mouse.Y - Wheel.AbsolutePosition.Y - 36)
-            local center = Vector2.new(75, 75)
+            local center = Vector2.new(80, 80)
             local diff = rel - center
             local angle = math.atan2(diff.Y, diff.X)
-            local dist = math.min(diff.Magnitude, 75)
+            local dist = math.min(diff.Magnitude, 80)
             
             h = (math.deg(angle) % 360) / 360
-            s = dist / 75
+            s = dist / 80
             WheelCursor.Position = UDim2.fromOffset(center.X + math.cos(angle) * dist, center.Y + math.sin(angle) * dist)
             SyncAll("Wheel")
         end
@@ -748,6 +760,14 @@ function Components:AddColorPicker(container, title, default, callback)
     local color = default or Theme.Accent
     local h, s, v = color:ToHSV()
     
+    local ColorBtn = Lib:Create("TextButton", {
+        Parent = item,
+        BackgroundColor3 = color,
+        Position = UDim2.new(1, -42, 0.5, -10),
+        Size = UDim2.new(0, 22, 0, 22),
+        Text = ""
+    }, { Lib:Create("UICorner", {CornerRadius = UDim.new(0, 5)}) })
+
     ColorBtn.MouseButton1Click:Connect(function()
         Lib:OpenPicker(color, function(newColor)
             color = newColor
