@@ -149,15 +149,16 @@ function Lib:OpenPicker(default, callback, includeAlpha)
         Size = UDim2.new(1, -40, 0, 160)
     })
 
-    -- Hue/Saturation Circle (Fixed asset and transparency)
+    -- Hue/Saturation Circle (Truly circular)
     local Wheel = Lib:Create("ImageButton", {
         Name = "Wheel",
         Parent = MainArea,
         Size = UDim2.fromOffset(160, 160),
         BackgroundTransparency = 1,
-        Image = "rbxassetid://4155801252", -- High-quality Hue/Sat Circle
-        ScaleType = Enum.ScaleType.Fit
-    })
+        Image = "rbxassetid://6020299385", -- Better circular Hue/Sat asset
+        ScaleType = Enum.ScaleType.Fit,
+        ZIndex = 10
+    }, { Lib:Create("UICorner", {CornerRadius = UDim.new(1, 0)}) })
 
     local WheelCursor = Lib:Create("Frame", {
         Parent = Wheel,
@@ -168,15 +169,15 @@ function Lib:OpenPicker(default, callback, includeAlpha)
         Active = false -- Let inputs pass through
     }, { Lib:Create("UICorner", {CornerRadius = UDim.new(1, 0)}), Lib:Create("UIStroke", {Thickness = 2, Color = Color3.new(0,0,0)}) })
 
-    -- Value Slider (Vibrancy)
+    -- Value Slider (Pill-shaped)
     local ValueSlider = Lib:Create("ImageButton", {
         Name = "ValueSlider",
         Parent = MainArea,
         Position = UDim2.fromOffset(180, 0),
-        Size = UDim2.fromOffset(30, 160),
+        Size = UDim2.fromOffset(25, 160),
         BackgroundColor3 = Color3.new(1,1,1),
         ZIndex = 10
-    }, { Lib:Create("UICorner", {CornerRadius = UDim.new(0, 10)}) })
+    }, { Lib:Create("UICorner", {CornerRadius = UDim.new(0, 12)}) })
 
     local ValGradient = Lib:Create("UIGradient", {
         Parent = ValueSlider,
@@ -193,16 +194,16 @@ function Lib:OpenPicker(default, callback, includeAlpha)
         Active = false
     }, { Lib:Create("UICorner", {CornerRadius = UDim.new(1, 0)}), Lib:Create("UIStroke", {Thickness = 1}) })
 
-    -- Alpha Slider (conditional)
+    -- Alpha Slider (Pill-shaped)
     local AlphaSlider = Lib:Create("ImageButton", {
         Name = "AlphaSlider",
         Parent = MainArea,
-        Position = UDim2.fromOffset(230, 0),
-        Size = UDim2.fromOffset(30, 160),
+        Position = UDim2.fromOffset(220, 0),
+        Size = UDim2.fromOffset(25, 160),
         BackgroundColor3 = Color3.new(1,1,1),
         Visible = includeAlpha == true,
         ZIndex = 10
-    }, { Lib:Create("UICorner", {CornerRadius = UDim.new(0, 10)}) })
+    }, { Lib:Create("UICorner", {CornerRadius = UDim.new(0, 12)}) })
 
     local AlphaGradient = Lib:Create("UIGradient", {
         Parent = AlphaSlider,
@@ -234,17 +235,18 @@ function Lib:OpenPicker(default, callback, includeAlpha)
 
     local Preview = Lib:Create("Frame", {
         Parent = ActionArea,
-        Size = UDim2.fromOffset(60, 35),
+        Size = UDim2.fromOffset(45, 45),
+        Position = UDim2.fromOffset(0, -5),
         BackgroundColor3 = pickerColor
     }, { 
-        Lib:Create("UICorner", {CornerRadius = UDim.new(0, 8)}), 
-        Lib:Create("UIStroke", {Thickness = 1.5, Color = Theme.Section}) 
+        Lib:Create("UICorner", {CornerRadius = UDim.new(1, 0)}), 
+        Lib:Create("UIStroke", {Thickness = 2, Color = Theme.Section}) 
     })
 
     local Hex = Lib:Create("TextBox", {
         Parent = ActionArea,
-        Position = UDim2.fromOffset(75, 0),
-        Size = UDim2.fromOffset(100, 35),
+        Position = UDim2.fromOffset(60, 0),
+        Size = UDim2.fromOffset(120, 35),
         BackgroundColor3 = Theme.Section,
         Font = Theme.FontRegular,
         Text = ColorToHex(pickerColor),
@@ -270,8 +272,8 @@ function Lib:OpenPicker(default, callback, includeAlpha)
         return btn
     end
 
-    local Apply = CreateBtn("rbxassetid://6031094678", 200, ActionArea, Theme.Accent)
-    local Cancel = CreateBtn("rbxassetid://6031094663", 245, ActionArea, Theme.Error)
+    local Apply = CreateBtn("rbxassetid://17790428935", 195, ActionArea, Theme.Accent)
+    local Cancel = CreateBtn("rbxassetid://102910221413931", 240, ActionArea, Theme.Error)
 
     -- Numeric Grid
     local Grid = Lib:Create("Frame", {
@@ -411,14 +413,18 @@ function Lib:OpenPicker(default, callback, includeAlpha)
 
     local function UpdateValue(input)
         local pos = input.Position
-        local relY = math.clamp((pos.Y - ValueSlider.AbsolutePosition.Y) / ValueSlider.AbsoluteSize.Y, 0, 1)
+        local size = ValueSlider.AbsoluteSize
+        local absPos = ValueSlider.AbsolutePosition
+        local relY = math.clamp((pos.Y - absPos.Y) / size.Y, 0, 1)
         v = 1 - relY
         SyncAll("Slider")
     end
 
     local function UpdateAlpha(input)
         local pos = input.Position
-        local relY = math.clamp((pos.Y - AlphaSlider.AbsolutePosition.Y) / AlphaSlider.AbsoluteSize.Y, 0, 1)
+        local size = AlphaSlider.AbsoluteSize
+        local absPos = AlphaSlider.AbsolutePosition
+        local relY = math.clamp((pos.Y - absPos.Y) / size.Y, 0, 1)
         alpha = 1 - relY
         SyncAll("Alpha")
     end
