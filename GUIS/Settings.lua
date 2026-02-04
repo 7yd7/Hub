@@ -580,6 +580,8 @@ function Components:AddColorPicker(container, title, default, callback)
     local gI = CreateIn("Green:", 192, 95, PickerFrame)
     local bI = CreateIn("Blue:", 192, 145, PickerFrame)
 
+    local isProgrammaticUpdate = false
+    
     local function UpdateAll()
         color = Color3.fromHSV(h, s, v)
         SatValArea.BackgroundColor3 = Color3.fromHSV(h, 1, 1)
@@ -589,7 +591,9 @@ function Components:AddColorPicker(container, title, default, callback)
         rI.Text = math.round(color.R * 255)
         gI.Text = math.round(color.G * 255)
         bI.Text = math.round(color.B * 255)
-        callback(color)
+        if not isProgrammaticUpdate then
+            callback(color)
+        end
     end
 
     local mDown = false
@@ -641,13 +645,17 @@ function Components:AddColorPicker(container, title, default, callback)
         UpdateAll()
     end)
 
+    isProgrammaticUpdate = true
     UpdateAll()
+    isProgrammaticUpdate = false
     
     return {
         SetValue = function(c)
+            isProgrammaticUpdate = true
             color = c
             h, s, v = color:ToHSV()
             UpdateAll()
+            isProgrammaticUpdate = false
         end
     }
 end
@@ -809,6 +817,7 @@ function Components:AddInputWithColor(container, title, placeholder, defaultText
     UserInputService.InputEnded:Connect(function(i)
         if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then mDown, hDown = false, false end
     end)
+    local isProgrammaticUpdate = false
     
     local function UpdatePicker()
         local c = Color3.fromHSV(h, s, v)
@@ -818,7 +827,9 @@ function Components:AddInputWithColor(container, title, placeholder, defaultText
         ColorBtn.BackgroundColor3 = c
         color = c
         text = Input.Text -- Always sync text from input before callback
-        callback(text, color)
+        if not isProgrammaticUpdate then
+            callback(text, color)
+        end
     end
     
     RunService.RenderStepped:Connect(function()
