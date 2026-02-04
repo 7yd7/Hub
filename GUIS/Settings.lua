@@ -348,8 +348,13 @@ function Lib:OpenPicker(default, callback, includeAlpha)
             local angle = math.rad(h * 360)
             local dist = s * 80
             WheelCursor.Position = UDim2.fromOffset(80 + math.cos(angle) * dist, 80 + math.sin(angle) * dist)
+        else
+            -- While dragging the wheel, we should still update the cursor position for smoothness
+            local angle = math.rad(h * 360)
+            local dist = s * 80
+            WheelCursor.Position = UDim2.fromOffset(80 + math.cos(angle) * dist, 80 + math.sin(angle) * dist)
         end
-        ValueCursor.Position = UDim2.fromScale(0, 1-v)
+        ValCursor.Position = UDim2.fromScale(0, 1-v)
         AlphaCursor.Position = UDim2.fromScale(0, 1-alpha)
         
         if source ~= "Hex" then Hex.Text = ColorToHex(pickerColor) end
@@ -441,7 +446,9 @@ function Lib:OpenPicker(default, callback, includeAlpha)
         end
     end)
 
-    UserInputService.InputChanged:Connect(function(input)
+    local connections = {}
+    
+    table.insert(connections, UserInputService.InputChanged:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
             if wheelDown then 
                 UpdateWheel({Position = input.Position}) 
@@ -451,13 +458,23 @@ function Lib:OpenPicker(default, callback, includeAlpha)
                 UpdateAlpha({Position = input.Position}) 
             end
         end
-    end)
+    end))
 
-    UserInputService.InputEnded:Connect(function(input)
+    table.insert(connections, UserInputService.InputEnded:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             wheelDown, valDown, alphaDown = false, false, false
         end
-    end)
+    end))
+
+    local function Cleanup()
+        for _, conn in ipairs(connections) do
+            if conn.Connected then conn:Disconnect() end
+        end
+        if PickerFrame then PickerFrame:Destroy(); PickerFrame = nil end
+    end
+
+    closeBtn.MouseButton1Click:Connect(Cleanup)
+    Cancel.MouseButton1Click:Connect(Cleanup)
 
     Hex.FocusLost:Connect(function()
         local c = HexToColor(Hex.Text)
@@ -481,7 +498,7 @@ function Lib:OpenPicker(default, callback, includeAlpha)
     Apply.MouseButton1Click:Connect(function()
         table.insert(ColorHistory, 1, pickerColor)
         table.remove(ColorHistory, 9)
-        PickerFrame:Destroy(); PickerFrame = nil
+        Cleanup()
         if includeAlpha then
             callback({Color = pickerColor, Alpha = alpha})
         else
@@ -489,7 +506,6 @@ function Lib:OpenPicker(default, callback, includeAlpha)
         end
     end)
     
-    Cancel.MouseButton1Click:Connect(function() PickerFrame:Destroy(); PickerFrame = nil end)
     SyncAll()
 end
 
