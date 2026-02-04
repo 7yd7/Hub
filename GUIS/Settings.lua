@@ -5,6 +5,18 @@ local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
 local Player = Players.LocalPlayer
 
+local function ColorToHex(c)
+    return string.format("#%02x%02x%02x", math.round(c.R*255), math.round(c.G*255), math.round(c.B*255))
+end
+
+local function HexToColor(hex)
+    local success, result = pcall(function()
+        hex = hex:gsub("#", "")
+        return Color3.fromRGB(tonumber(hex:sub(1,2), 16), tonumber(hex:sub(3,4), 16), tonumber(hex:sub(5,6), 16))
+    end)
+    return success and result or nil
+end
+
 local _7yd7Settings = Instance.new("Folder")
 _7yd7Settings.Name = "7yd7-Settings"
 _7yd7Settings.Parent = game.CoreGui:FindFirstChild("RobloxGui") or game.Players.LocalPlayer:WaitForChild("PlayerGui")
@@ -60,6 +72,254 @@ function Lib:Create(className, properties, children)
         end
     end
     return obj
+end
+
+local PickerFrame = nil
+local currentPickerCallback = nil
+local pickerColor = Color3.new(1, 1, 1)
+
+function Lib:OpenPicker(default, callback)
+    if PickerFrame then PickerFrame:Destroy() end
+    currentPickerCallback = callback
+    pickerColor = default or Theme.Accent
+    local h, s, v = pickerColor:ToHSV()
+
+    PickerFrame = Lib:Create("Frame", {
+        Name = "ColorPicker",
+        Parent = SettingsUI,
+        BackgroundColor3 = Theme.Background,
+        Position = UDim2.fromScale(0.5, 0.5),
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Size = UDim2.fromOffset(280, 360),
+        ZIndex = 2000
+    }, {
+        Lib:Create("UICorner", {CornerRadius = Theme.CornerRadius}),
+        Lib:Create("UIStroke", {Color = Theme.Section, Thickness = 2}),
+        Lib:Create("TextLabel", {
+            Position = UDim2.fromOffset(15, 10),
+            Size = UDim2.new(1, -30, 0, 25),
+            BackgroundTransparency = 1,
+            Font = Theme.FontBold,
+            Text = "Color",
+            TextColor3 = Theme.Text,
+            TextSize = 18,
+            TextXAlignment = Enum.TextXAlignment.Left
+        })
+    })
+
+    local MainArea = Lib:Create("Frame", {
+        Parent = PickerFrame,
+        BackgroundTransparency = 1,
+        Position = UDim2.fromOffset(15, 45),
+        Size = UDim2.new(1, -30, 0, 160)
+    })
+
+    local Wheel = Lib:Create("ImageButton", {
+        Parent = MainArea,
+        Size = UDim2.fromOffset(150, 150),
+        Image = "rbxassetid://6039290073", -- Circular Picker
+        BackgroundTransparency = 1
+    })
+
+    local WheelCursor = Lib:Create("Frame", {
+        Parent = Wheel,
+        Size = UDim2.fromOffset(10, 10),
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        BackgroundColor3 = Color3.new(1, 1, 1),
+        ZIndex = 5
+    }, { Lib:Create("UICorner", {CornerRadius = UDim.new(1, 0)}), Lib:Create("UIStroke", {Thickness = 1}) })
+
+    local Slider = Lib:Create("ImageButton", {
+        Parent = MainArea,
+        Position = UDim2.new(1, -30, 0, 10),
+        Size = UDim2.fromOffset(20, 130),
+        Image = "rbxassetid://0", -- Gradient will be applied via UIGradient
+        BackgroundColor3 = Color3.new(1,1,1)
+    }, { Lib:Create("UICorner", {CornerRadius = UDim.new(0, 10)}) })
+
+    local SliderGradient = Lib:Create("UIGradient", {
+        Parent = Slider,
+        Rotation = 90,
+        Color = ColorSequence.new(Color3.new(1, 1, 1), Color3.new(0, 0, 0))
+    })
+
+    local SliderCursor = Lib:Create("Frame", {
+        Parent = Slider,
+        Size = UDim2.new(1.4, 0, 0, 4),
+        Position = UDim2.fromScale(-0.2, 1-v),
+        BackgroundColor3 = Color3.new(1, 1, 1),
+        ZIndex = 5
+    }, { Lib:Create("UICorner", {CornerRadius = UDim.new(1, 0)}), Lib:Create("UIStroke", {Thickness = 1}) })
+
+    -- Bottom Controls
+    local Controls = Lib:Create("Frame", {
+        Parent = PickerFrame,
+        BackgroundTransparency = 1,
+        Position = UDim2.fromOffset(15, 215),
+        Size = UDim2.new(1, -30, 0, 40)
+    })
+
+    local ColorPreview = Lib:Create("Frame", {
+        Parent = Controls,
+        Size = UDim2.fromOffset(35, 30),
+        BackgroundColor3 = pickerColor
+    }, { Lib:Create("UICorner", {CornerRadius = UDim.new(0, 8)}) })
+
+    local ApplyBtn = Lib:Create("ImageButton", {
+        Parent = Controls,
+        Position = UDim2.fromOffset(50, 0),
+        Size = UDim2.fromOffset(30, 30),
+        BackgroundTransparency = 1,
+        Image = "rbxassetid://11419713314", -- Checkmark
+        ImageColor3 = Theme.Text
+    })
+
+    local CancelBtn = Lib:Create("ImageButton", {
+        Parent = Controls,
+        Position = UDim2.fromOffset(100, 0),
+        Size = UDim2.fromOffset(30, 30),
+        BackgroundTransparency = 1,
+        Image = "rbxassetid://11419719547", -- Close
+        ImageColor3 = Theme.Text
+    })
+
+    local HexBox = Lib:Create("TextBox", {
+        Parent = Controls,
+        Position = UDim2.new(1, -85, 0, 0),
+        Size = UDim2.fromOffset(85, 30),
+        BackgroundColor3 = Theme.Section,
+        Font = Theme.FontRegular,
+        Text = ColorToHex(pickerColor),
+        TextColor3 = Theme.Text,
+        TextSize = 12
+    }, { Lib:Create("UICorner", {CornerRadius = UDim.new(0, 6)}) })
+
+    -- Inputs Grid
+    local InputsGrid = Lib:Create("Frame", {
+        Parent = PickerFrame,
+        BackgroundTransparency = 1,
+        Position = UDim2.fromOffset(15, 255),
+        Size = UDim2.new(1, -30, 0, 90)
+    })
+
+    local function CreateInput(parent, label, pos, default)
+        local container = Lib:Create("Frame", {
+            Parent = parent,
+            Position = pos,
+            Size = UDim2.fromOffset(70, 35),
+            BackgroundColor3 = Theme.Section
+        }, {
+            Lib:Create("UICorner", {CornerRadius = UDim.new(0, 6)}),
+            Lib:Create("TextLabel", {
+                Position = UDim2.new(0, -15, 0, 0),
+                Size = UDim2.new(0, 15, 1, 0),
+                BackgroundTransparency = 1,
+                Font = Theme.FontBold,
+                Text = label,
+                TextColor3 = Theme.Text,
+                TextSize = 12
+            })
+        })
+        local box = Lib:Create("TextBox", {
+            Parent = container,
+            Size = UDim2.new(1, 0, 1, 0),
+            BackgroundTransparency = 1,
+            Font = Theme.FontRegular,
+            Text = tostring(default),
+            TextColor3 = Theme.Text,
+            TextSize = 12,
+            ClearTextOnFocus = false
+        })
+        return box
+    end
+
+    local rI = CreateInput(InputsGrid, "R", UDim2.fromOffset(25, 5), math.round(pickerColor.R*255))
+    local gI = CreateInput(InputsGrid, "G", UDim2.fromOffset(115, 5), math.round(pickerColor.G*255))
+    local bI = CreateInput(InputsGrid, "B", UDim2.fromOffset(205, 5), math.round(pickerColor.B*255))
+    
+    local hI = CreateInput(InputsGrid, "H", UDim2.fromOffset(25, 45), math.round(h*360))
+    local sI = CreateInput(InputsGrid, "S", UDim2.fromOffset(115, 45), string.format("%.2f", s))
+    local vI = CreateInput(InputsGrid, "V", UDim2.fromOffset(205, 45), string.format("%.2f", v))
+
+    local function SyncAll(source)
+        pickerColor = Color3.fromHSV(h, s, v)
+        ColorPreview.BackgroundColor3 = pickerColor
+        SliderGradient.Color = ColorSequence.new(Color3.fromHSV(h, s, 1), Color3.new(0, 0, 0))
+        
+        if source ~= "Wheel" then
+            local angle = math.rad(h * 360)
+            local dist = s * 75
+            WheelCursor.Position = UDim2.fromOffset(75 + math.cos(angle) * dist, 75 + math.sin(angle) * dist)
+        end
+        if source ~= "Slider" then
+            SliderCursor.Position = UDim2.fromScale(-0.2, 1-v)
+        end
+        if source ~= "Hex" then HexBox.Text = ColorToHex(pickerColor) end
+        
+        if source ~= "RGB" then
+            rI.Text = math.round(pickerColor.R * 255)
+            gI.Text = math.round(pickerColor.G * 255)
+            bI.Text = math.round(pickerColor.B * 255)
+        end
+        if source ~= "HSV" then
+            hI.Text = math.round(h * 360)
+            sI.Text = string.format("%.2f", s)
+            vI.Text = string.format("%.2f", v)
+        end
+    end
+
+    -- Interaction Logic
+    local wheelDown, sliderDown = false, false
+    Wheel.MouseButton1Down:Connect(function() wheelDown = true end)
+    Slider.MouseButton1Down:Connect(function() sliderDown = true end)
+    UserInputService.InputEnded:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 then wheelDown, sliderDown = false, false end end)
+
+    RunService.RenderStepped:Connect(function()
+        if not PickerFrame or not PickerFrame.Visible then return end
+        if wheelDown then
+            local mouse = UserInputService:GetMouseLocation()
+            local rel = Vector2.new(mouse.X - Wheel.AbsolutePosition.X, mouse.Y - Wheel.AbsolutePosition.Y - 36)
+            local center = Vector2.new(75, 75)
+            local diff = rel - center
+            local angle = math.atan2(diff.Y, diff.X)
+            local dist = math.min(diff.Magnitude, 75)
+            
+            h = (math.deg(angle) % 360) / 360
+            s = dist / 75
+            WheelCursor.Position = UDim2.fromOffset(center.X + math.cos(angle) * dist, center.Y + math.sin(angle) * dist)
+            SyncAll("Wheel")
+        end
+        if sliderDown then
+            local mouse = UserInputService:GetMouseLocation()
+            local relY = math.clamp((mouse.Y - Slider.AbsolutePosition.Y - 36) / Slider.AbsoluteSize.Y, 0, 1)
+            v = 1 - relY
+            SyncAll("Slider")
+        end
+    end)
+
+    HexBox.FocusLost:Connect(function()
+        local c = HexToColor(HexBox.Text)
+        if c then h, s, v = c:ToHSV(); SyncAll("Hex") else HexBox.Text = ColorToHex(pickerColor) end
+    end)
+
+    local function HandleRGB()
+        local r, g, b = tonumber(rI.Text) or 0, tonumber(gI.Text) or 0, tonumber(bI.Text) or 0
+        local c = Color3.fromRGB(math.clamp(r,0,255), math.clamp(g,0,255), math.clamp(b,0,255))
+        h, s, v = c:ToHSV(); SyncAll("RGB")
+    end
+    rI.FocusLost:Connect(HandleRGB); gI.FocusLost:Connect(HandleRGB); bI.FocusLost:Connect(HandleRGB)
+
+    local function HandleHSV()
+        local nh, ns, nv = tonumber(hI.Text) or 0, tonumber(sI.Text) or 0, tonumber(vI.Text) or 0
+        h, s, v = (nh%360)/360, math.clamp(ns,0,1), math.clamp(nv,0,1)
+        SyncAll("HSV")
+    end
+    hI.FocusLost:Connect(HandleHSV); sI.FocusLost:Connect(HandleHSV); vI.FocusLost:Connect(HandleHSV)
+
+    ApplyBtn.MouseButton1Click:Connect(function() PickerFrame:Destroy(); PickerFrame = nil; callback(pickerColor) end)
+    CancelBtn.MouseButton1Click:Connect(function() PickerFrame:Destroy(); PickerFrame = nil end)
+    
+    SyncAll()
 end
 
 local MainFrame = Lib:Create("Frame", {
@@ -488,148 +748,13 @@ function Components:AddColorPicker(container, title, default, callback)
     local color = default or Theme.Accent
     local h, s, v = color:ToHSV()
     
-    local ColorBtn = Lib:Create("TextButton", {
-        Parent = item,
-        BackgroundColor3 = color,
-        Position = UDim2.new(1, -42, 0.5, -10),
-        Size = UDim2.new(0, 22, 0, 22),
-        Text = ""
-    }, { Lib:Create("UICorner", {CornerRadius = UDim.new(0, 5)}) })
-    
-    local PickerFrame = Lib:Create("Frame", {
-        Parent = SettingsUI,
-        BackgroundColor3 = Theme.Background,
-        Position = UDim2.fromScale(0.5, 0.5),
-        AnchorPoint = Vector2.new(0.5, 0.5),
-        Size = UDim2.fromOffset(260, 200),
-        Visible = false,
-        ZIndex = 500
-    }, {
-        Lib:Create("UICorner", {CornerRadius = UDim.new(0, 10)}),
-        Lib:Create("UIStroke", {Color = Theme.Section, Thickness = 2}),
-        Lib:Create("TextLabel", {
-            Position = UDim2.fromOffset(12, 8),
-            Size = UDim2.new(1, -30, 0, 18),
-            BackgroundTransparency = 1,
-            Font = Theme.FontBold,
-            Text = "COLOR SELECTOR",
-            TextColor3 = Theme.Text,
-            TextSize = 12,
-            TextXAlignment = Enum.TextXAlignment.Left
-        })
-    })
-
-    local closePicker = Lib:Create("TextButton", {
-        Parent = PickerFrame,
-        BackgroundTransparency = 1,
-        Position = UDim2.new(1, -30, 0, 5),
-        Size = UDim2.fromOffset(25, 25),
-        Font = Theme.FontBold,
-        Text = "×",
-        TextColor3 = Theme.TextDim,
-        TextSize = 22
-    })
-    closePicker.MouseButton1Click:Connect(function() PickerFrame.Visible = false end)
-
-    local SatValArea = Lib:Create("ImageButton", {
-        Parent = PickerFrame,
-        BackgroundColor3 = Color3.fromHSV(h, 1, 1),
-        Position = UDim2.fromOffset(12, 35),
-        Size = UDim2.fromOffset(140, 140),
-        Image = "rbxassetid://4155801252",
-        BorderSizePixel = 0
-    }, { Lib:Create("UICorner", {CornerRadius = UDim.new(0, 6)}) })
-
-    local SatValCursor = Lib:Create("Frame", {
-        Parent = SatValArea,
-        BackgroundColor3 = Color3.new(1, 1, 1),
-        Size = UDim2.fromOffset(4, 4),
-        Position = UDim2.fromScale(s, 1-v)
-    }, { Lib:Create("UICorner", {CornerRadius = UDim.new(1, 0)}), Lib:Create("UIStroke", {Thickness = 1}) })
-
-    local HueSlider = Lib:Create("ImageButton", {
-        Parent = PickerFrame,
-        Position = UDim2.fromOffset(162, 35),
-        Size = UDim2.fromOffset(18, 140),
-        Image = "rbxassetid://4155806652",
-        BorderSizePixel = 0
-    }, { Lib:Create("UICorner", {CornerRadius = UDim.new(0, 6)}) })
-
-    local HueCursor = Lib:Create("Frame", {
-        Parent = HueSlider,
-        BackgroundColor3 = Color3.new(1, 1, 1),
-        Size = UDim2.new(1, 0, 0, 2),
-        Position = UDim2.fromScale(0, 1-h)
-    }, { Lib:Create("UIStroke", {Thickness = 1}) })
-
-    local function CreateIn(name, x, y, parent)
-        Lib:Create("TextLabel", { Parent = parent, Position = UDim2.fromOffset(x, y-15), Size = UDim2.fromOffset(65, 12), BackgroundTransparency = 1, Font = Theme.FontBold, Text = name, TextColor3 = Theme.Text, TextSize = 10, TextXAlignment = Enum.TextXAlignment.Left })
-        return Lib:Create("TextBox", {
-            Parent = parent,
-            BackgroundColor3 = Color3.fromRGB(0, 220, 130),
-            Position = UDim2.fromOffset(x, y),
-            Size = UDim2.fromOffset(65, 30),
-            Font = Theme.FontRegular,
-            Text = "255",
-            TextColor3 = Theme.Text,
-            TextSize = 14
-        }, { Lib:Create("UICorner", {CornerRadius = UDim.new(0, 6)}) })
-    end
-
-    local rI = CreateIn("Red:", 192, 45, PickerFrame)
-    local gI = CreateIn("Green:", 192, 95, PickerFrame)
-    local bI = CreateIn("Blue:", 192, 145, PickerFrame)
-
-    local isProgrammaticUpdate = false
-    
-    local function UpdateAll()
-        color = Color3.fromHSV(h, s, v)
-        SatValArea.BackgroundColor3 = Color3.fromHSV(h, 1, 1)
-        SatValCursor.Position = UDim2.fromScale(s, 1-v)
-        HueCursor.Position = UDim2.fromScale(0, 1-h)
-        ColorBtn.BackgroundColor3 = color
-        rI.Text = math.round(color.R * 255)
-        gI.Text = math.round(color.G * 255)
-        bI.Text = math.round(color.B * 255)
-        if not isProgrammaticUpdate then
+    ColorBtn.MouseButton1Click:Connect(function()
+        Lib:OpenPicker(color, function(newColor)
+            color = newColor
+            ColorBtn.BackgroundColor3 = color
             callback(color)
-        end
-    end
-
-    local mDown = false
-    local hDown = false
-
-    SatValArea.MouseButton1Down:Connect(function() mDown = true end)
-    HueSlider.MouseButton1Down:Connect(function() hDown = true end)
-
-    UserInputService.InputEnded:Connect(function(i)
-        if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
-            mDown = false
-            hDown = false
-        end
+        end)
     end)
-    
-    RunService.RenderStepped:Connect(function()
-        if not PickerFrame.Visible then return end
-        
-        if mDown then
-            local pos = UserInputService:GetMouseLocation()
-            local relX = (pos.X - SatValArea.AbsolutePosition.X) / SatValArea.AbsoluteSize.X
-            local relY = (pos.Y - SatValArea.AbsolutePosition.Y - 36) / SatValArea.AbsoluteSize.Y
-            s = math.clamp(relX, 0, 1)
-            v = 1 - math.clamp(relY, 0, 1)
-            UpdateAll()
-        end
-
-        if hDown then
-            local pos = UserInputService:GetMouseLocation()
-            local relY = (pos.Y - HueSlider.AbsolutePosition.Y - 36) / HueSlider.AbsoluteSize.Y
-            h = 1 - math.clamp(relY, 0, 1)
-            UpdateAll()
-        end
-    end)
-
-    ColorBtn.MouseButton1Click:Connect(function() PickerFrame.Visible = true end)
     
     local Reset = Lib:Create("ImageButton", {
         Parent = item,
@@ -641,21 +766,14 @@ function Components:AddColorPicker(container, title, default, callback)
     })
     Reset.MouseButton1Click:Connect(function()
         color = default or Theme.Accent
-        h, s, v = color:ToHSV()
-        UpdateAll()
+        ColorBtn.BackgroundColor3 = color
+        callback(color)
     end)
 
-    isProgrammaticUpdate = true
-    UpdateAll()
-    isProgrammaticUpdate = false
-    
     return {
         SetValue = function(c)
-            isProgrammaticUpdate = true
             color = c
-            h, s, v = color:ToHSV()
-            UpdateAll()
-            isProgrammaticUpdate = false
+            ColorBtn.BackgroundColor3 = color
         end
     }
 end
@@ -720,7 +838,7 @@ function Components:AddInputWithColor(container, title, placeholder, defaultText
     local Input = Lib:Create("TextBox", {
         Parent = item,
         BackgroundColor3 = Color3.fromRGB(25, 27, 30),
-        Position = UDim2.new(1, -140, 0.5, -12), -- Adjusted for color btn
+        Position = UDim2.new(1, -140, 0.5, -12),
         Size = UDim2.new(0, 90, 0, 24),
         Font = Theme.FontRegular,
         PlaceholderText = placeholder or "...",
@@ -737,140 +855,14 @@ function Components:AddInputWithColor(container, title, placeholder, defaultText
         Text = ""
     }, { Lib:Create("UICorner", {CornerRadius = UDim.new(0, 5)}) })
 
-    -- Inline Picker Logic (Simplified for speed)
-    local h, s, v = color:ToHSV()
-    local SettingsUI = item:FindFirstAncestor("SettingsUI") or game.CoreGui:FindFirstChild("RobloxGui"):FindFirstChild("7yd7-Settings"):FindFirstChild("SettingsUI")
-
-    -- Check if global picker exists or create one (Ideally we reuse, but here we create per instance to be safe/quick)
-    -- Since we want isolation, local picker is fine.
-    
-    local PickerFrame = Lib:Create("Frame", {
-        Parent = SettingsUI,
-        BackgroundColor3 = Theme.Background,
-        Position = UDim2.fromScale(0.5, 0.5),
-        AnchorPoint = Vector2.new(0.5, 0.5),
-        Size = UDim2.fromOffset(260, 200),
-        Visible = false,
-        ZIndex = 500
-    }, {
-        Lib:Create("UICorner", {CornerRadius = UDim.new(0, 10)}),
-        Lib:Create("UIStroke", {Color = Theme.Section, Thickness = 2}),
-        Lib:Create("TextLabel", {
-            Position = UDim2.fromOffset(12, 8),
-            Size = UDim2.new(1, -30, 0, 18),
-            BackgroundTransparency = 1,
-            Font = Theme.FontBold,
-            Text = "COLOR SELECTOR",
-            TextColor3 = Theme.Text,
-            TextSize = 12,
-            TextXAlignment = Enum.TextXAlignment.Left
-        })
-    })
-
-    local closePicker = Lib:Create("TextButton", {
-        Parent = PickerFrame,
-        BackgroundTransparency = 1,
-        Position = UDim2.new(1, -30, 0, 5),
-        Size = UDim2.fromOffset(25, 25),
-        Font = Theme.FontBold,
-        Text = "×",
-        TextColor3 = Theme.TextDim,
-        TextSize = 22
-    })
-    closePicker.MouseButton1Click:Connect(function() PickerFrame.Visible = false end)
-    
-    local SatValArea = Lib:Create("ImageButton", {
-        Parent = PickerFrame,
-        BackgroundColor3 = Color3.fromHSV(h, 1, 1),
-        Position = UDim2.fromOffset(12, 35),
-        Size = UDim2.fromOffset(140, 140),
-        Image = "rbxassetid://4155801252",
-        BorderSizePixel = 0
-    }, { Lib:Create("UICorner", {CornerRadius = UDim.new(0, 6)}) })
-
-    local SatValCursor = Lib:Create("Frame", {
-        Parent = SatValArea,
-        BackgroundColor3 = Color3.new(1, 1, 1),
-        Size = UDim2.fromOffset(4, 4),
-        Position = UDim2.fromScale(s, 1-v)
-    }, { Lib:Create("UICorner", {CornerRadius = UDim.new(1, 0)}), Lib:Create("UIStroke", {Thickness = 1}) })
-    
-    local HueSlider = Lib:Create("ImageButton", {
-        Parent = PickerFrame,
-        Position = UDim2.fromOffset(162, 35),
-        Size = UDim2.fromOffset(18, 140),
-        Image = "rbxassetid://4155806652",
-        BorderSizePixel = 0
-    }, { Lib:Create("UICorner", {CornerRadius = UDim.new(0, 6)}) })
-    
-    local HueCursor = Lib:Create("Frame", {
-        Parent = HueSlider,
-        BackgroundColor3 = Color3.new(1, 1, 1),
-        Size = UDim2.new(1, 0, 0, 2),
-        Position = UDim2.fromScale(0, 1-h)
-    }, { Lib:Create("UIStroke", {Thickness = 1}) })
-    
-    local mDown, hDown = false, false
-    SatValArea.MouseButton1Down:Connect(function() mDown = true end)
-    HueSlider.MouseButton1Down:Connect(function() hDown = true end)
-    
-    local isProgrammaticUpdate = false
-    
-    local function UpdatePicker()
-        local c = Color3.fromHSV(h, s, v)
-        SatValArea.BackgroundColor3 = Color3.fromHSV(h, 1, 1)
-        SatValCursor.Position = UDim2.fromScale(s, 1-v)
-        HueCursor.Position = UDim2.fromScale(0, 1-h)
-        ColorBtn.BackgroundColor3 = c
-        color = c
-        text = Input.Text
-        if not isProgrammaticUpdate then
+    ColorBtn.MouseButton1Click:Connect(function()
+        Lib:OpenPicker(color, function(newColor)
+            color = newColor
+            ColorBtn.BackgroundColor3 = color
             callback(text, color)
-        end
-    end
-    
-    -- Visual-only update
-    local function UpdatePickerVisual()
-        local c = Color3.fromHSV(h, s, v)
-        SatValArea.BackgroundColor3 = Color3.fromHSV(h, 1, 1)
-        SatValCursor.Position = UDim2.fromScale(s, 1-v)
-        HueCursor.Position = UDim2.fromScale(0, 1-h)
-        ColorBtn.BackgroundColor3 = c
-        color = c
-        text = Input.Text
-    end
-    
-    UserInputService.InputEnded:Connect(function(i)
-        if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
-            if mDown or hDown then
-                -- Trigger callback update BEFORE resetting flags
-                if PickerFrame.Visible then
-                    UpdatePicker()
-                end
-                mDown, hDown = false, false
-            end
-        end
+        end)
     end)
-    
-    RunService.RenderStepped:Connect(function()
-        if not PickerFrame.Visible then return end
-        if mDown then
-            local pos = UserInputService:GetMouseLocation()
-            local relX = (pos.X - SatValArea.AbsolutePosition.X) / SatValArea.AbsoluteSize.X
-            local relY = (pos.Y - SatValArea.AbsolutePosition.Y - 36) / SatValArea.AbsoluteSize.Y
-            s = math.clamp(relX, 0, 1)
-            v = 1 - math.clamp(relY, 0, 1)
-            UpdatePickerVisual()
-        end
-        if hDown then
-            local pos = UserInputService:GetMouseLocation()
-            local relY = (pos.Y - HueSlider.AbsolutePosition.Y - 36) / HueSlider.AbsoluteSize.Y
-            h = 1 - math.clamp(relY, 0, 1)
-            UpdatePickerVisual()
-        end
-    end)
-    
-    ColorBtn.MouseButton1Click:Connect(function() PickerFrame.Visible = true end)
+
     Input.FocusLost:Connect(function() text = Input.Text; callback(text, color) end)
     
     local Reset = Lib:Create("ImageButton", {
@@ -885,21 +877,15 @@ function Components:AddInputWithColor(container, title, placeholder, defaultText
         text, color = defaultText or "", defaultColor or Color3.fromRGB(255,255,255)
         Input.Text = text
         ColorBtn.BackgroundColor3 = color
-        h, s, v = color:ToHSV()
-        UpdatePicker() 
+        callback(text, color)
     end)
-    
+
     return {
         SetValue = function(t, c)
             text = t or ""
             color = c or Color3.fromRGB(255, 255, 255)
             Input.Text = text
             ColorBtn.BackgroundColor3 = color
-            h, s, v = color:ToHSV()
-            -- Update picker visuals
-            SatValArea.BackgroundColor3 = Color3.fromHSV(h, 1, 1)
-            SatValCursor.Position = UDim2.fromScale(s, 1-v)
-            HueCursor.Position = UDim2.fromScale(0, 1-h)
         end
     }
 end
@@ -971,7 +957,7 @@ function Components:AddAssetColor(container, title, placeholder, defaultText, de
     local Save = Lib:Create("TextButton", {
         Parent = InputPanel,
         Size = UDim2.new(0.4, 0, 0, 25),
-        Position = UDim2.new(0.05, 0, 0.2 + 0.45, 0), -- Adjusted
+        Position = UDim2.new(0.05, 0, 0.65, 0),
         BackgroundColor3 = Theme.Accent,
         Text = "Apply",
         Font = Theme.FontBold,
@@ -981,7 +967,7 @@ function Components:AddAssetColor(container, title, placeholder, defaultText, de
     local Cancel = Lib:Create("TextButton", {
         Parent = InputPanel,
         Size = UDim2.new(0.4, 0, 0, 25),
-        Position = UDim2.new(0.55, 0, 0.2 + 0.45, 0), -- Adjusted
+        Position = UDim2.new(0.55, 0, 0.65, 0),
         BackgroundColor3 = Theme.Section,
         Text = "Cancel",
         TextColor3 = Theme.Text,
@@ -989,77 +975,21 @@ function Components:AddAssetColor(container, title, placeholder, defaultText, de
         TextSize = 12
     }, { Lib:Create("UICorner", {CornerRadius = UDim.new(0, 6)}) })
 
-    EditBtn.MouseButton1Click:Connect(function() 
-        InputPanel.Visible = true 
-        In.Text = text
-    end)
-    
+    EditBtn.MouseButton1Click:Connect(function() InputPanel.Visible = true; In.Text = text end)
     Cancel.MouseButton1Click:Connect(function() InputPanel.Visible = false end)
-    
     Save.MouseButton1Click:Connect(function()
         text = In.Text
         InputPanel.Visible = false
         callback(text, color)
     end)
 
-    -- Reuse Picker Logic
-    local h, s, v = color:ToHSV()
-    local SettingsUI = item:FindFirstAncestor("SettingsUI") or game.CoreGui:FindFirstChild("RobloxGui"):FindFirstChild("7yd7-Settings"):FindFirstChild("SettingsUI")
-    
-    local PickerFrame = Lib:Create("Frame", {
-        Parent = SettingsUI,
-        BackgroundColor3 = Theme.Background,
-        Position = UDim2.fromScale(0.5, 0.5),
-        AnchorPoint = Vector2.new(0.5, 0.5),
-        Size = UDim2.fromOffset(260, 200),
-        Visible = false,
-        ZIndex = 500
-    }, {
-        Lib:Create("UICorner", {CornerRadius = UDim.new(0, 10)}),
-        Lib:Create("UIStroke", {Color = Theme.Section, Thickness = 2}),
-        Lib:Create("TextLabel", { Position = UDim2.fromOffset(12, 8), Size = UDim2.new(1, -30, 0, 18), BackgroundTransparency = 1, Font = Theme.FontBold, Text = "COLOR SELECTOR", TextColor3 = Theme.Text, TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left })
-    })
-
-    local closePicker = Lib:Create("TextButton", { Parent = PickerFrame, BackgroundTransparency = 1, Position = UDim2.new(1, -30, 0, 5), Size = UDim2.fromOffset(25, 25), Font = Theme.FontBold, Text = "×", TextColor3 = Theme.TextDim, TextSize = 22 })
-    closePicker.MouseButton1Click:Connect(function() PickerFrame.Visible = false end)
-    
-    local SatValArea = Lib:Create("ImageButton", { Parent = PickerFrame, BackgroundColor3 = Color3.fromHSV(h, 1, 1), Position = UDim2.fromOffset(12, 35), Size = UDim2.fromOffset(140, 140), Image = "rbxassetid://4155801252", BorderSizePixel = 0 }, { Lib:Create("UICorner", {CornerRadius = UDim.new(0, 6)}) })
-    local SatValCursor = Lib:Create("Frame", { Parent = SatValArea, BackgroundColor3 = Color3.new(1, 1, 1), Size = UDim2.fromOffset(4, 4), Position = UDim2.fromScale(s, 1-v) }, { Lib:Create("UICorner", {CornerRadius = UDim.new(1, 0)}), Lib:Create("UIStroke", {Thickness = 1}) })
-    local HueSlider = Lib:Create("ImageButton", { Parent = PickerFrame, Position = UDim2.fromOffset(162, 35), Size = UDim2.fromOffset(18, 140), Image = "rbxassetid://4155806652", BorderSizePixel = 0 }, { Lib:Create("UICorner", {CornerRadius = UDim.new(0, 6)}) })
-    local HueCursor = Lib:Create("Frame", { Parent = HueSlider, BackgroundColor3 = Color3.new(1, 1, 1), Size = UDim2.new(1, 0, 0, 2), Position = UDim2.fromScale(0, 1-h) }, { Lib:Create("UIStroke", {Thickness = 1}) })
-    
-    local mDown, hDown = false, false
-    SatValArea.MouseButton1Down:Connect(function() mDown = true end)
-    HueSlider.MouseButton1Down:Connect(function() hDown = true end)
-    
-    local function UpdatePicker()
-        local c = Color3.fromHSV(h, s, v)
-        SatValArea.BackgroundColor3 = Color3.fromHSV(h, 1, 1)
-        SatValCursor.Position = UDim2.fromScale(s, 1-v)
-        HueCursor.Position = UDim2.fromScale(0, 1-h)
-        ColorBtn.BackgroundColor3 = c
-        color = c
-        callback(text, color)
-    end
-    
-    UserInputService.InputEnded:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then mDown, hDown = false, false end end)
-    RunService.RenderStepped:Connect(function()
-        if not PickerFrame.Visible then return end
-        if mDown then
-            local pos = UserInputService:GetMouseLocation()
-            local relX, relY = (pos.X - SatValArea.AbsolutePosition.X) / SatValArea.AbsoluteSize.X, (pos.Y - SatValArea.AbsolutePosition.Y - 36) / SatValArea.AbsoluteSize.Y
-            s, v = math.clamp(relX, 0, 1), 1 - math.clamp(relY, 0, 1)
-            UpdatePicker()
-        end
-        if hDown then
-            local pos = UserInputService:GetMouseLocation()
-            local relY = (pos.Y - HueSlider.AbsolutePosition.Y - 36) / HueSlider.AbsoluteSize.Y
-            h = 1 - math.clamp(relY, 0, 1)
-            UpdatePicker()
-        end
+    ColorBtn.MouseButton1Click:Connect(function()
+        Lib:OpenPicker(color, function(newColor)
+            color = newColor
+            ColorBtn.BackgroundColor3 = color
+            callback(text, color)
+        end)
     end)
-    
-    ColorBtn.MouseButton1Click:Connect(function() PickerFrame.Visible = true end)
 
     return {
         SetValue = function(t, c)
@@ -1067,10 +997,6 @@ function Components:AddAssetColor(container, title, placeholder, defaultText, de
             color = c or Color3.fromRGB(255, 255, 255)
             ColorBtn.BackgroundColor3 = color
             In.Text = text
-            h, s, v = color:ToHSV()
-            SatValArea.BackgroundColor3 = Color3.fromHSV(h, 1, 1)
-            SatValCursor.Position = UDim2.fromScale(s, 1-v)
-            HueCursor.Position = UDim2.fromScale(0, 1-h)
         end
     }
 end
