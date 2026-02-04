@@ -348,7 +348,25 @@ function Components:AddInput(container, title, placeholder, default, callback)
     Input.FocusLost:Connect(function()
         callback(Input.Text)
     end)
-    return Input
+
+    local Reset = Lib:Create("ImageButton", {
+        Parent = item,
+        BackgroundTransparency = 1,
+        Position = UDim2.new(1, -135, 0.5, -10),
+        Size = UDim2.new(0, 20, 0, 20),
+        Image = "rbxassetid://127493377027615",
+        ScaleType = Enum.ScaleType.Fit
+    })
+    Reset.MouseButton1Click:Connect(function()
+        Input.Text = default or ""
+        callback(Input.Text)
+    end)
+    
+    return {
+        SetValue = function(val)
+            Input.Text = val
+        end
+    }
 end
 
 function Components:AddTextArea(container, title, placeholder, default, callback)
@@ -573,7 +591,30 @@ function Components:AddColorPicker(container, title, default, callback)
     end)
 
     ColorBtn.MouseButton1Click:Connect(function() PickerFrame.Visible = true end)
+    
+    local Reset = Lib:Create("ImageButton", {
+        Parent = item,
+        BackgroundTransparency = 1,
+        Position = UDim2.new(1, -70, 0.5, -10),
+        Size = UDim2.new(0, 20, 0, 20),
+        Image = "rbxassetid://127493377027615",
+        ScaleType = Enum.ScaleType.Fit
+    })
+    Reset.MouseButton1Click:Connect(function()
+        color = default or Theme.Accent
+        h, s, v = color:ToHSV()
+        UpdateAll()
+    end)
+
     UpdateAll()
+    
+    return {
+        SetValue = function(c)
+            color = c
+            h, s, v = color:ToHSV()
+            UpdateAll()
+        end
+    }
 end
 
 local function CreateTab(name, order)
