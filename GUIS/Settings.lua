@@ -463,7 +463,7 @@ function Components:AddFolder(container, title)
         Visible = false,
         ClipsDescendants = true
     }, {
-        Lib:Create("UIListLayout", {Padding = UDim.new(0, 10), HorizontalAlignment = Enum.HorizontalAlignment.Center})
+        Lib:Create("UIListLayout", {Padding = UDim.new(0, 10), HorizontalAlignment = Enum.HorizontalAlignment.Center, SortOrder = Enum.SortOrder.LayoutOrder})
     })
     
     FolderBtn.MouseButton1Click:Connect(function()
@@ -671,7 +671,7 @@ local function CreateTab(name, order)
         ScrollBarThickness = 2,
         Visible = order == 1,
         AutomaticCanvasSize = Enum.AutomaticSize.Y
-    }, { Lib:Create("UIListLayout", {Padding = UDim.new(0, 10), HorizontalAlignment = Enum.HorizontalAlignment.Center}) })
+    }, { Lib:Create("UIListLayout", {Padding = UDim.new(0, 10), HorizontalAlignment = Enum.HorizontalAlignment.Center, SortOrder = Enum.SortOrder.LayoutOrder}) })
     
     local TabBtn = Lib:Create("TextButton", {
         Name = name,
