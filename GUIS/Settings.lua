@@ -333,20 +333,6 @@ function Lib:OpenPicker(default, callback, includeAlpha)
         })
     })
 
-    -- Palette Logic
-    for i, color in ipairs(ColorHistory) do
-        local swatch = Lib:Create("TextButton", {
-            Parent = Palette,
-            Size = UDim2.fromOffset(28, 28),
-            BackgroundColor3 = color,
-            Text = ""
-        }, { Lib:Create("UICorner", {CornerRadius = UDim.new(0, 6)}) })
-        swatch.MouseButton1Click:Connect(function()
-            h, s, v = color:ToHSV()
-            SyncAll("Palette")
-        end)
-    end
-
     local function SyncAll(source)
         pickerColor = Color3.fromHSV(h, s, v)
         Preview.BackgroundColor3 = pickerColor
@@ -354,15 +340,10 @@ function Lib:OpenPicker(default, callback, includeAlpha)
         SVSquare.BackgroundColor3 = Color3.fromHSV(h, 1, 1)
         AlphaGradient.Color = ColorSequence.new(pickerColor, pickerColor)
         
-        if source ~= "SV" then
-            SVCursor.Position = UDim2.fromScale(s, 1-v)
-        end
-        if source ~= "Hue" then
-            HueCursor.Position = UDim2.fromScale(0, 1-h)
-        end
-        if source ~= "Alpha" then
-            AlphaCursor.Position = UDim2.fromScale(0, 1-alpha)
-        end
+        SVCursor.Position = UDim2.fromScale(s, 1-v)
+        HueCursor.Position = UDim2.fromScale(0, 1-h)
+        AlphaCursor.Position = UDim2.fromScale(0, 1-alpha)
+        
         if source ~= "Hex" then Hex.Text = ColorToHex(pickerColor) end
         
         if source ~= "RGB" then
@@ -375,6 +356,20 @@ function Lib:OpenPicker(default, callback, includeAlpha)
             sI.Text = string.format("%.2f", s)
             vI.Text = string.format("%.2f", v)
         end
+    end
+
+    -- Palette Logic
+    for i, color in ipairs(ColorHistory) do
+        local swatch = Lib:Create("TextButton", {
+            Parent = Palette,
+            Size = UDim2.fromOffset(28, 28),
+            BackgroundColor3 = color,
+            Text = ""
+        }, { Lib:Create("UICorner", {CornerRadius = UDim.new(0, 6)}) })
+        swatch.MouseButton1Click:Connect(function()
+            h, s, v = color:ToHSV()
+            SyncAll("Palette")
+        end)
     end
 
     -- Interaction Refactored (Linear)
