@@ -361,6 +361,15 @@ function Lib:OpenPicker(default, callback, includeAlpha)
             sI.Text = string.format("%.2f", s)
             vI.Text = string.format("%.2f", v)
         end
+
+        -- Real-time update
+        if currentPickerCallback then
+            if includeAlpha then
+                currentPickerCallback({Color = pickerColor, Alpha = alpha})
+            else
+                currentPickerCallback(pickerColor)
+            end
+        end
     end
 
     -- Palette Logic
