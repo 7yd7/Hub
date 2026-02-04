@@ -860,10 +860,15 @@ function Components:AddInputWithColor(container, title, placeholder, defaultText
     
     return {
         SetValue = function(t, c)
-            text, color = t, c
+            text = t or ""
+            color = c or Color3.fromRGB(255, 255, 255)
             Input.Text = text
             ColorBtn.BackgroundColor3 = color
             h, s, v = color:ToHSV()
+            -- Update picker visuals
+            SatValArea.BackgroundColor3 = Color3.fromHSV(h, 1, 1)
+            SatValCursor.Position = UDim2.fromScale(s, 1-v)
+            HueCursor.Position = UDim2.fromScale(0, 1-h)
         end
     }
 end
