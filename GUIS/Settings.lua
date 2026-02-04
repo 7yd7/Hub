@@ -410,11 +410,23 @@ function Components:AddIconButton(container, imageId, callback)
 end
 
 function Components:AddFolder(container, title)
+    -- Wrapper to hold both Button and Content together for LayoutOrder sorting
+    local FolderContainer = Lib:Create("Frame", {
+        Name = title .. "_Folder",
+        Parent = container,
+        BackgroundTransparency = 1,
+        Size = UDim2.new(0.95, 0, 0, 35), -- Initial height (only button)
+        AutomaticSize = Enum.AutomaticSize.Y
+    }, {
+         Lib:Create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 0) })
+    })
+
     local IsOpen = false
     local FolderBtn = Lib:Create("TextButton", {
-        Parent = container,
+        Parent = FolderContainer,
         BackgroundColor3 = Theme.Section,
-        Size = UDim2.new(0.95, 0, 0, 35),
+        Size = UDim2.new(1, 0, 0, 35),
+        LayoutOrder = 0, -- Always top of wrapper
         Font = Theme.FontBold,
         Text = "  ▶  " .. title,
         TextColor3 = Theme.Text,
@@ -423,8 +435,9 @@ function Components:AddFolder(container, title)
     }, { Lib:Create("UICorner", {CornerRadius = Theme.CornerRadius}) })
     
     local Content = Lib:Create("Frame", {
-        Parent = container,
+        Parent = FolderContainer,
         BackgroundTransparency = 1,
+        LayoutOrder = 1, -- Below button
         Size = UDim2.new(1, 0, 0, 0),
         Visible = false,
         ClipsDescendants = true
@@ -436,6 +449,7 @@ function Components:AddFolder(container, title)
         IsOpen = not IsOpen
         FolderBtn.Text = (IsOpen and "  ▼  " or "  ▶  ") .. title
         Content.Visible = IsOpen
+        -- Size is handled by AutomaticSize of wrapper if Content grows
         Content.Size = IsOpen and UDim2.new(1, 0, 0, Content.UIListLayout.AbsoluteContentSize.Y + 5) or UDim2.new(1, 0, 0, 0)
     end)
     
