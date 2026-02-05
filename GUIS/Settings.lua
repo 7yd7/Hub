@@ -520,6 +520,7 @@ local MainFrame = Lib:Create("Frame", {
 }, {
     Lib:Create("UICorner", {CornerRadius = Theme.CornerRadius})
 })
+MainFrame.Visible = false
 
 -- Dragging Logic
 local Dragging, DragStart, StartPos
