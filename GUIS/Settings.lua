@@ -843,10 +843,11 @@ function Components:AddTextArea(container, title, placeholder, default, callback
 end
 
 function Components:AddIconButton(container, imageId, callback)
-    local BtnHolder = Lib:Create("Frame", {
+    local BtnHolder = Lib:Create("TextButton", {
         Parent = container,
         BackgroundColor3 = Color3.fromHex("18191c"),
-        Size = UDim2.new(0, 38, 0, 38)
+        Size = UDim2.new(0, 38, 0, 38),
+        Text = ""
     }, { Lib:Create("UICorner", {CornerRadius = UDim.new(0, 10)}) })
     
     local Btn = Lib:Create("ImageButton", {
@@ -857,7 +858,8 @@ function Components:AddIconButton(container, imageId, callback)
         Size = UDim2.new(0, 22, 0, 22),
         Image = "rbxassetid://" .. tostring(imageId):gsub("rbxassetid://", ""),
         ImageColor3 = Color3.fromRGB(200, 200, 200),
-        ScaleType = Enum.ScaleType.Fit
+        ScaleType = Enum.ScaleType.Fit,
+        Active = false
     })
     
     BtnHolder.MouseEnter:Connect(function()
@@ -865,12 +867,12 @@ function Components:AddIconButton(container, imageId, callback)
         Lib:Tween(Btn, TweenInfo.new(0.15), {ImageColor3 = Color3.new(1, 1, 1)})
     end)
     BtnHolder.MouseLeave:Connect(function()
-        Lib:Tween(BtnHolder, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(45, 48, 55)})
+        Lib:Tween(BtnHolder, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromHex("18191c")})
         Lib:Tween(Btn, TweenInfo.new(0.15), {ImageColor3 = Color3.fromRGB(200, 200, 200)})
     end)
     
-    Btn.MouseButton1Click:Connect(callback)
-    return Btn
+    BtnHolder.MouseButton1Click:Connect(callback)
+    return BtnHolder
 end
 
 function Components:AddFolder(container, title)
