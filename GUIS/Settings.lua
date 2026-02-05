@@ -418,9 +418,9 @@ function Lib:OpenPicker(default, callback, includeAlpha)
         local dist = math.min(diff.Magnitude, radius)
         
         -- Refined Hue calculation: 
-        -- Based on user feedback and visual analysis, Red (0) is at the Left (180 deg)
-        -- Calculation: (180 - angle) % 360 / 360
-        pendingH = ((180 - math.deg(angle)) % 360) / 360
+        -- 1. Offset by 90 deg to make Top = 0
+        -- 2. Invert (1 - ...) to match clockwise flow of standard wheels
+        pendingH = (1 - ((math.deg(angle) + 90) % 360) / 360) % 1
         pendingS = dist / radius
         SyncAll("Wheel")
     end
