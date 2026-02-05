@@ -736,10 +736,17 @@ function Components:AddDropdown(container, title, options, default, callback)
         IsOpen = not IsOpen
         if IsOpen then
             local scale = UIScale.Scale
-            DropList.Position = UDim2.fromOffset(DropBtn.AbsolutePosition.X / scale, (DropBtn.AbsolutePosition.Y + DropBtn.AbsoluteSize.Y + 2) / scale)
+            local btnPos = DropBtn.AbsolutePosition
+            local btnSize = DropBtn.AbsoluteSize
+            
+            -- Set size first
+            local listHeight = math.min(#options * 24 + 32, 200)
+            DropList.Size = UDim2.fromOffset(110, listHeight)
+            
+            -- Calculate Offset below the button
+            DropList.Position = UDim2.fromOffset(btnPos.X / scale, (btnPos.Y + btnSize.Y + 4) / scale)
             DropList.Visible = true
             RefreshOptions(SearchBox.Text)
-            DropList.Size = UDim2.fromOffset(110, math.min(#options * 24 + 32, 140))
         else
             DropList.Visible = false
         end
