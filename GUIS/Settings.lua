@@ -347,12 +347,12 @@ function Lib:OpenPicker(default, callback, includeAlpha)
         
         -- Update cursors
         if source ~= "Wheel" then
-            local angle = math.rad(h * 360)
+            local angle = math.rad(h * 360 + 180)
             local dist = s * 80
             WheelCursor.Position = UDim2.fromOffset(80 + math.cos(angle) * dist, 80 + math.sin(angle) * dist)
         else
             -- While dragging the wheel, we should still update the cursor position for smoothness
-            local angle = math.rad(h * 360)
+            local angle = math.rad(h * 360 + 180)
             local dist = s * 80
             WheelCursor.Position = UDim2.fromOffset(80 + math.cos(angle) * dist, 80 + math.sin(angle) * dist)
         end
