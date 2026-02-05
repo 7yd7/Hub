@@ -347,12 +347,12 @@ function Lib:OpenPicker(default, callback, includeAlpha)
         
         -- Update cursors
         if source ~= "Wheel" then
-            local angle = math.rad(h * 360)
+            local angle = math.rad(h * 360 - 90)
             local dist = s * 80
             WheelCursor.Position = UDim2.fromOffset(80 + math.cos(angle) * dist, 80 + math.sin(angle) * dist)
         else
             -- While dragging the wheel, we should still update the cursor position for smoothness
-            local angle = math.rad(h * 360)
+            local angle = math.rad(h * 360 - 90)
             local dist = s * 80
             WheelCursor.Position = UDim2.fromOffset(80 + math.cos(angle) * dist, 80 + math.sin(angle) * dist)
         end
@@ -406,7 +406,9 @@ function Lib:OpenPicker(default, callback, includeAlpha)
         local angle = math.atan2(diff.Y, diff.X)
         local dist = math.min(diff.Magnitude, radius)
         
-        h = (math.deg(angle) % 360) / 360
+        -- Hue calculation: Adjust for asset rotation (-90 degrees usually centers red at top)
+        -- Invert the angle if hue feels backwards
+        h = ((math.deg(angle) + 90) % 360) / 360
         s = dist / radius
         SyncAll("Wheel")
     end
