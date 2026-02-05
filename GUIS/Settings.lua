@@ -857,7 +857,7 @@ function Components:AddIconButton(container, imageId, callback)
         Text = ""
     }, { Lib:Create("UICorner", {CornerRadius = UDim.new(0, 10)}) })
     
-    local Btn = Lib:Create("ImageButton", {
+    local Btn = Lib:Create("ImageLabel", {
         Parent = BtnHolder,
         BackgroundTransparency = 1,
         Position = UDim2.fromScale(0.5, 0.5),
