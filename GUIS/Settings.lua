@@ -1049,7 +1049,11 @@ function Components:AddInputWithColor(container, title, placeholder, defaultText
         callback(text, color)
     end)
 
-    return { SetValue = function(t, c) text, color = t or "", c or color; Input.Text, ColorBtn.BackgroundColor3 = text, color end }
+    return { 
+        SetValue = function(t, c) text, color = t or "", c or color; Input.Text, ColorBtn.BackgroundColor3 = text, color end,
+        Button = ColorBtn,
+        Item = item
+    }
 end
 
 function Components:AddAssetColor(container, title, placeholder, defaultText, defaultColor, callback)
@@ -1133,7 +1137,11 @@ function Components:AddAssetColor(container, title, placeholder, defaultText, de
         end)
     end)
 
-    return { SetValue = function(t, c) text, color = t or "", c or color; In.Text, ColorBtn.BackgroundColor3 = text, color end }
+    return { 
+        SetValue = function(t, c) text, color = t or "", c or color; In.Text, ColorBtn.BackgroundColor3 = text, color end,
+        Button = ColorBtn,
+        Item = item
+    }
 end
 
 local Library = {
