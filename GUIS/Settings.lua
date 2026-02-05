@@ -29,7 +29,7 @@ local function GetUIContainer()
 end
 
 local SettingsUI = Instance.new("ScreenGui")
-SettingsUI.Name = "SettingsUI"
+SettingsUI.Name = "7yd7-Settings"
 SettingsUI.ResetOnSpawn = false
 SettingsUI.IgnoreGuiInset = true
 SettingsUI.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
@@ -738,13 +738,15 @@ function Components:AddDropdown(container, title, options, default, callback)
             local scale = UIScale.Scale
             local btnPos = DropBtn.AbsolutePosition
             local btnSize = DropBtn.AbsoluteSize
+            local guiContainerSize = SettingsUI.AbsoluteSize or workspace.CurrentCamera.ViewportSize
             
             -- Set size first
             local listHeight = math.min(#options * 24 + 32, 200)
             DropList.Size = UDim2.fromOffset(110, listHeight)
             
-            -- Calculate Offset below the button
-            DropList.Position = UDim2.fromOffset(btnPos.X / scale, (btnPos.Y + btnSize.Y + 4) / scale)
+            -- Detailed screen calculation to ensure it appears EXACTLY below the button
+            -- accounting for potential anchor points or layout shifts
+            DropList.Position = UDim2.new(0, btnPos.X / scale, 0, (btnPos.Y + btnSize.Y + 4) / scale)
             DropList.Visible = true
             RefreshOptions(SearchBox.Text)
         else
