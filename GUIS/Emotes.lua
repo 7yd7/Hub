@@ -16,6 +16,1048 @@ end
 _G.EmotesGUIRunning = true
 
 loadstring(game:HttpGet("https://raw.githubusercontent.com/7yd7/Menu-7yd7/refs/heads/Script/GUIS/Off-site/Notify.lua"))()
+
+local HttpService = game:GetService("HttpService")
+local request = http_request or (syn and syn.request) or request
+
+local function GetAsset(asset)
+    if not asset or asset == "" then return "" end
+    local assetStr = tostring(asset)
+    
+    _G.AssetCache = _G.AssetCache or {}
+    if _G.AssetCache[assetStr] then return _G.AssetCache[assetStr] end
+
+    if not assetStr:find("://") and tonumber(assetStr) then
+        local id = "rbxassetid://" .. assetStr
+        _G.AssetCache[assetStr] = id
+        return id
+    end
+    
+    if assetStr:find("rbxassetid://") or assetStr:find("rbxasset://") or assetStr:find("rbxthumb://") then
+        return assetStr
+    end
+    
+    if assetStr:find("http") then
+        local targetUrl = assetStr
+        if targetUrl:find("github.com") and targetUrl:find("/blob/") then
+            targetUrl = targetUrl:gsub("github.com", "raw.githubusercontent.com"):gsub("/blob/", "/")
+        end
+
+        local filename = targetUrl:match("([^/]+)$") or "asset.png"
+        filename = filename:match("([^%?]+)") or filename
+        if not filename:find("%.") then filename = filename .. ".png" end
+        filename = filename:gsub("[%c%s%*%?%\"%<%>%|]", "_")
+        
+        local path = "7yd7/Assets/" .. filename
+        
+        if isfile(path) then
+            local success, result = pcall(function() return getcustomasset(path) end)
+            if success and result then
+                _G.AssetCache[assetStr] = result
+                return result
+            end
+        else
+            if not isfolder("7yd7/Assets") then 
+                pcall(function()
+                    if not isfolder("7yd7") then makefolder("7yd7") end
+                    makefolder("7yd7/Assets") 
+                end)
+            end
+            
+            local success, content = pcall(function() return game:HttpGet(targetUrl) end)
+            if success and content and content ~= "" then
+                local low = content:sub(1, 100):lower()
+                if low:find("<!doctype") or low:find("<html") or low:find("<head") then
+                    warn("7yd7 | GetAsset: Downloaded content appears to be HTML. Link might be incorrect: " .. targetUrl)
+                    return ""
+                end
+                
+                pcall(function() writefile(path, content) end)
+                task.wait(0.2) 
+                
+                local s, result = pcall(function() return getcustomasset(path) end)
+                if s and result then
+                    _G.AssetCache[assetStr] = result
+                    return result
+                end
+            end
+        end
+    end
+    
+    return assetStr
+end
+
+local ConfigPath = "7yd7/EmoteSettings.json"
+local Config = {
+    NotifyEnabled = true,
+    SearchVisible = true,
+    FavVisible = true,
+    ModeVisible = true,
+    FreezeVisible = true,
+    SpeedVisible = true,
+    NavVisible = true,
+    EmoteSpeed = 1,
+    EmoteSpeedEnabled = false,
+    SelectedTheme = "Default"
+}
+
+local Under, UIListLayout, _1left, _9right, _4pages, _3TextLabel, _2Routenumber, Top, EmoteWalkButton, UICorner1,
+    UIListLayout_2, UICorner, Search, Favorite, UICorner2, UICorner_2, SpeedEmote, UICorner_4, SpeedBox, UICorner_5, Changepage,
+    Reload, UICorner_6
+local speedEmoteEnabled = false
+local currentMode = "emote"
+local emotesWalkEnabled = false
+local favoriteEnabled = false
+
+local function ApplyUIVisibility()
+    pcall(function()
+        if Search and Top then Top.Visible = Config.SearchVisible end
+        if Favorite then Favorite.Visible = Config.FavVisible end
+        if Changepage then Changepage.Visible = Config.ModeVisible end
+        if EmoteWalkButton then EmoteWalkButton.Visible = Config.FreezeVisible end
+        if SpeedEmote then SpeedEmote.Visible = Config.SpeedVisible end
+        if SpeedBox then 
+            SpeedBox.Visible = (Config.SpeedVisible and speedEmoteEnabled) 
+        end
+        if Under then Under.Visible = Config.NavVisible end
+        if Reload then 
+            Reload.Visible = (currentMode == "animation" and Config.NavVisible) 
+        end
+    end)
+end
+
+local function SaveConfig()
+    if not isfolder("7yd7") then makefolder("7yd7") end
+    writefile(ConfigPath, HttpService:JSONEncode(Config))
+end
+
+local function LoadConfig()
+    if isfile(ConfigPath) then
+        local success, decoded = pcall(function() return HttpService:JSONDecode(readfile(ConfigPath)) end)
+        if success and type(decoded) == "table" then
+            for k, v in pairs(decoded) do Config[k] = v end
+        end
+    end
+end
+LoadConfig()
+
+local rawNotify = getgenv().Notify
+getgenv().Notify = function(data)
+    if Config.NotifyEnabled then
+        rawNotify(data)
+    end
+end
+
+local SettingsLib = loadstring(game:HttpGet("https://raw.githubusercontent.com/7yd7/Hub/refs/heads/Branch/GUIS/Settings.lua"))()
+
+local ToggleContainer = Instance.new("Frame")
+ToggleContainer.Name = "open/Close"
+ToggleContainer.Parent = SettingsLib.UI
+ToggleContainer.BackgroundTransparency = 1
+ToggleContainer.Size = UDim2.fromScale(1, 1)
+ToggleContainer.ZIndex = 5000
+ToggleContainer.Visible = false
+ToggleContainer.Active = false
+ToggleContainer.Selectable = false
+
+local ToggleBtn = Instance.new("ImageButton")
+ToggleBtn.Name = "ToggleSettings"
+ToggleBtn.Parent = ToggleContainer
+ToggleBtn.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+ToggleBtn.BackgroundTransparency = 0.4
+ToggleBtn.Position = UDim2.new(0.005, 0, 0.939, 0)
+ToggleBtn.Size = UDim2.new(0.027, 0, 0.049, 0)
+ToggleBtn.Image = "rbxassetid://79568054778195"
+
+local ToggleCorner = Instance.new("UICorner")
+ToggleCorner.CornerRadius = UDim.new(0, 10)
+ToggleCorner.Parent = ToggleBtn
+
+local function getSettingsMainFrame()
+    if SettingsLib and SettingsLib.UI then
+        return SettingsLib.UI:FindFirstChild("MainFrame")
+    end
+    return nil
+end
+
+local function applySettingsToggleStyle()
+    local main = getSettingsMainFrame()
+    if main then
+        ToggleBtn.BackgroundColor3 = main.BackgroundColor3
+    elseif _G.EmoteTheme and _G.EmoteTheme.Background then
+        ToggleBtn.BackgroundColor3 = _G.EmoteTheme.Background
+    end
+end
+
+local function syncToggleVisibility()
+    local main = getSettingsMainFrame()
+    if main then
+        ToggleContainer.Visible = not main.Visible
+    else
+        ToggleContainer.Visible = true
+    end
+end
+
+ToggleBtn.MouseButton1Click:Connect(function()
+    local main = getSettingsMainFrame()
+    if main then
+        main.Visible = not main.Visible
+        syncToggleVisibility()
+    else
+        SettingsLib.UI.Enabled = not SettingsLib.UI.Enabled
+    end
+end)
+
+applySettingsToggleStyle()
+syncToggleVisibility()
+
+do
+    local main = getSettingsMainFrame()
+    if main then
+        main:GetPropertyChangedSignal("Visible"):Connect(syncToggleVisibility)
+    end
+end
+
+local GeneralTab = SettingsLib.CreateTab("General", 1)
+SettingsLib.AddToggle(GeneralTab, "Show Notifications", "Receive alerts and feedback", Config.NotifyEnabled, function(v)
+    Config.NotifyEnabled = v
+    SaveConfig()
+end)
+local ButtonsTab = SettingsLib.CreateTab("Buttons", 2)
+
+SettingsLib.AddToggle(ButtonsTab, "Search Bar", "Show/Hide the search input", Config.SearchVisible, function(v)
+    Config.SearchVisible = v
+    ApplyUIVisibility()
+    SaveConfig()
+end)
+
+SettingsLib.AddToggle(ButtonsTab, "Favorites Button", "Show/Hide the star button", Config.FavVisible, function(v)
+    Config.FavVisible = v
+    ApplyUIVisibility()
+    SaveConfig()
+end)
+
+SettingsLib.AddToggle(ButtonsTab, "Mode Switcher", "Show/Hide animation mode button", Config.ModeVisible, function(v)
+    Config.ModeVisible = v
+    ApplyUIVisibility()
+    SaveConfig()
+end)
+
+SettingsLib.AddToggle(ButtonsTab, "Freeze Button", "Show/Hide emote freeze button", Config.FreezeVisible, function(v)
+    Config.FreezeVisible = v
+    ApplyUIVisibility()
+    SaveConfig()
+end)
+
+SettingsLib.AddToggle(ButtonsTab, "Speed Button", "Show/Hide the speed controller", Config.SpeedVisible, function(v)
+    Config.SpeedVisible = v
+    ApplyUIVisibility()
+    SaveConfig()
+end)
+
+SettingsLib.AddToggle(ButtonsTab, "Page Controls", "Show/Hide navigation buttons", Config.NavVisible, function(v)
+    Config.NavVisible = v
+    ApplyUIVisibility()
+    SaveConfig()
+end)
+
+local cachedOverlay = nil
+local function getBackgroundOverlay()
+    if cachedOverlay and cachedOverlay.Parent then return cachedOverlay end
+    
+    local success, result = pcall(function()
+        return game:GetService("CoreGui").RobloxGui.EmotesMenu.Children.Main.EmotesWheel.Back.Background
+                   .BackgroundCircleOverlay
+    end)
+    if success and result then
+        cachedOverlay = result
+        return result
+    end
+    return nil
+end
+
+local function DeepCopy(t)
+    local copy = {}
+    for k, v in pairs(t) do
+        if type(v) == "table" then
+            copy[k] = DeepCopy(v)
+        else
+            copy[k] = v
+        end
+    end
+    return copy
+end
+
+local function ColorToTable(c) return {math.round(c.R*255), math.round(c.G*255), math.round(c.B*255)} end
+local function TableToColor(t) return Color3.fromRGB(t[1], t[2], t[3]) end
+
+local function GetThemeIconColor(key)
+    local theme = _G.EmoteTheme
+    if theme and theme.IconColors and theme.IconColors[key] then
+        return TableToColor(theme.IconColors[key])
+    end
+    if theme and theme.ImageColor then
+        return theme.ImageColor
+    end
+    return Color3.new(1, 1, 1)
+end
+
+local ApplyFavoriteButtonVisual
+local function updateGUIColors()
+    local backgroundOverlay = getBackgroundOverlay()
+    if not backgroundOverlay then
+        return
+    end
+
+    local theme = _G.EmoteTheme
+    if not theme then return end
+    
+    local bgColor = theme.Background
+    local accentColor = theme.Accent
+    local imgColor = theme.ImageColor
+    local bgTransparency = backgroundOverlay.BackgroundTransparency
+
+    local function getIconColor(key)
+        if theme.IconColors and theme.IconColors[key] then
+            return TableToColor(theme.IconColors[key])
+        end
+        return imgColor
+    end
+
+    if _1left then
+        _1left.ImageColor3 = getIconColor("Left")
+        _1left.ImageTransparency = bgTransparency
+    end
+
+    if _9right then
+        _9right.ImageColor3 = getIconColor("Right")
+        _9right.ImageTransparency = bgTransparency
+    end
+
+    if _4pages then
+        _4pages.TextColor3 = bgColor
+        _4pages.TextTransparency = bgTransparency
+    end
+
+    if _3TextLabel then
+        _3TextLabel.TextColor3 = bgColor
+        _3TextLabel.TextTransparency = bgTransparency
+    end
+
+    if _2Routenumber then
+        _2Routenumber.TextColor3 = bgColor
+        _2Routenumber.TextTransparency = bgTransparency
+    end
+
+    if Top then
+        Top.BackgroundColor3 = bgColor
+        Top.BackgroundTransparency = bgTransparency
+    end
+
+    if EmoteWalkButton then
+        EmoteWalkButton.BackgroundColor3 = bgColor
+        EmoteWalkButton.BackgroundTransparency = bgTransparency
+    end
+
+    if SpeedEmote then
+        SpeedEmote.BackgroundColor3 = bgColor
+        SpeedEmote.BackgroundTransparency = bgTransparency
+    end
+
+     if Changepage then
+        Changepage.BackgroundColor3 = bgColor
+        Changepage.BackgroundTransparency = bgTransparency
+    end
+
+    if SpeedBox then
+        SpeedBox.BackgroundColor3 = bgColor
+        SpeedBox.BackgroundTransparency = bgTransparency
+    end
+
+    if Favorite then
+        Favorite.BackgroundColor3 = bgColor
+        Favorite.BackgroundTransparency = bgTransparency
+    end
+
+    if Reload then
+        Reload.BackgroundColor3 = bgColor
+        Reload.BackgroundTransparency = bgTransparency
+    end
+    
+    if ApplyFavoriteButtonVisual then
+        ApplyFavoriteButtonVisual()
+    end
+    ApplyUIVisibility()
+    applySettingsToggleStyle()
+end
+
+ApplyFavoriteButtonVisual = function()
+    if not Favorite then return end
+    local isOn = favoriteEnabled
+    local image = isOn and favoriteIconId or notFavoriteIconId
+    if image and image ~= "" then
+        Favorite.Image = image
+    end
+    local colorKey = isOn and "Favorite" or "NotFavorite"
+    Favorite.ImageColor3 = GetThemeIconColor(colorKey)
+end
+
+-- Optimizing performance: Removed RenderStepped loop
+-- game:GetService("RunService").RenderStepped:Connect(function()
+--     updateGUIColors()
+-- end)
+
+local ThemeTab = SettingsLib.CreateTab("Theme", 3)
+
+local DiscordPromo = SettingsLib.AddItem(ThemeTab, "WANT THEMES?", "Join our Discord for themes!")
+DiscordPromo.LayoutOrder = -1
+
+local CopyBtn = SettingsLib:Create("TextButton", {
+    Parent = DiscordPromo,
+    BackgroundColor3 = Color3.fromRGB(0, 255, 150),
+    Position = UDim2.new(1, -95, 0.5, -12),
+    Size = UDim2.new(0, 85, 0, 24),
+    Font = Enum.Font.GothamBold,
+    Text = "COPY LINK",
+    TextColor3 = Color3.fromRGB(24, 25, 28),
+    TextSize = 11
+}, { SettingsLib:Create("UICorner", {CornerRadius = UDim.new(0, 6)}) })
+
+CopyBtn.MouseButton1Click:Connect(function()
+    setclipboard("https://discord.gg/kRfzv2kV7X")
+    getgenv().Notify({Title = "Discord", Content = "Link copied to clipboard!", Duration = 3})
+end)
+
+local ThemeConfigPath = "7yd7/EmoteThemes.json"
+
+local lastSaveTime = 0
+local saveDebounce = 1
+local pendingSave = false
+
+local function SaveThemesImplementation(themes)
+    if not isfolder("7yd7") then makefolder("7yd7") end
+    local toSave = { Themes = {}, Order = {}, Selected = currentThemeName }
+    
+    toSave.Order = themes.Order or {}
+    
+    for name, data in pairs(themes) do
+        if name ~= "Default" and name ~= "Order" and name ~= "Selected" then
+            toSave.Themes[name] = data
+        end
+    end
+    writefile(ThemeConfigPath, HttpService:JSONEncode(toSave))
+end
+
+local function SaveThemes(themes)
+    if pendingSave then 
+        pendingSave = "queued"
+        return 
+    end
+    pendingSave = true
+    task.delay(0.5, function()
+        SaveThemesImplementation(themes)
+        local wasQueued = pendingSave == "queued"
+        pendingSave = false
+        if wasQueued then
+            SaveThemes(themes)
+        end
+    end)
+end
+
+local function LoadThemes()
+    local defaultTheme = {
+        Background = {28, 30, 32},
+        Accent = {0, 255, 150},
+        ImageColor = {255, 255, 255},
+        IconColors = {
+            Left = {0, 0, 0},
+            Right = {0, 0, 0}
+        },
+        Icons = {
+            Left = "93111945058621",
+            Right = "107938916240738",
+            Walk = "71408678974152",
+            Favorite = "97307461910825",
+            NotFavorite = "124025954365505",
+            Speed = "116056570415896",
+            Page = "13285615740",
+            Reload = "127493377027615"
+        },
+        Wheel = {
+            BackgroundImage = "rbxasset://textures/ui/Emotes/Large/SegmentedCircle.png",
+            BackgroundImageColor = {255, 255, 255},
+            SelectionGradient = "rbxasset://textures/ui/Emotes/Large/SelectedGradient.png",
+            SelectionGradientColor = {255, 255, 255},
+            SelectionLine = "rbxasset://textures/ui/Emotes/Large/SelectedLine.png",
+            SelectionLineColor = {255, 255, 255}
+        }
+    }
+    
+    local loaded = { Default = defaultTheme, Order = {"Default"} }
+    
+    if isfile(ThemeConfigPath) then
+        local success, decoded = pcall(function() return HttpService:JSONDecode(readfile(ThemeConfigPath)) end)
+        if success and type(decoded) == "table" then
+            local themesTable = decoded.Themes or decoded 
+            local orderTable = decoded.Order or {}
+            
+            for name, data in pairs(themesTable) do
+                if not data.Icons then data.Icons = DeepCopy(defaultTheme.Icons) end
+                if not data.Wheel then data.Wheel = DeepCopy(defaultTheme.Wheel) end
+                loaded[name] = data
+                if not decoded.Order and name ~= "Default" then
+                    table.insert(loaded.Order, name)
+                end
+            end
+            
+            if decoded.Order then
+                loaded.Order = {"Default"}
+                for _, name in ipairs(decoded.Order) do
+                    if name ~= "Default" and loaded[name] then
+                        table.insert(loaded.Order, name)
+                    end
+                end
+            end
+            
+            if decoded.Selected and loaded[decoded.Selected] then
+                loaded.Selected = decoded.Selected
+            end
+            
+            return loaded
+        end
+    end
+    return loaded
+end
+
+local themes = LoadThemes()
+local currentThemeName = Config.SelectedTheme or themes.Selected or "Default"
+if not themes[currentThemeName] then currentThemeName = "Default" end
+
+local themeDropdown
+
+local function GetNames()
+    local n = {}
+    for _, name in ipairs(themes.Order) do
+        if themes[name] then table.insert(n, name) end
+    end
+    for name, _ in pairs(themes) do
+        if name ~= "Order" and not table.find(n, name) then
+            table.insert(n, name)
+        end
+    end
+    return n
+end
+
+local UIElements = {
+    Background = {},
+    Accent = {},
+    ImageColor = {},
+    Icons = {},
+    Wheel = {}
+}
+
+local function ApplyTheme(themeData)
+    if themeData.Background then
+        _G.EmoteTheme = {
+            Background = TableToColor(themeData.Background),
+            Accent = TableToColor(themeData.Accent or {0, 255, 150}),
+            ImageColor = TableToColor(themeData.ImageColor or {255, 255, 255}),
+            Icons = themeData.Icons or {},
+            IconColors = themeData.IconColors or {},
+            Wheel = themeData.Wheel or {}
+        }
+        
+        local function getIconColor(key)
+            if _G.EmoteTheme.IconColors and _G.EmoteTheme.IconColors[key] then
+                return TableToColor(_G.EmoteTheme.IconColors[key])
+            end
+            return _G.EmoteTheme.ImageColor 
+        end
+        
+        favoriteIconId = GetAsset(_G.EmoteTheme.Icons.Favorite)
+        notFavoriteIconId = GetAsset(_G.EmoteTheme.Icons.NotFavorite)
+        
+        updateGUIColors()
+        
+        if _1left then _1left.Image = GetAsset(_G.EmoteTheme.Icons.Left); _1left.ImageColor3 = getIconColor("Left") end
+        if _9right then _9right.Image = GetAsset(_G.EmoteTheme.Icons.Right); _9right.ImageColor3 = getIconColor("Right") end
+        if EmoteWalkButton then EmoteWalkButton.Image = GetAsset(_G.EmoteTheme.Icons.Walk); EmoteWalkButton.ImageColor3 = getIconColor("Walk") end
+        if SpeedEmote then SpeedEmote.Image = GetAsset(_G.EmoteTheme.Icons.Speed); SpeedEmote.ImageColor3 = getIconColor("Speed") end
+        if Changepage then Changepage.Image = GetAsset(_G.EmoteTheme.Icons.Page); Changepage.ImageColor3 = getIconColor("Page") end
+        if Reload then Reload.Image = GetAsset(_G.EmoteTheme.Icons.Reload); Reload.ImageColor3 = getIconColor("Reload") end
+        
+        if Favorite then ApplyFavoriteButtonVisual() end 
+
+        
+        if UIElements.Background.Main then UIElements.Background.Main.SetValue(_G.EmoteTheme.Background) end
+        
+        for key, comp in pairs(UIElements.Icons) do
+            local iconVal = _G.EmoteTheme.Icons[key] or ""
+            local specificColor = _G.EmoteTheme.IconColors and _G.EmoteTheme.IconColors[key]
+            local colorVal
+            
+            if specificColor then
+                colorVal = TableToColor(specificColor)
+            else
+                colorVal = _G.EmoteTheme.ImageColor 
+            end
+            
+            if comp then comp.SetValue(iconVal, colorVal) end
+        end
+
+        local function applyWheel()
+            pcall(function()
+                local root = game:GetService("CoreGui"):FindFirstChild("RobloxGui")
+                if not root then return end
+                root = root:FindFirstChild("EmotesMenu")
+                if not root then return end
+                root = root.Children.Main.EmotesWheel.Back.Background
+                
+                local wheel = _G.EmoteTheme.Wheel
+                if not wheel then return end
+
+                local function getAsset(id)
+                    return GetAsset(id)
+                end
+
+                local bgImg = root:FindFirstChild("BackgroundImage")
+                if bgImg then
+                    bgImg.Image = getAsset(wheel.BackgroundImage)
+                    bgImg.ImageColor3 = TableToColor(wheel.BackgroundImageColor or {255,255,255})
+                end
+
+                local gradContainer = root:FindFirstChild("BackgroundGradient")
+                local selectionGrad = gradContainer and gradContainer:FindFirstChild("SelectionGradient")
+                local grad = selectionGrad and selectionGrad:FindFirstChild("SelectedGradient")
+                if grad then
+                    grad.Image = getAsset(wheel.SelectionGradient)
+                    grad.ImageColor3 = TableToColor(wheel.SelectionGradientColor or {255,255,255})
+                end
+
+                local selection = root:FindFirstChild("Selection")
+                local selectionEffect = selection and selection:FindFirstChild("SelectionEffect")
+                local line = selectionEffect and selectionEffect:FindFirstChild("SelectedLine")
+                if line then
+                    line.Image = getAsset(wheel.SelectionLine)
+                    line.ImageColor3 = TableToColor(wheel.SelectionLineColor or {255,255,255})
+                end
+            end)
+        end
+        applyWheel()
+
+        for key, comp in pairs(UIElements.Wheel) do
+            local imgVal = _G.EmoteTheme.Wheel[key] or ""
+            local colorVal = TableToColor(_G.EmoteTheme.Wheel[key.."Color"] or {255, 255, 255})
+            if comp then comp.SetValue(imgVal, colorVal) end
+        end
+    end
+end
+
+task.spawn(function()
+    local attempts = 0
+    while attempts < 15 do
+        local exists = checkEmotesMenuExists()
+        if exists then
+            ApplyTheme(themes[currentThemeName])
+            break
+        end
+        attempts = attempts + 1
+        task.wait(1)
+    end
+end)
+
+themeDropdown = SettingsLib.AddDropdown(ThemeTab, "Select Theme", GetNames(), currentThemeName, function(v)
+    currentThemeName = v
+    Config.SelectedTheme = v
+    SaveConfig()
+    if themes[v] then
+        SaveThemes(themes) 
+        task.wait(0.1)
+        ApplyTheme(themes[v])
+    end
+end)
+if themeDropdown and themeDropdown.Button and themeDropdown.Button.Parent and themeDropdown.Button.Parent.Parent then
+   themeDropdown.Button.Parent.Parent.LayoutOrder = 0
+end
+
+local BtnItem = SettingsLib.AddItem(ThemeTab, "Theme Management", "Manage your themes")
+BtnItem.LayoutOrder = 1 
+BtnItem.BackgroundColor3 = Color3.fromRGB(35, 38, 42)
+BtnItem.Size = UDim2.new(0.95, 0, 0, 70) 
+
+for _, v in pairs(BtnItem:GetChildren()) do if v.Name == "Title" or v.Name == "Desc" then v:Destroy() end end
+
+local ManagementContainer = Instance.new("Frame")
+ManagementContainer.Parent = BtnItem
+ManagementContainer.BackgroundTransparency = 1
+ManagementContainer.Size = UDim2.new(1, 0, 1, 0)
+
+local Layout = Instance.new("UIListLayout")
+Layout.FillDirection = Enum.FillDirection.Horizontal
+Layout.Padding = UDim.new(0, 15)
+Layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+Layout.VerticalAlignment = Enum.VerticalAlignment.Center
+Layout.Parent = ManagementContainer
+
+local BtnRow = ManagementContainer 
+
+local function CreatePopup(title, size)
+    local panel = Instance.new("Frame")
+    panel.Size = size or UDim2.fromOffset(280, 140)
+    panel.Position = UDim2.fromScale(0.5, 0.5)
+    panel.AnchorPoint = Vector2.new(0.5, 0.5)
+    panel.BackgroundColor3 = Color3.fromHex("18191c")
+    panel.ZIndex = 2000
+    panel.Parent = SettingsLib.UI
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 12)
+    corner.Parent = panel
+
+    local stroke = Instance.new("UIStroke")
+    stroke.Parent = panel
+    stroke.Color = _G.EmoteTheme.Accent
+    stroke.Thickness = 1.5
+    stroke.Transparency = 0.5
+
+    local lbl = Instance.new("TextLabel")
+    lbl.Parent = panel
+    lbl.Size = UDim2.new(1, 0, 0, 35)
+    lbl.BackgroundTransparency = 1
+    lbl.Text = title:upper()
+    lbl.Font = Enum.Font.GothamBold
+    lbl.TextSize = 13
+    lbl.TextColor3 = Color3.new(1,1,1)
+    
+    local content = Instance.new("Frame")
+    content.Name = "Content"
+    content.Parent = panel
+    content.BackgroundTransparency = 1
+    content.Position = UDim2.new(0, 0, 0, 35)
+    content.Size = UDim2.new(1, 0, 1, -35)
+    
+    return panel, content
+end
+
+local function CreateInput(parent, placeholder, text, isMulti)
+    local box = Instance.new("TextBox")
+    box.Size = isMulti and UDim2.new(0.9, 0, 0, 100) or UDim2.new(0.9, 0, 0, 35)
+    box.Position = UDim2.new(0.05, 0, 0, 5)
+    box.BackgroundColor3 = Color3.fromRGB(35, 38, 41)
+    box.TextColor3 = Color3.new(1,1,1)
+    box.PlaceholderText = placeholder or ""
+    box.Text = text or ""
+    box.Font = Enum.Font.Gotham
+    box.TextSize = 12
+    box.MultiLine = isMulti
+    box.TextWrapped = isMulti
+    box.Parent = parent
+    
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 8)
+    corner.Parent = box
+    
+    return box
+end
+
+local function CreateButton(parent, text, color, pos, size)
+    local btn = Instance.new("TextButton")
+    btn.Size = size or UDim2.new(0.4, 0, 0, 32)
+    btn.Position = pos
+    btn.BackgroundColor3 = color
+    btn.Text = text
+    btn.Font = Enum.Font.GothamBold
+    btn.TextColor3 = (color.R + color.G + color.B < 1.5) and Color3.new(1,1,1) or Color3.new(0,0,0)
+    btn.TextSize = 12
+    btn.Parent = parent
+    
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 8)
+    corner.Parent = btn
+    
+    return btn
+end
+
+SettingsLib.AddIconButton(BtnRow, "108445456753346", function()
+    local popup, content = CreatePopup("Create Theme")
+    local In = CreateInput(content, "Theme Name...")
+    
+    local Save = CreateButton(content, "SAVE", _G.EmoteTheme.Accent, UDim2.new(0.05, 0, 0.6, 0))
+    local Cancel = CreateButton(content, "CANCEL", Color3.fromRGB(50, 50, 50), UDim2.new(0.55, 0, 0.6, 0))
+    Cancel.TextColor3 = Color3.new(1,1,1)
+
+    Save.MouseButton1Click:Connect(function()
+        if In.Text ~= "" and not themes[In.Text] then
+            themes[In.Text] = DeepCopy(themes[currentThemeName])
+            if not themes[In.Text].IconColors then themes[In.Text].IconColors = {} end
+            table.insert(themes.Order, In.Text)
+            
+            table.sort(themes.Order, function(a, b)
+                if a == "Default" then return true end
+                if b == "Default" then return false end
+                return a:lower() < b:lower()
+            end)
+            
+            SaveThemes(themes)
+            currentThemeName = In.Text
+            themeDropdown.Refresh(GetNames())
+            themeDropdown.Button.Text = currentThemeName .. "  ▼"
+            ApplyTheme(themes[currentThemeName])
+            popup:Destroy()
+        end
+    end)
+    
+    Cancel.MouseButton1Click:Connect(function() popup:Destroy() end)
+end)
+
+SettingsLib.AddIconButton(BtnRow, "71829270056766", function()
+    if currentThemeName ~= "Default" then
+        local idx = table.find(themes.Order, currentThemeName)
+        if idx then table.remove(themes.Order, idx) end
+        
+        themes[currentThemeName] = nil
+        SaveThemes(themes)
+        currentThemeName = "Default"
+        themeDropdown.Refresh(GetNames())
+        themeDropdown.Button.Text = "Default  ▼"
+        ApplyTheme(themes["Default"])
+    end
+end)
+
+SettingsLib.AddIconButton(BtnRow, "117761881427472", function()
+    if currentThemeName == "Default" then return end
+    
+    local popup, content = CreatePopup("Rename Theme")
+    local In = CreateInput(content, "New Name...", currentThemeName)
+    
+    local Save = CreateButton(content, "RENAME", _G.EmoteTheme.Accent, UDim2.new(0.05, 0, 0.6, 0))
+    local Cancel = CreateButton(content, "CANCEL", Color3.fromRGB(50, 50, 50), UDim2.new(0.55, 0, 0.6, 0))
+    Cancel.TextColor3 = Color3.new(1,1,1)
+
+    Save.MouseButton1Click:Connect(function()
+        if In.Text ~= "" and not themes[In.Text] then
+            local idx = table.find(themes.Order, currentThemeName)
+            if idx then themes.Order[idx] = In.Text end
+            
+            themes[In.Text] = themes[currentThemeName]
+            themes[currentThemeName] = nil
+            currentThemeName = In.Text
+            SaveThemes(themes)
+            themeDropdown.Refresh(GetNames())
+            themeDropdown.Button.Text = currentThemeName .. "  ▼"
+            popup:Destroy()
+        end
+    end)
+    
+    Cancel.MouseButton1Click:Connect(function() popup:Destroy() end)
+end)
+
+SettingsLib.AddIconButton(BtnRow, "78317476576895", function()
+    local popup, content = CreatePopup("Import Theme", UDim2.fromOffset(320, 240))
+    local box = CreateInput(content, "Paste Theme JSON here...", "", true)
+    box.Size = UDim2.new(0.9, 0, 0, 130)
+    
+    local imp = CreateButton(content, "IMPORT THEME", _G.EmoteTheme.Accent, UDim2.new(0.05, 0, 0.8, 0), UDim2.new(0.9, 0, 0, 35))
+
+    imp.MouseButton1Click:Connect(function()
+        local s, d = pcall(function() return HttpService:JSONDecode(box.Text) end)
+        if s and type(d) == "table" and d.name then
+            if d.name == "Default" then
+                getgenv().Notify({Title = "Error", Content = "Cannot overwrite 'Default' theme.", Duration = 3})
+                return
+            end
+            if not themes[d.name] then
+                table.insert(themes.Order, d.name)
+            end
+            themes[d.name] = d.data
+            SaveThemes(themes)
+            themeDropdown.Refresh(GetNames())
+            popup:Destroy()
+        else
+            getgenv().Notify({Title = "Error", Content = "Invalid JSON Format!", Duration = 3})
+        end
+    end)
+    
+    local close = Instance.new("TextButton")
+    close.Size = UDim2.fromOffset(24, 24)
+    close.Position = UDim2.new(1, -30, 0, -30)
+    close.Text = "×"
+    close.Font = Enum.Font.GothamBold
+    close.TextSize = 20
+    close.BackgroundTransparency = 1
+    close.TextColor3 = Color3.new(1,1,1)
+    close.Parent = content
+    close.MouseButton1Click:Connect(function() popup:Destroy() end)
+end)
+
+SettingsLib.AddIconButton(BtnRow, "107588515524752", function()
+    local exportData = { name = currentThemeName, data = themes[currentThemeName] }
+    local json = HttpService:JSONEncode(exportData)
+    
+    local popup, content = CreatePopup("Export Theme", UDim2.fromOffset(320, 240))
+    local box = CreateInput(content, "", json, true)
+    box.Size = UDim2.new(0.9, 0, 0, 130)
+    box.TextEditable = false
+    
+    local copy = CreateButton(content, "COPY TO CLIPBOARD", _G.EmoteTheme.Accent, UDim2.new(0.05, 0, 0.8, 0), UDim2.new(0.9, 0, 0, 35))
+
+    copy.MouseButton1Click:Connect(function()
+        setclipboard(json)
+        copy.Text = "COPIED!"
+        task.delay(1, function() copy.Text = "COPY TO CLIPBOARD" end)
+    end)
+    
+    local close = Instance.new("TextButton")
+    close.Size = UDim2.fromOffset(24, 24)
+    close.Position = UDim2.new(1, -30, 0, -30)
+    close.Text = "×"
+    close.Font = Enum.Font.GothamBold
+    close.TextSize = 20
+    close.BackgroundTransparency = 1
+    close.TextColor3 = Color3.new(1,1,1)
+    close.Parent = content
+    close.MouseButton1Click:Connect(function() popup:Destroy() end)
+end)
+
+
+local function SmartUpdate(key, subkey, val)
+    if currentThemeName == "Default" then
+        getgenv().Notify({Title = "Theme", Content = "Cannot modify Default theme. Create a new one!", Duration = 2})
+        return
+    end
+
+    if themes[currentThemeName] then
+        if not themes[currentThemeName][key] then themes[currentThemeName][key] = {} end
+        
+        if subkey then
+            themes[currentThemeName][key][subkey] = val
+        else
+            themes[currentThemeName][key] = val
+        end
+        SaveThemes(themes)
+        ApplyTheme(themes[currentThemeName])
+    end
+end
+
+local WheelFolder = SettingsLib.AddFolder(ThemeTab, "Wheel Settings")
+WheelFolder.Parent.LayoutOrder = 1.1
+
+local function AddWheelInput(title, wheelKey)
+    local initialData = themes["Default"].Wheel[wheelKey]
+    local initialColor = TableToColor(themes["Default"].Wheel[wheelKey.."Color"])
+    
+    local current = (themes[currentThemeName].Wheel and themes[currentThemeName].Wheel[wheelKey]) or initialData
+    local currentColor = TableToColor((themes[currentThemeName].Wheel and themes[currentThemeName].Wheel[wheelKey.."Color"]) or themes["Default"].Wheel[wheelKey.."Color"])
+    
+    local comp = SettingsLib.AddAssetColor(WheelFolder, title, "Asset ID...", current, currentColor, function(text, color)
+        if currentThemeName == "Default" then
+            getgenv().Notify({Title = "Theme", Content = "Cannot modify Default theme!", Duration = 2})
+            return
+        end
+        
+        if themes[currentThemeName] then
+            if not themes[currentThemeName].Wheel then themes[currentThemeName].Wheel = {} end
+            themes[currentThemeName].Wheel[wheelKey] = text
+            themes[currentThemeName].Wheel[wheelKey.."Color"] = ColorToTable(color)
+            
+            SaveThemes(themes)
+            ApplyTheme(themes[currentThemeName])
+        end
+    end)
+    UIElements.Wheel[wheelKey] = comp
+
+    local resetBtn = SettingsLib:Create("ImageButton", {
+        Parent = comp.Item,
+        BackgroundTransparency = 1,
+        Position = UDim2.new(1, -120, 0.5, -10),
+        Size = UDim2.fromOffset(20, 20),
+        Image = "rbxassetid://127493377027615",
+        ScaleType = Enum.ScaleType.Fit,
+        ZIndex = 10
+    })
+    
+    resetBtn.MouseButton1Click:Connect(function()
+        if currentThemeName == "Default" then return end
+        comp.SetValue(initialData, initialColor)
+        if themes[currentThemeName] then
+            if not themes[currentThemeName].Wheel then themes[currentThemeName].Wheel = {} end
+            themes[currentThemeName].Wheel[wheelKey] = initialData
+            themes[currentThemeName].Wheel[wheelKey.."Color"] = ColorToTable(initialColor)
+            SaveThemes(themes)
+            ApplyTheme(themes[currentThemeName])
+        end
+    end)
+end
+
+AddWheelInput("Wheel Background", "BackgroundImage")
+AddWheelInput("Selection Gradient", "SelectionGradient")
+AddWheelInput("Selection Line", "SelectionLine")
+
+local BackgroundFolder = SettingsLib.AddFolder(ThemeTab, "Background Settings")
+BackgroundFolder.Parent.LayoutOrder = 2
+UIElements.Background.Main = SettingsLib.AddColorPicker(BackgroundFolder, "Main Background", TableToColor(themes[currentThemeName].Background), function(c)
+    SmartUpdate("Background", nil, ColorToTable(c))
+end)
+
+local IconSettingsFolder = SettingsLib.AddFolder(ThemeTab, "Icon Settings")
+IconSettingsFolder.Parent.LayoutOrder = 3
+
+local function AddAssetInput(title, iconKey)
+    local current = (themes[currentThemeName].Icons and themes[currentThemeName].Icons[iconKey]) or ""
+    local defaultText = (themes["Default"].Icons and themes["Default"].Icons[iconKey]) or ""
+    
+    local currentColor = Color3.new(1,1,1)
+    if themes[currentThemeName].IconColors and themes[currentThemeName].IconColors[iconKey] then
+        currentColor = TableToColor(themes[currentThemeName].IconColors[iconKey])
+    elseif themes[currentThemeName].ImageColor then
+        currentColor = TableToColor(themes[currentThemeName].ImageColor)
+    end
+    
+    local defaultColor = Color3.new(1,1,1)
+    if themes["Default"].IconColors and themes["Default"].IconColors[iconKey] then
+        defaultColor = TableToColor(themes["Default"].IconColors[iconKey])
+    elseif themes["Default"].ImageColor then
+        defaultColor = TableToColor(themes["Default"].ImageColor)
+    end
+    
+    local comp = SettingsLib.AddInputWithColor(IconSettingsFolder, title, "Asset ID...", defaultText, defaultColor, function(text, color)
+        local s, err = pcall(function()
+            if currentThemeName == "Default" then
+                getgenv().Notify({Title = "Theme", Content = "Cannot modify Default theme!", Duration = 2})
+                return
+            end
+            
+            if themes[currentThemeName] then
+                if not themes[currentThemeName].Icons then themes[currentThemeName].Icons = {} end
+                if not themes[currentThemeName].IconColors then themes[currentThemeName].IconColors = {} end
+                
+                local cTable = ColorToTable(color)
+                themes[currentThemeName].Icons[iconKey] = text
+                themes[currentThemeName].IconColors[iconKey] = cTable
+                
+                SaveThemes(themes)
+                ApplyTheme(themes[currentThemeName])
+            end
+        end)
+        if not s then
+            warn("Theme Save Error: " .. tostring(err))
+            getgenv().Notify({Title = "Error", Content = "Failed to save color!", Duration = 3})
+        end
+    end)
+    comp.SetValue(current, currentColor)
+    UIElements.Icons[iconKey] = comp
+end
+
+AddAssetInput("Left Arrow", "Left")
+AddAssetInput("Right Arrow", "Right")
+AddAssetInput("Walk Icon", "Walk")
+AddAssetInput("Speed Icon", "Speed")
+AddAssetInput("Page Icon", "Page")
+AddAssetInput("Reload Icon", "Reload")
+AddAssetInput("Favorite (Star)", "Favorite")
+AddAssetInput("Not Favorite", "NotFavorite")
+
+
 pcall(function()
     loadstring(game:HttpGet("https://raw.githubusercontent.com/7yd7/Hub/Branch/GUIS/count-emote"))()
 end)
@@ -27,7 +1069,6 @@ getgenv().Notify({
 })
 
 local Players = game:GetService("Players")
-local HttpService = game:GetService("HttpService")
 local RunService = game:GetService("RunService")
 local player = Players.LocalPlayer
 local character = player.Character or player.CharacterAdded:Wait()
@@ -35,12 +1076,17 @@ local humanoid = character:WaitForChild("Humanoid")
 local UserInputService = game:GetService("UserInputService")
 local CoreGui = game:GetService("CoreGui")
 
+_G.EmoteTheme = _G.EmoteTheme or {
+    Background = Color3.fromRGB(28, 30, 32),
+    Accent = Color3.fromRGB(0, 255, 150),
+    ImageColor = Color3.fromRGB(255, 255, 255)
+}
+
 local emoteClickConnections = {}
 local guiConnections = {}
 local isMonitoringClicks = false
 local currentTimer = nil
 
-local currentMode = "emote"
 local animationsData = {}
 local originalAnimationsData = {}
 local filteredAnimations = {}
@@ -61,9 +1107,11 @@ RunService.Heartbeat:Connect(function()
     if not (success and menu) then return end
     
     pcall(function()
-        if menu.Main.EmotesWheel.Visible then
+        local wheelVisible = menu.Main.EmotesWheel.Visible
+        if wheelVisible then
             lastWheelVisibleTime = tick()
         end
+        ToggleContainer.Visible = wheelVisible
     end)
 
     local errorMsg = menu:FindFirstChild("ErrorMessage")
@@ -114,18 +1162,11 @@ local originalEmotesData = {}
 local totalEmotesLoaded = 0
 local scannedEmotes = {}
 local favoriteEmotes = {}
-local favoriteEnabled = false
 local favoriteFileName = "FavoriteEmotes.json"
-local emotesWalkEnabled = false
 local currentEmoteTrack = nil
 local currentCharacter = nil
 local isGUICreated = false
-local speedEmoteEnabled = false
 local speedEmoteConfigFile = "SpeedEmoteConfig.json"
-
-local Under, UIListLayout, _1left, _9right, _4pages, _3TextLabel, _2Routenumber, Top, EmoteWalkButton, UICorner1,
-    UIListLayout_2, UICorner, Search, Favorite, UICorner2, UICorner_2, SpeedEmote, UICorner_4, SpeedBox, UICorner_5, Changepage,
-    Reload, UICorner_6
 
 local defaultButtonImage = "rbxassetid://71408678974152"
 local enabledButtonImage = "rbxassetid://106798555684020"
@@ -173,88 +1214,6 @@ local function checkEmotesMenuExists()
     end
 
     return true, emotesWheel
-end
-
-local function getBackgroundOverlay()
-    local success, result = pcall(function()
-        return game:GetService("CoreGui").RobloxGui.EmotesMenu.Children.Main.EmotesWheel.Back.Background
-                   .BackgroundCircleOverlay
-    end)
-    if success then
-        return result
-    end
-    return nil
-end
-
-local function updateGUIColors()
-    local backgroundOverlay = getBackgroundOverlay()
-    if not backgroundOverlay then
-        return
-    end
-
-    local bgColor = backgroundOverlay.BackgroundColor3
-    local bgTransparency = backgroundOverlay.BackgroundTransparency
-
-    if _1left then
-        _1left.ImageColor3 = bgColor
-        _1left.ImageTransparency = bgTransparency
-    end
-
-    if _9right then
-        _9right.ImageColor3 = bgColor
-        _9right.ImageTransparency = bgTransparency
-    end
-
-    if _4pages then
-        _4pages.TextColor3 = bgColor
-        _4pages.TextTransparency = bgTransparency
-    end
-
-    if _3TextLabel then
-        _3TextLabel.TextColor3 = bgColor
-        _3TextLabel.TextTransparency = bgTransparency
-    end
-
-    if _2Routenumber then
-        _2Routenumber.TextColor3 = bgColor
-        _2Routenumber.TextTransparency = bgTransparency
-    end
-
-    if Top then
-        Top.BackgroundColor3 = bgColor
-        Top.BackgroundTransparency = bgTransparency
-    end
-
-    if EmoteWalkButton then
-        EmoteWalkButton.BackgroundColor3 = bgColor
-        EmoteWalkButton.BackgroundTransparency = bgTransparency
-    end
-
-    if SpeedEmote then
-        SpeedEmote.BackgroundColor3 = bgColor
-        SpeedEmote.BackgroundTransparency = bgTransparency
-    end
-
-     if Changepage then
-        Changepage.BackgroundColor3 = bgColor
-        Changepage.BackgroundTransparency = bgTransparency
-    end
-
-    if SpeedBox then
-        SpeedBox.BackgroundColor3 = bgColor
-        SpeedBox.BackgroundTransparency = bgTransparency
-    end
-
-    if Favorite then
-        Favorite.BackgroundColor3 = bgColor
-        Favorite.BackgroundTransparency = bgTransparency
-    end
-
-if Reload then
-    Reload.BackgroundColor3 = bgColor
-    Reload.BackgroundTransparency = bgTransparency
-    Reload.Visible = (currentMode == "animation")
-end
 end
 
 local function urlToId(animationId)
@@ -311,18 +1270,10 @@ local function disconnectAllConnections()
 end
 
 local function loadSpeedEmoteConfig()
-    if readfile and isfile and isfile(speedEmoteConfigFile) then
-        local success, result = pcall(function()
-            local fileContent = readfile(speedEmoteConfigFile)
-            return HttpService:JSONDecode(fileContent)
-        end)
-        if success and result then
-            speedEmoteEnabled = result.Enabled or false
-            if SpeedBox then
-                SpeedBox.Text = tostring(result.SpeedValue or 1)
-                SpeedBox.Visible = speedEmoteEnabled
-            end
-        end
+    speedEmoteEnabled = Config.EmoteSpeedEnabled
+    if SpeedBox then
+        SpeedBox.Text = tostring(Config.EmoteSpeed)
+        SpeedBox.Visible = (speedEmoteEnabled and Config.SpeedVisible)
     end
 end
 
@@ -934,7 +1885,13 @@ UICorner_6.Parent = Reload
 
     connectEvents()
     isGUICreated = true
+    
+    ApplyTheme(themes[currentThemeName] or themes.Default)
+    
     updateGUIColors()
+    
+    ApplyUIVisibility()
+    
     return true
 end
 
@@ -1773,19 +2730,16 @@ local function toggleSpeedEmote()
         stopCurrentEmote()
     end
 
-    if writefile then
-        writefile(speedEmoteConfigFile, HttpService:JSONEncode({
-            Enabled = speedEmoteEnabled,
-            SpeedValue = tonumber(SpeedBox.Text) or 1
-        }))
-    end
+    Config.EmoteSpeedEnabled = speedEmoteEnabled
+    Config.EmoteSpeed = tonumber(SpeedBox.Text) or 1
+    SaveConfig()
 end
 
 local function toggleFavoriteMode()
     favoriteEnabled = not favoriteEnabled
 
     if favoriteEnabled then
-        Favorite.Image = "rbxassetid://97307461910825"
+        ApplyFavoriteButtonVisual()
         getgenv().Notify({
             Title = '7yd7 | Favorite System',
             Content = "🔒 Favorite ON",
@@ -1798,7 +2752,7 @@ local function toggleFavoriteMode()
             updateAllFavoriteIcons()
         end
     else
-        Favorite.Image = "rbxassetid://124025954365505"
+        ApplyFavoriteButtonVisual()
         getgenv().Notify({
             Title = '7yd7 | Favorite System',
             Content = '🔓 Favorite OFF',
@@ -2013,12 +2967,8 @@ end
 
     if SpeedBox then
         table.insert(guiConnections, SpeedBox.FocusLost:Connect(function()
-            if writefile then
-                writefile(speedEmoteConfigFile, HttpService:JSONEncode({
-                    Enabled = speedEmoteEnabled,
-                    SpeedValue = tonumber(SpeedBox.Text) or 1
-                }))
-            end
+            Config.EmoteSpeed = tonumber(SpeedBox.Text) or 1
+            SaveConfig()
         end))
     end
 end
