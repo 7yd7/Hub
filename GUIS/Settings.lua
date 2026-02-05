@@ -112,7 +112,7 @@ function Lib:OpenPicker(default, callback, includeAlpha)
         BackgroundColor3 = Theme.Background,
         Position = UDim2.fromScale(0.5, 0.5),
         AnchorPoint = Vector2.new(0.5, 0.5),
-        Size = UDim2.fromOffset(320, 480), -- Taller for advanced features
+        Size = UDim2.fromOffset(320, 480), 
         ZIndex = 5000
     }, {
         Lib:Create("UICorner", {CornerRadius = Theme.CornerRadius}),
@@ -141,7 +141,6 @@ function Lib:OpenPicker(default, callback, includeAlpha)
     })
     closeBtn.MouseButton1Click:Connect(function() PickerFrame:Destroy(); PickerFrame = nil end)
 
-    -- Main Area (Wheel + Sliders)
     local MainArea = Lib:Create("Frame", {
         Parent = PickerFrame,
         BackgroundTransparency = 1,
@@ -149,13 +148,12 @@ function Lib:OpenPicker(default, callback, includeAlpha)
         Size = UDim2.new(1, -40, 0, 160)
     })
 
-    -- Hue/Saturation Circle (Truly circular)
     local Wheel = Lib:Create("ImageButton", {
         Name = "Wheel",
         Parent = MainArea,
         Size = UDim2.fromOffset(160, 160),
         BackgroundTransparency = 1,
-        Image = "rbxassetid://6020299385", -- Better circular Hue/Sat asset
+        Image = "rbxassetid://6020299385", 
         ScaleType = Enum.ScaleType.Fit,
         ZIndex = 10
     }, { Lib:Create("UICorner", {CornerRadius = UDim.new(1, 0)}) })
@@ -166,10 +164,9 @@ function Lib:OpenPicker(default, callback, includeAlpha)
         AnchorPoint = Vector2.new(0.5, 0.5),
         BackgroundColor3 = Color3.new(1, 1, 1),
         ZIndex = 11,
-        Active = false -- Let inputs pass through
+        Active = false 
     }, { Lib:Create("UICorner", {CornerRadius = UDim.new(1, 0)}), Lib:Create("UIStroke", {Thickness = 2, Color = Color3.new(0,0,0)}) })
 
-    -- Value Slider (Pill-shaped)
     local ValueSlider = Lib:Create("ImageButton", {
         Name = "ValueSlider",
         Parent = MainArea,
@@ -194,7 +191,6 @@ function Lib:OpenPicker(default, callback, includeAlpha)
         Active = false
     }, { Lib:Create("UICorner", {CornerRadius = UDim.new(1, 0)}), Lib:Create("UIStroke", {Thickness = 1}) })
 
-    -- Alpha Slider (Pill-shaped)
     local AlphaSlider = Lib:Create("ImageButton", {
         Name = "AlphaSlider",
         Parent = MainArea,
@@ -225,7 +221,6 @@ function Lib:OpenPicker(default, callback, includeAlpha)
         ValueSlider.Size = UDim2.fromOffset(40, 160)
     end
 
-    -- Feedback and Actions
     local ActionArea = Lib:Create("Frame", {
         Parent = PickerFrame,
         BackgroundTransparency = 1,
@@ -275,7 +270,6 @@ function Lib:OpenPicker(default, callback, includeAlpha)
     local Apply = CreateBtn("rbxassetid://17790428935", 195, ActionArea, Theme.Accent)
     local Cancel = CreateBtn("rbxassetid://102910221413931", 240, ActionArea, Theme.Error)
 
-    -- Numeric Grid
     local Grid = Lib:Create("Frame", {
         Parent = PickerFrame,
         BackgroundTransparency = 1,
@@ -322,7 +316,6 @@ function Lib:OpenPicker(default, callback, includeAlpha)
     local sI = CreateInput("S", 95, 50, Grid, string.format("%.2f", s))
     local vI = CreateInput("V", 190, 50, Grid, string.format("%.2f", v))
 
-    -- Palette
     local Palette = Lib:Create("Frame", {
         Parent = PickerFrame,
         BackgroundTransparency = 1,
@@ -341,17 +334,14 @@ function Lib:OpenPicker(default, callback, includeAlpha)
         Preview.BackgroundColor3 = pickerColor
         Preview.BackgroundTransparency = 1 - alpha
         
-        -- Update gradients
         ValGradient.Color = ColorSequence.new(Color3.fromHSV(h, s, 1), Color3.new(0, 0, 0))
         AlphaGradient.Color = ColorSequence.new(pickerColor, pickerColor)
         
-        -- Update cursors
         if source ~= "Wheel" then
-            local angle = math.rad(180 - h * 360) -- Reverse mapping (CCW)
+            local angle = math.rad(180 - h * 360) 
             local dist = s * 80
             WheelCursor.Position = UDim2.fromOffset(80 + math.cos(angle) * dist, 80 + math.sin(angle) * dist)
         else
-            -- While dragging, the cursor follows the mouse
             local angle = math.rad(180 - h * 360)
             local dist = s * 80
             WheelCursor.Position = UDim2.fromOffset(80 + math.cos(angle) * dist, 80 + math.sin(angle) * dist)
@@ -371,11 +361,8 @@ function Lib:OpenPicker(default, callback, includeAlpha)
             sI.Text = string.format("%.2f", s)
             vI.Text = string.format("%.2f", v)
         end
-
-        -- Apply confirmation only
     end
 
-    -- Palette Logic
     for i, color in ipairs(ColorHistory) do
         local swatch = Lib:Create("TextButton", {
             Parent = Palette,
@@ -398,8 +385,6 @@ function Lib:OpenPicker(default, callback, includeAlpha)
         local angle = math.atan2(diff.Y, diff.X)
         local dist = math.min(diff.Magnitude, radius)
         
-        -- NEW: Counter-Clockwise (CCW) Hue Mapping
-        -- Red at 180 deg (Left), Yellow at 90 deg (Bottom), etc.
         h = (180 - math.deg(angle)) % 360 / 360
         s = dist / radius
         SyncAll("Wheel")
@@ -509,7 +494,6 @@ function Lib:OpenPicker(default, callback, includeAlpha)
     SyncAll()
 end
 
--- Main UI Setup
 local MainFrame = Lib:Create("Frame", {
     Name = "MainFrame",
     Parent = SettingsUI,
@@ -522,7 +506,6 @@ local MainFrame = Lib:Create("Frame", {
 })
 MainFrame.Visible = false
 
--- Dragging Logic
 local Dragging, DragStart, StartPos
 MainFrame.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
@@ -576,7 +559,6 @@ local CloseBtn = Lib:Create("TextButton", {
     Lib:Create("UICorner", {CornerRadius = UDim.new(0, 6)})
 })
 CloseBtn.MouseButton1Click:Connect(function()
-    -- Hide only the main frame so the UI isn't destroyed
     MainFrame.Visible = false
 end)
 
@@ -744,12 +726,9 @@ function Components:AddDropdown(container, title, options, default, callback)
             local btnSize = DropBtn.AbsoluteSize
             local guiContainerSize = SettingsUI.AbsoluteSize or workspace.CurrentCamera.ViewportSize
             
-            -- Set size first
             local listHeight = math.min(#options * 24 + 32, 200)
             DropList.Size = UDim2.fromOffset(110, listHeight)
-            
-            -- Detailed screen calculation to ensure it appears EXACTLY below the button
-            -- accounting for potential anchor points or layout shifts
+
             DropList.Position = UDim2.new(0, btnPos.X / scale, 0, (btnPos.Y + btnSize.Y + 4) / scale)
             DropList.Visible = true
             RefreshOptions(SearchBox.Text)
