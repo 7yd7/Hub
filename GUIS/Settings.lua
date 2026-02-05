@@ -1159,7 +1159,8 @@ local Library = {
     AddItem = function(...) return Components:AddItem(...) end,
     AddInputWithColor = function(...) return Components:AddInputWithColor(...) end,
     AddAssetColor = function(...) return Components:AddAssetColor(...) end,
-    OpenPicker = function(...) return Lib:OpenPicker(...) end
+    OpenPicker = function(...) return Lib:OpenPicker(...) end,
+    Create = function(self, ...) return Lib:Create(...) end
 }
 
 return Library
