@@ -574,7 +574,10 @@ local CloseBtn = Lib:Create("TextButton", {
 }, {
     Lib:Create("UICorner", {CornerRadius = UDim.new(0, 6)})
 })
-CloseBtn.MouseButton1Click:Connect(function() SettingsUI.Enabled = false end)
+CloseBtn.MouseButton1Click:Connect(function()
+    -- Hide only the main frame so the UI isn't destroyed
+    MainFrame.Visible = false
+end)
 
 local TabContainers = {}
 local ActiveTab = nil
