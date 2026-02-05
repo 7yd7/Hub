@@ -851,6 +851,7 @@ end
 function Components:AddIconButton(container, imageId, callback)
     local BtnHolder = Lib:Create("TextButton", {
         Parent = container,
+        BackgroundColor3 = Color3.fromHex("18191c"),
         BackgroundTransparency = 1,
         Size = UDim2.new(0, 38, 0, 38),
         Text = ""
@@ -867,6 +868,15 @@ function Components:AddIconButton(container, imageId, callback)
         ScaleType = Enum.ScaleType.Fit,
         Active = false
     })
+    
+    BtnHolder.MouseEnter:Connect(function()
+        Lib:Tween(BtnHolder, TweenInfo.new(0.15), {BackgroundTransparency = 0, BackgroundColor3 = Theme.Accent})
+        Lib:Tween(Btn, TweenInfo.new(0.15), {ImageColor3 = Color3.new(1, 1, 1)})
+    end)
+    BtnHolder.MouseLeave:Connect(function()
+        Lib:Tween(BtnHolder, TweenInfo.new(0.15), {BackgroundTransparency = 1, BackgroundColor3 = Color3.fromHex("18191c")})
+        Lib:Tween(Btn, TweenInfo.new(0.15), {ImageColor3 = Color3.fromRGB(200, 200, 200)})
+    end)
     
     BtnHolder.MouseButton1Click:Connect(callback)
     return BtnHolder
