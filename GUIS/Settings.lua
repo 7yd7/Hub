@@ -337,48 +337,57 @@ function Lib:OpenPicker(default, callback, includeAlpha)
         })
     })
 
+    local h, s, v = default:ToHSV()
+    local alpha = includeAlpha and (typeof(default) == "table" and default.Alpha or 1) or 1
+    if typeof(default) == "table" and default.Color then
+        h, s, v = default.Color:ToHSV()
+        alpha = default.Alpha or 1
+    end
+    
+    local pendingH, pendingS, pendingV = h, s, v
+    local pendingAlpha = alpha
+    
     local function SyncAll(source)
-        pickerColor = Color3.fromHSV(h, s, v)
-        Preview.BackgroundColor3 = pickerColor
-        Preview.BackgroundTransparency = 1 - alpha
+        local curH, curS, curV = pendingH, pendingS, pendingV
+        local curAlpha = pendingAlpha
+        
+        local pickerColor = Color3.fromHSV(curH, curS, 1)
+        local realColor = Color3.fromHSV(curH, curS, curV)
+        
+        Preview.BackgroundColor3 = realColor
+        Preview.BackgroundTransparency = 1 - curAlpha
         
         -- Update gradients
-        ValGradient.Color = ColorSequence.new(Color3.fromHSV(h, s, 1), Color3.new(0, 0, 0))
-        AlphaGradient.Color = ColorSequence.new(pickerColor, pickerColor)
+        ValGradient.Color = ColorSequence.new(Color3.fromHSV(curH, curS, 1), Color3.new(0, 0, 0))
+        AlphaGradient.Color = ColorSequence.new(realColor, realColor)
         
         -- Update cursors
-        if source ~= "Wheel" then
-            local angle = math.rad(h * 360 - 90)
-            local dist = s * 80
-            WheelCursor.Position = UDim2.fromOffset(80 + math.cos(angle) * dist, 80 + math.sin(angle) * dist)
-        else
-            -- While dragging the wheel, we should still update the cursor position for smoothness
-            local angle = math.rad(h * 360 - 90)
-            local dist = s * 80
-            WheelCursor.Position = UDim2.fromOffset(80 + math.cos(angle) * dist, 80 + math.sin(angle) * dist)
-        end
-        ValCursor.Position = UDim2.fromScale(0, 1-v)
-        AlphaCursor.Position = UDim2.fromScale(0, 1-alpha)
+        local angle = math.rad(curH * 360 - 90)
+        local dist = curS * 80
+        WheelCursor.Position = UDim2.fromOffset(80 + math.cos(angle) * dist, 80 + math.sin(angle) * dist)
         
-        if source ~= "Hex" then Hex.Text = ColorToHex(pickerColor) end
+        ValCursor.Position = UDim2.fromScale(0, 1-curV)
+        AlphaCursor.Position = UDim2.fromScale(0, 1-curAlpha)
+        
+        if source ~= "Hex" then Hex.Text = ColorToHex(realColor) end
         
         if source ~= "RGB" then
-            rI.Text = math.round(pickerColor.R * 255)
-            gI.Text = math.round(pickerColor.G * 255)
-            bI.Text = math.round(pickerColor.B * 255)
+            rI.Text = math.round(realColor.R * 255)
+            gI.Text = math.round(realColor.G * 255)
+            bI.Text = math.round(realColor.B * 255)
         end
         if source ~= "HSV" then
-            hI.Text = math.round(h * 360)
-            sI.Text = string.format("%.2f", s)
-            vI.Text = string.format("%.2f", v)
+            hI.Text = math.round(curH * 360)
+            sI.Text = string.format("%.2f", curS)
+            vI.Text = string.format("%.2f", curV)
         end
 
         -- Real-time update
         if currentPickerCallback then
             if includeAlpha then
-                currentPickerCallback({Color = pickerColor, Alpha = alpha})
+                currentPickerCallback({Color = realColor, Alpha = curAlpha})
             else
-                currentPickerCallback(pickerColor)
+                currentPickerCallback(realColor)
             end
         end
     end
@@ -392,7 +401,8 @@ function Lib:OpenPicker(default, callback, includeAlpha)
             Text = ""
         }, { Lib:Create("UICorner", {CornerRadius = UDim.new(0, 6)}) })
         swatch.MouseButton1Click:Connect(function()
-            h, s, v = color:ToHSV()
+            pendingH, pendingS, pendingV = color:ToHSV()
+            pendingAlpha = color.A
             SyncAll("Palette")
         end)
     end
@@ -407,10 +417,11 @@ function Lib:OpenPicker(default, callback, includeAlpha)
         local angle = math.atan2(diff.Y, diff.X)
         local dist = math.min(diff.Magnitude, radius)
         
-        -- Hue calculation: Adjust for asset rotation (-90 degrees usually centers red at top)
-        -- Invert the angle if hue feels backwards
-        h = ((math.deg(angle) + 90) % 360) / 360
-        s = dist / radius
+        -- Refined Hue calculation: 
+        -- 1. Offset by 90 deg to make Top = 0
+        -- 2. Invert (1 - ...) to match clockwise flow of standard wheels
+        pendingH = (1 - ((math.deg(angle) + 90) % 360) / 360) % 1
+        pendingS = dist / radius
         SyncAll("Wheel")
     end
 
@@ -419,7 +430,7 @@ function Lib:OpenPicker(default, callback, includeAlpha)
         local size = ValueSlider.AbsoluteSize
         local absPos = ValueSlider.AbsolutePosition
         local relY = math.clamp((pos.Y - absPos.Y) / size.Y, 0, 1)
-        v = 1 - relY
+        pendingV = 1 - relY
         SyncAll("Slider")
     end
 
@@ -428,7 +439,7 @@ function Lib:OpenPicker(default, callback, includeAlpha)
         local size = AlphaSlider.AbsoluteSize
         local absPos = AlphaSlider.AbsolutePosition
         local relY = math.clamp((pos.Y - absPos.Y) / size.Y, 0, 1)
-        alpha = 1 - relY
+        pendingAlpha = 1 - relY
         SyncAll("Alpha")
     end
 
@@ -482,12 +493,24 @@ function Lib:OpenPicker(default, callback, includeAlpha)
         if PickerFrame then PickerFrame:Destroy(); PickerFrame = nil end
     end
 
-    closeBtn.MouseButton1Click:Connect(Cleanup)
+    local function Apply()
+        h, s, v, alpha = pendingH, pendingS, pendingV, pendingAlpha
+        local finalColor = Color3.fromHSV(h, s, v)
+        if includeAlpha then
+            callback({Color = finalColor, Alpha = alpha})
+        else
+            callback(finalColor)
+        end
+        Cleanup()
+    end
+    
+    Apply.MouseButton1Click:Connect(ApplyFunc)
     Cancel.MouseButton1Click:Connect(Cleanup)
+    closeBtn.MouseButton1Click:Connect(Cleanup)
 
     Hex.FocusLost:Connect(function()
         local c = HexToColor(Hex.Text)
-        if c then h, s, v = c:ToHSV(); SyncAll("Hex") else Hex.Text = ColorToHex(pickerColor) end
+        if c then pendingH, pendingS, pendingV = c:ToHSV(); pendingAlpha = c.A; SyncAll("Hex") else Hex.Text = ColorToHex(Color3.fromHSV(pendingH, pendingS, pendingV)) end
     end)
 
     local function HandleRGB()
