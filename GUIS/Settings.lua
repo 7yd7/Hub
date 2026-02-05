@@ -347,12 +347,12 @@ function Lib:OpenPicker(default, callback, includeAlpha)
         
         -- Update cursors
         if source ~= "Wheel" then
-            local angle = math.rad(h * 360 + 180)
+            local angle = math.rad(180 - h * 360) -- Reverse mapping (CCW)
             local dist = s * 80
             WheelCursor.Position = UDim2.fromOffset(80 + math.cos(angle) * dist, 80 + math.sin(angle) * dist)
         else
-            -- While dragging the wheel, we should still update the cursor position for smoothness
-            local angle = math.rad(h * 360 + 180)
+            -- While dragging, the cursor follows the mouse
+            local angle = math.rad(180 - h * 360)
             local dist = s * 80
             WheelCursor.Position = UDim2.fromOffset(80 + math.cos(angle) * dist, 80 + math.sin(angle) * dist)
         end
@@ -389,7 +389,6 @@ function Lib:OpenPicker(default, callback, includeAlpha)
         end)
     end
 
-    -- Interaction Refactored (Circular)
     local function UpdateWheel(input)
         local pos = input.Position
         local rel = Vector2.new(pos.X - Wheel.AbsolutePosition.X, pos.Y - Wheel.AbsolutePosition.Y)
@@ -399,7 +398,9 @@ function Lib:OpenPicker(default, callback, includeAlpha)
         local angle = math.atan2(diff.Y, diff.X)
         local dist = math.min(diff.Magnitude, radius)
         
-        h = (math.deg(angle) + 180) % 360 / 360
+        -- NEW: Counter-Clockwise (CCW) Hue Mapping
+        -- Red at 180 deg (Left), Yellow at 90 deg (Bottom), etc.
+        h = (180 - math.deg(angle)) % 360 / 360
         s = dist / radius
         SyncAll("Wheel")
     end
