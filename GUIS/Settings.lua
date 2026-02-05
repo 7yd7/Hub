@@ -372,14 +372,7 @@ function Lib:OpenPicker(default, callback, includeAlpha)
             vI.Text = string.format("%.2f", v)
         end
 
-        -- Real-time update
-        if currentPickerCallback then
-            if includeAlpha then
-                currentPickerCallback({Color = pickerColor, Alpha = alpha})
-            else
-                currentPickerCallback(pickerColor)
-            end
-        end
+        -- Apply confirmation only
     end
 
     -- Palette Logic
@@ -406,7 +399,7 @@ function Lib:OpenPicker(default, callback, includeAlpha)
         local angle = math.atan2(diff.Y, diff.X)
         local dist = math.min(diff.Magnitude, radius)
         
-        h = (math.deg(angle) % 360) / 360
+        h = (math.deg(angle) + 180) % 360 / 360
         s = dist / radius
         SyncAll("Wheel")
     end
@@ -844,7 +837,7 @@ end
 function Components:AddIconButton(container, imageId, callback)
     local BtnHolder = Lib:Create("Frame", {
         Parent = container,
-        BackgroundColor3 = Color3.fromRGB(45, 48, 55),
+        BackgroundColor3 = Color3.fromHex("18191c"),
         Size = UDim2.new(0, 38, 0, 38)
     }, { Lib:Create("UICorner", {CornerRadius = UDim.new(0, 10)}) })
     
