@@ -18,6 +18,7 @@ _G.EmotesGUIRunning = true
 loadstring(game:HttpGet("https://raw.githubusercontent.com/7yd7/Menu-7yd7/refs/heads/Script/GUIS/Off-site/Notify.lua"))()
 
 local HttpService = game:GetService("HttpService")
+local RunService = game:GetService("RunService")
 local request = http_request or (syn and syn.request) or request
 
 local function GetAsset(asset)
@@ -85,6 +86,188 @@ local function GetAsset(asset)
     end
     
     return assetStr
+end
+
+local function NormalizeUrl(url)
+    if not url or url == "" then return url end
+    local targetUrl = tostring(url)
+    if targetUrl:find("github.com") and targetUrl:find("/blob/") then
+        targetUrl = targetUrl:gsub("github.com", "raw.githubusercontent.com"):gsub("/blob/", "/")
+    end
+    return targetUrl
+end
+
+local DEFAULT_WHEEL_BG = "rbxasset://textures/ui/Emotes/Large/SegmentedCircle.png"
+local wheelImgState = setmetatable({}, { __mode = "k" })
+local checkEmotesMenuExists
+
+local function SetWheelImageMode(bgImg, isCustom)
+    if not bgImg then return end
+    if not wheelImgState[bgImg] then
+        wheelImgState[bgImg] = {
+            ScaleType = bgImg.ScaleType,
+            SliceCenter = bgImg.SliceCenter,
+            SliceScale = bgImg.SliceScale
+        }
+    end
+
+    if isCustom then
+        bgImg.ScaleType = Enum.ScaleType.Stretch
+        bgImg.SliceCenter = Rect.new(0, 0, 0, 0)
+        bgImg.SliceScale = 1
+    else
+        local st = wheelImgState[bgImg]
+        if st then
+            bgImg.ScaleType = st.ScaleType
+            bgImg.SliceCenter = st.SliceCenter
+            bgImg.SliceScale = st.SliceScale
+        end
+    end
+end
+
+local function ParseGifInfo(bytes)
+    if not bytes or #bytes < 13 then return nil end
+    if bytes:sub(1, 3) ~= "GIF" then return nil end
+    local function u16le(pos)
+        local b1 = bytes:byte(pos) or 0
+        local b2 = bytes:byte(pos + 1) or 0
+        return b1 + b2 * 256
+    end
+    local width = u16le(7)
+    local height = u16le(9)
+    local packed = bytes:byte(11) or 0
+    local gctFlag = bit32.band(packed, 0x80) ~= 0
+    local gctSize = bit32.band(packed, 0x07)
+    local offset = 13
+    if gctFlag then
+        offset = offset + (3 * (2 ^ (gctSize + 1)))
+    end
+
+    local frames = 0
+    local delays = {}
+    local pendingDelay = nil
+
+    local function skipSubBlocks(pos)
+        while pos <= #bytes do
+            local size = bytes:byte(pos) or 0
+            pos = pos + 1
+            if size == 0 then
+                break
+            end
+            pos = pos + size
+        end
+        return pos
+    end
+
+    while offset <= #bytes do
+        local b = bytes:byte(offset)
+        if not b then break end
+        if b == 0x3B then
+            break
+        elseif b == 0x21 then
+            local label = bytes:byte(offset + 1) or 0
+            if label == 0xF9 then
+                local delay = u16le(offset + 4)
+                pendingDelay = delay
+                offset = offset + 8
+            else
+                offset = skipSubBlocks(offset + 2)
+            end
+        elseif b == 0x2C then
+            frames = frames + 1
+            if pendingDelay then
+                table.insert(delays, pendingDelay)
+                pendingDelay = nil
+            end
+            local packedImg = bytes:byte(offset + 9) or 0
+            local lctFlag = bit32.band(packedImg, 0x80) ~= 0
+            local lctSize = bit32.band(packedImg, 0x07)
+            offset = offset + 10
+            if lctFlag then
+                offset = offset + (3 * (2 ^ (lctSize + 1)))
+            end
+            offset = offset + 1
+            offset = skipSubBlocks(offset)
+        else
+            offset = offset + 1
+        end
+    end
+
+    local totalDelay = 0
+    for _, d in ipairs(delays) do
+        totalDelay = totalDelay + d
+    end
+    local avgDelay = (#delays > 0) and (totalDelay / #delays) or 10
+
+    return {
+        width = width,
+        height = height,
+        frames = frames > 0 and frames or #delays,
+        totalDelayCs = totalDelay,
+        avgDelayCs = avgDelay
+    }
+end
+
+local function ParsePngInfo(bytes)
+    if not bytes or #bytes < 24 then return nil end
+    if bytes:sub(1, 8) ~= "\137PNG\r\n\26\n" then return nil end
+    local function u32be(pos)
+        local b1 = bytes:byte(pos) or 0
+        local b2 = bytes:byte(pos + 1) or 0
+        local b3 = bytes:byte(pos + 2) or 0
+        local b4 = bytes:byte(pos + 3) or 0
+        return ((b1 * 256 + b2) * 256 + b3) * 256 + b4
+    end
+    local width = u32be(17)
+    local height = u32be(21)
+    if width <= 0 or height <= 0 then return nil end
+    return { width = width, height = height }
+end
+
+local function LooksLikeGif(src)
+    if not src or src == "" then return false end
+    local s = tostring(src):lower()
+    return s:find("%.gif") or s:find("format=gif") or s:find("image/gif")
+end
+
+local wheelGifConnection = nil
+local function StopWheelGifAnimation()
+    if wheelGifConnection then
+        wheelGifConnection:Disconnect()
+        wheelGifConnection = nil
+    end
+end
+
+local function StartWheelGifAnimation(bgImg, data)
+    StopWheelGifAnimation()
+    if not bgImg or not data or not data.sprite then return end
+
+    local frames = data.frames or 0
+    local frameW = data.frameW or 0
+    local frameH = data.frameH or 0
+    if frames <= 0 or frameW <= 0 or frameH <= 0 then return end
+
+    local cols = data.cols or 0
+    if cols <= 0 then
+        cols = math.max(1, math.floor(1024 / frameW))
+    end
+    local delayCs = (data.gifInfo and data.gifInfo.avgDelayCs) or 10
+    local delay = math.max(0.02, (delayCs / 100))
+
+    bgImg.Image = data.sprite
+    bgImg.ImageRectSize = Vector2.new(frameW, frameH)
+
+    local current = 0
+    local acc = 0
+    wheelGifConnection = RunService.Heartbeat:Connect(function(dt)
+        acc = acc + dt
+        if acc < delay then return end
+        acc = 0
+        current = (current + 1) % frames
+        local x = (current % cols) * frameW
+        local y = math.floor(current / cols) * frameH
+        bgImg.ImageRectOffset = Vector2.new(x, y)
+    end)
 end
 
 local ConfigPath = "7yd7/EmoteSettings.json"
@@ -289,7 +472,15 @@ local function DeepCopy(t)
 end
 
 local function ColorToTable(c) return {math.round(c.R*255), math.round(c.G*255), math.round(c.B*255)} end
-local function TableToColor(t) return Color3.fromRGB(t[1], t[2], t[3]) end
+local function TableToColor(t)
+    if type(t) ~= "table" then
+        return Color3.fromRGB(255, 255, 255)
+    end
+    local r = tonumber(t[1]) or 255
+    local g = tonumber(t[2]) or 255
+    local b = tonumber(t[3]) or 255
+    return Color3.fromRGB(r, g, b)
+end
 
 local function GetThemeIconColor(key)
     local theme = _G.EmoteTheme
@@ -556,6 +747,80 @@ local UIElements = {
     Wheel = {}
 }
 
+local function ApplyWheelBackgroundImage(bgImg, wheel)
+    if not bgImg or not wheel then return end
+    local bgSrc = wheel.BackgroundImage or ""
+    local isCustomBg = tostring(bgSrc) ~= DEFAULT_WHEEL_BG
+
+    local gifUrl, sheetUrl = nil, nil
+    if bgSrc and tostring(bgSrc):find("\n") then
+        local lines = {}
+        for line in tostring(bgSrc):gmatch("[^\r\n]+") do
+            line = line:match("^%s*(.-)%s*$")
+            if line ~= "" then table.insert(lines, line) end
+        end
+        gifUrl = lines[1]
+        sheetUrl = lines[2]
+    elseif tostring(bgSrc):find("|") then
+        local parts = {}
+        for part in tostring(bgSrc):gmatch("[^|]+") do
+            part = part:match("^%s*(.-)%s*$")
+            if part ~= "" then table.insert(parts, part) end
+        end
+        gifUrl = parts[1]
+        sheetUrl = parts[2]
+    elseif LooksLikeGif(bgSrc) then
+        gifUrl = bgSrc
+    end
+
+    local targetUrl = NormalizeUrl(bgSrc)
+    if gifUrl then gifUrl = NormalizeUrl(gifUrl) end
+    if sheetUrl then sheetUrl = NormalizeUrl(sheetUrl) end
+
+    if gifUrl and sheetUrl and sheetUrl ~= "" then
+        local okGif, gifBytes = pcall(function() return game:HttpGet(gifUrl) end)
+        local gifInfo = okGif and gifBytes and ParseGifInfo(gifBytes) or nil
+
+        local okSheet, sheetBytes = pcall(function() return game:HttpGet(sheetUrl) end)
+        local sheetInfo = okSheet and sheetBytes and ParsePngInfo(sheetBytes) or nil
+        local sheetAsset = GetAsset(sheetUrl)
+
+        if gifInfo and sheetInfo and sheetAsset and sheetAsset ~= "" then
+            local frameW = gifInfo.width
+            local frameH = gifInfo.height
+            local cols = math.max(1, math.floor(sheetInfo.width / frameW))
+            local rows = math.max(1, math.floor(sheetInfo.height / frameH))
+            local frames = gifInfo.frames or (cols * rows)
+
+            local spriteData = {
+                sprite = sheetAsset,
+                frames = frames,
+                frameW = frameW,
+                frameH = frameH,
+                cols = cols,
+                rows = rows,
+                gifInfo = gifInfo
+            }
+            SetWheelImageMode(bgImg, true)
+            StartWheelGifAnimation(bgImg, spriteData)
+            return
+        else
+            StopWheelGifAnimation()
+            SetWheelImageMode(bgImg, true)
+            bgImg.Image = sheetAsset or ""
+            bgImg.ImageRectSize = Vector2.new(0, 0)
+            bgImg.ImageRectOffset = Vector2.new(0, 0)
+            return
+        end
+    end
+
+    StopWheelGifAnimation()
+    SetWheelImageMode(bgImg, isCustomBg)
+    bgImg.Image = GetAsset(targetUrl)
+    bgImg.ImageRectSize = Vector2.new(0, 0)
+    bgImg.ImageRectOffset = Vector2.new(0, 0)
+end
+
 local function ApplyTheme(themeData)
     if themeData.Background then
         _G.EmoteTheme = {
@@ -622,7 +887,7 @@ local function ApplyTheme(themeData)
 
                 local bgImg = root:FindFirstChild("BackgroundImage")
                 if bgImg then
-                    bgImg.Image = getAsset(wheel.BackgroundImage)
+                    ApplyWheelBackgroundImage(bgImg, wheel)
                     bgImg.ImageColor3 = TableToColor(wheel.BackgroundImageColor or {255,255,255})
                 end
 
@@ -651,6 +916,36 @@ local function ApplyTheme(themeData)
             if comp then comp.SetValue(imgVal, colorVal) end
         end
     end
+end
+
+checkEmotesMenuExists = function()
+    local coreGui = game:GetService("CoreGui")
+    local robloxGui = coreGui:FindFirstChild("RobloxGui")
+    if not robloxGui then
+        return false
+    end
+
+    local emotesMenu = robloxGui:FindFirstChild("EmotesMenu")
+    if not emotesMenu then
+        return false
+    end
+
+    local children = emotesMenu:FindFirstChild("Children")
+    if not children then
+        return false
+    end
+
+    local main = children:FindFirstChild("Main")
+    if not main then
+        return false
+    end
+
+    local emotesWheel = main:FindFirstChild("EmotesWheel")
+    if not emotesWheel then
+        return false
+    end
+
+    return true, emotesWheel
 end
 
 task.spawn(function()
@@ -1069,7 +1364,6 @@ getgenv().Notify({
 })
 
 local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
 local player = Players.LocalPlayer
 local character = player.Character or player.CharacterAdded:Wait()
 local humanoid = character:WaitForChild("Humanoid")
@@ -1184,36 +1478,6 @@ local function getCharacterAndHumanoid()
         return nil, nil
     end
     return character, humanoid
-end
-
-local function checkEmotesMenuExists()
-    local coreGui = game:GetService("CoreGui")
-    local robloxGui = coreGui:FindFirstChild("RobloxGui")
-    if not robloxGui then
-        return false
-    end
-
-    local emotesMenu = robloxGui:FindFirstChild("EmotesMenu")
-    if not emotesMenu then
-        return false
-    end
-
-    local children = emotesMenu:FindFirstChild("Children")
-    if not children then
-        return false
-    end
-
-    local main = children:FindFirstChild("Main")
-    if not main then
-        return false
-    end
-
-    local emotesWheel = main:FindFirstChild("EmotesWheel")
-    if not emotesWheel then
-        return false
-    end
-
-    return true, emotesWheel
 end
 
 local function urlToId(animationId)
