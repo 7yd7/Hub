@@ -305,7 +305,9 @@ local Config = {
     NavVisible = true,
     EmoteSpeed = 1,
     EmoteSpeedEnabled = false,
-    SelectedTheme = "Default"
+    SelectedTheme = "Default",
+    EmotePage = 1,
+    AnimationPage = 1
 }
 
 local Under, UIListLayout, _1left, _9right, _4pages, _3TextLabel, _2Routenumber, Top, EmoteWalkButton, UICorner1,
@@ -1569,6 +1571,15 @@ local currentCharacter = nil
 local isGUICreated = false
 local speedEmoteConfigFile = "SpeedEmoteConfig.json"
 
+local favoriteSetVersion = 0
+local favoriteSetBuiltVersion = -1
+local favoriteEmoteSet = {}
+local favoriteAnimationSet = {}
+local emoteCacheVersion = 0
+local animationCacheVersion = 0
+local emotePageCache = { version = nil, normal = {}, favorites = {} }
+local animationPageCache = { version = nil, normal = {}, favorites = {} }
+
 local defaultButtonImage = "rbxassetid://71408678974152"
 local enabledButtonImage = "rbxassetid://106798555684020"
 
@@ -1615,6 +1626,7 @@ local function loadFavorites()
         end)
         if success and result then
             favoriteEmotes = result
+            favoriteSetVersion = favoriteSetVersion + 1
         end
     end
 end
@@ -1627,6 +1639,7 @@ local function loadFavoritesAnimations()
         end)
         if success and result then
             favoriteAnimations = result
+            favoriteSetVersion = favoriteSetVersion + 1
         end
     end
 end
@@ -1666,19 +1679,73 @@ local function getEmoteName(assetId)
 end
 
 local function isInFavorites(assetId)
-    local favoriteList
-    if currentMode == "animation" then
-        favoriteList = favoriteAnimations
-    else
-        favoriteList = favoriteEmotes
+    if favoriteSetBuiltVersion ~= favoriteSetVersion then
+        favoriteEmoteSet = {}
+        for _, favorite in pairs(favoriteEmotes) do
+            favoriteEmoteSet[tostring(favorite.id)] = true
+        end
+        favoriteAnimationSet = {}
+        for _, favorite in pairs(favoriteAnimations) do
+            favoriteAnimationSet[tostring(favorite.id)] = true
+        end
+        favoriteSetBuiltVersion = favoriteSetVersion
     end
+    if currentMode == "animation" then
+        return favoriteAnimationSet[tostring(assetId)] == true
+    end
+    return favoriteEmoteSet[tostring(assetId)] == true
+end
 
-    for _, favorite in pairs(favoriteList) do
-        if tostring(favorite.id) == tostring(assetId) then
-            return true
+local function rebuildEmoteNormalCache()
+    if emotePageCache.version == emoteCacheVersion and emotePageCache.favVersion == favoriteSetVersion then
+        return
+    end
+    if favoriteSetBuiltVersion ~= favoriteSetVersion then
+        favoriteEmoteSet = {}
+        for _, favorite in pairs(favoriteEmotes) do
+            favoriteEmoteSet[tostring(favorite.id)] = true
+        end
+        favoriteAnimationSet = {}
+        for _, favorite in pairs(favoriteAnimations) do
+            favoriteAnimationSet[tostring(favorite.id)] = true
+        end
+        favoriteSetBuiltVersion = favoriteSetVersion
+    end
+    local normal = {}
+    for _, emote in ipairs(filteredEmotes) do
+        if not favoriteEmoteSet[tostring(emote.id)] then
+            table.insert(normal, emote)
         end
     end
-    return false
+    emotePageCache.normal = normal
+    emotePageCache.version = emoteCacheVersion
+    emotePageCache.favVersion = favoriteSetVersion
+end
+
+local function rebuildAnimationNormalCache()
+    if animationPageCache.version == animationCacheVersion and animationPageCache.favVersion == favoriteSetVersion then
+        return
+    end
+    if favoriteSetBuiltVersion ~= favoriteSetVersion then
+        favoriteEmoteSet = {}
+        for _, favorite in pairs(favoriteEmotes) do
+            favoriteEmoteSet[tostring(favorite.id)] = true
+        end
+        favoriteAnimationSet = {}
+        for _, favorite in pairs(favoriteAnimations) do
+            favoriteAnimationSet[tostring(favorite.id)] = true
+        end
+        favoriteSetBuiltVersion = favoriteSetVersion
+    end
+    local normal = {}
+    for _, animation in ipairs(filteredAnimations) do
+        if not favoriteAnimationSet[tostring(animation.id)] then
+            table.insert(normal, animation)
+        end
+    end
+    animationPageCache.normal = normal
+    animationPageCache.version = animationCacheVersion
+    animationPageCache.favVersion = favoriteSetVersion
 end
 
 local function updateAnimationImages(currentPageAnimations)
@@ -1786,6 +1853,7 @@ local function updateAnimations()
     local animationTable = {}
     local equippedAnimations = {}
 
+    rebuildAnimationNormalCache()
     local favoritesToUse = _G.filteredFavoritesAnimationsForDisplay or favoriteAnimations
     local hasFavorites = #favoritesToUse > 0
     local favoritePagesCount = hasFavorites and math.ceil(#favoritesToUse / itemsPerPage) or 0
@@ -1804,13 +1872,7 @@ local function updateAnimations()
             end
         end
     else
-        local normalAnimations = {}
-        for _, animation in pairs(filteredAnimations) do
-            if not isInFavorites(animation.id) then
-                table.insert(normalAnimations, animation)
-            end
-        end
-
+        local normalAnimations = animationPageCache.normal or {}
         local adjustedPage = currentPage - favoritePagesCount
         local startIndex = (adjustedPage - 1) * itemsPerPage + 1
         local endIndex = math.min(startIndex + itemsPerPage - 1, #normalAnimations)
@@ -1862,6 +1924,7 @@ local function updateEmotes()
     local emoteTable = {}
     local equippedEmotes = {}
 
+    rebuildEmoteNormalCache()
     local favoritesToUse = _G.filteredFavoritesForDisplay or favoriteEmotes
     local hasFavorites = #favoritesToUse > 0
     local favoritePagesCount = hasFavorites and math.ceil(#favoritesToUse / itemsPerPage) or 0
@@ -1880,13 +1943,7 @@ local function updateEmotes()
             end
         end
     else
-        local normalEmotes = {}
-        for _, emote in pairs(filteredEmotes) do
-            if not isInFavorites(emote.id) then
-                table.insert(normalEmotes, emote)
-            end
-        end
-
+        local normalEmotes = emotePageCache.normal or {}
         local adjustedPage = currentPage - favoritePagesCount
         local startIndex = (adjustedPage - 1) * itemsPerPage + 1
         local endIndex = math.min(startIndex + itemsPerPage - 1, #normalEmotes)
@@ -1919,13 +1976,8 @@ local function calculateTotalPages()
       if currentMode == "animation" then
         local favoritesToUse = _G.filteredFavoritesAnimationsForDisplay or favoriteAnimations
         local hasFavorites = #favoritesToUse > 0
-        local normalAnimationsCount = 0
-
-        for _, animation in pairs(filteredAnimations) do
-            if not isInFavorites(animation.id) then
-                normalAnimationsCount = normalAnimationsCount + 1
-            end
-        end
+        rebuildAnimationNormalCache()
+        local normalAnimationsCount = #animationPageCache.normal
 
         local pages = 0
         if hasFavorites then
@@ -1939,13 +1991,8 @@ local function calculateTotalPages()
     
     local favoritesToUse = _G.filteredFavoritesForDisplay or favoriteEmotes
     local hasFavorites = #favoritesToUse > 0
-    local normalEmotesCount = 0
-
-    for _, emote in pairs(filteredEmotes) do
-        if not isInFavorites(emote.id) then
-            normalEmotesCount = normalEmotesCount + 1
-        end
-    end
+    rebuildEmoteNormalCache()
+    local normalEmotesCount = #emotePageCache.normal
 
     local pages = 0
 
@@ -2271,6 +2318,12 @@ local function updatePageDisplay()
         _4pages.Text = tostring(totalPages)
         _2Routenumber.Text = tostring(currentPage)
     end
+    if currentMode == "animation" then
+        Config.AnimationPage = currentPage
+    else
+        Config.EmotePage = currentPage
+    end
+    SaveConfig()
 end
 
 
@@ -2306,6 +2359,7 @@ local function toggleFavorite(emoteId, emoteName)
         })
     end
 
+    favoriteSetVersion = favoriteSetVersion + 1
     saveFavorites()
     totalPages = calculateTotalPages()
     updatePageDisplay()
@@ -2348,6 +2402,7 @@ local function toggleFavoriteAnimation(animationData)
         })
     end
 
+    favoriteSetVersion = favoriteSetVersion + 1
     saveFavoritesAnimations()
     totalPages = calculateTotalPages()
     updatePageDisplay()
@@ -2705,6 +2760,7 @@ local function fetchAllEmotes()
 
     originalEmotesData = emotesData
     filteredEmotes = emotesData
+    emoteCacheVersion = emoteCacheVersion + 1
 
     totalPages = calculateTotalPages()
     currentPage = 1
@@ -2753,6 +2809,7 @@ local function fetchAllAnimations()
 
     originalAnimationsData = animationsData
     filteredAnimations = animationsData
+    animationCacheVersion = animationCacheVersion + 1
     isLoading = false
 end
 
@@ -2770,6 +2827,7 @@ local function searchEmotes(searchTerm)
 
     if searchTerm == "" then
         filteredEmotes = originalEmotesData
+        emoteCacheVersion = emoteCacheVersion + 1
         if _G.originalFavoritesBackup then
             _G.originalFavoritesBackup = nil
         end
@@ -2808,6 +2866,7 @@ local function searchEmotes(searchTerm)
         end
         
         filteredEmotes = newFilteredList
+        emoteCacheVersion = emoteCacheVersion + 1
 
         if not isIdSearch then
             if not _G.originalFavoritesBackup then
@@ -2849,6 +2908,7 @@ local function searchAnimations(searchTerm)
 
     if searchTerm == "" then
         filteredAnimations = originalAnimationsData
+        animationCacheVersion = animationCacheVersion + 1
         if _G.originalAnimationFavoritesBackup then
             _G.originalAnimationFavoritesBackup = nil
         end
@@ -2873,6 +2933,7 @@ local function searchAnimations(searchTerm)
         end
         
         filteredAnimations = newFilteredList
+        animationCacheVersion = animationCacheVersion + 1
 
         if not isIdSearch then
             if not _G.originalAnimationFavoritesBackup then
@@ -3300,7 +3361,7 @@ if Changepage then
             spawn(function()
                 fetchAllAnimations()
                 Search.Text = animationSearchTerm
-                currentPage = 1
+                currentPage = Config.AnimationPage or 1
                 totalPages = calculateTotalPages()
                 updatePageDisplay()
                 updateEmotes()
@@ -3317,7 +3378,7 @@ if Changepage then
         else
             currentMode = "emote"
             Search.Text = emoteSearchTerm
-            currentPage = 1
+            currentPage = Config.EmotePage or 1
             totalPages = calculateTotalPages()
             updatePageDisplay() 
             updateEmotes()
