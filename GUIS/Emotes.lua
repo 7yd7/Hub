@@ -1,3 +1,4 @@
+
 --[[ 
     Source script taken from: https://github.com/Roblox/creator-docs/blob/main/content/en-us/characters/emotes.md
 
@@ -251,8 +252,11 @@ local function StartWheelGifAnimation(bgImg, data)
     if cols <= 0 then
         cols = math.max(1, math.floor(1024 / frameW))
     end
-    local delayCs = (data.gifInfo and data.gifInfo.avgDelayCs) or 10
-    local delay = math.max(0.02, (delayCs / 100))
+    local delay = data.delay
+    if not delay then
+        local delayCs = (data.gifInfo and data.gifInfo.avgDelayCs) or 10
+        delay = math.max(0.02, (delayCs / 100))
+    end
 
     bgImg.Image = data.sprite
     bgImg.ImageRectSize = Vector2.new(frameW, frameH)
@@ -268,6 +272,26 @@ local function StartWheelGifAnimation(bgImg, data)
         local y = math.floor(current / cols) * frameH
         bgImg.ImageRectOffset = Vector2.new(x, y)
     end)
+end
+
+local WheelAnimCache = {}
+
+local function MakeWheelAnimKey(gifUrl, sheetUrl)
+    return tostring(gifUrl or "") .. "|" .. tostring(sheetUrl or "")
+end
+
+local function AreWheelAnimMetaEqual(a, b)
+    if a == b then return true end
+    if not a or not b then return false end
+    return a.Enabled == b.Enabled
+        and a.FrameHeight == b.FrameHeight
+        and a.FrameWidth == b.FrameWidth
+        and a.FPS == b.FPS
+        and a.Frames == b.Frames
+        and a.Cols == b.Cols
+        and a.Rows == b.Rows
+        and a.GifUrl == b.GifUrl
+        and a.SheetUrl == b.SheetUrl
 end
 
 local ConfigPath = "7yd7/EmoteSettings.json"
@@ -778,6 +802,50 @@ local function ApplyWheelBackgroundImage(bgImg, wheel)
     if sheetUrl then sheetUrl = NormalizeUrl(sheetUrl) end
 
     if gifUrl and sheetUrl and sheetUrl ~= "" then
+        local cacheKey = MakeWheelAnimKey(gifUrl, sheetUrl)
+        local meta = wheel.Animation
+        if meta and meta.GifUrl == gifUrl and meta.SheetUrl == sheetUrl then
+            WheelAnimCache[cacheKey] = meta
+        else
+            meta = WheelAnimCache[cacheKey]
+        end
+
+        if meta and meta.Enabled == false then
+            local sheetAsset = GetAsset(sheetUrl)
+            StopWheelGifAnimation()
+            SetWheelImageMode(bgImg, true)
+            bgImg.Image = sheetAsset or ""
+            bgImg.ImageRectSize = Vector2.new(0, 0)
+            bgImg.ImageRectOffset = Vector2.new(0, 0)
+            return
+        end
+
+        if meta and meta.Enabled == true then
+            local sheetAsset = GetAsset(sheetUrl)
+            if sheetAsset and sheetAsset ~= "" and (meta.FrameWidth or 0) > 0 and (meta.FrameHeight or 0) > 0 then
+                local frames = tonumber(meta.Frames) or 0
+                local cols = tonumber(meta.Cols) or 0
+                local rows = tonumber(meta.Rows) or 0
+                local frameW = tonumber(meta.FrameWidth) or 0
+                local frameH = tonumber(meta.FrameHeight) or 0
+                local fps = tonumber(meta.FPS) or 10
+                local delay = fps > 0 and (1 / fps) or 0.1
+
+                local spriteData = {
+                    sprite = sheetAsset,
+                    frames = frames,
+                    frameW = frameW,
+                    frameH = frameH,
+                    cols = cols,
+                    rows = rows,
+                    delay = delay
+                }
+                SetWheelImageMode(bgImg, true)
+                StartWheelGifAnimation(bgImg, spriteData)
+                return
+            end
+        end
+
         local okGif, gifBytes = pcall(function() return game:HttpGet(gifUrl) end)
         local gifInfo = okGif and gifBytes and ParseGifInfo(gifBytes) or nil
 
@@ -791,6 +859,7 @@ local function ApplyWheelBackgroundImage(bgImg, wheel)
             local cols = math.max(1, math.floor(sheetInfo.width / frameW))
             local rows = math.max(1, math.floor(sheetInfo.height / frameH))
             local frames = gifInfo.frames or (cols * rows)
+            local fps = (gifInfo.avgDelayCs and gifInfo.avgDelayCs > 0) and (100 / gifInfo.avgDelayCs) or 10
 
             local spriteData = {
                 sprite = sheetAsset,
@@ -803,6 +872,25 @@ local function ApplyWheelBackgroundImage(bgImg, wheel)
             }
             SetWheelImageMode(bgImg, true)
             StartWheelGifAnimation(bgImg, spriteData)
+
+            local newMeta = {
+                Enabled = true,
+                FrameWidth = frameW,
+                FrameHeight = frameH,
+                FPS = math.floor(fps + 0.5),
+                Frames = frames,
+                Cols = cols,
+                Rows = rows,
+                GifUrl = gifUrl,
+                SheetUrl = sheetUrl
+            }
+            if not AreWheelAnimMetaEqual(wheel.Animation, newMeta) then
+                wheel.Animation = newMeta
+                WheelAnimCache[cacheKey] = newMeta
+                if currentThemeName and currentThemeName ~= "Default" then
+                    SaveThemes(themes)
+                end
+            end
             return
         else
             StopWheelGifAnimation()
@@ -810,6 +898,25 @@ local function ApplyWheelBackgroundImage(bgImg, wheel)
             bgImg.Image = sheetAsset or ""
             bgImg.ImageRectSize = Vector2.new(0, 0)
             bgImg.ImageRectOffset = Vector2.new(0, 0)
+
+            local newMeta = {
+                Enabled = false,
+                FrameWidth = 0,
+                FrameHeight = 0,
+                FPS = 10,
+                Frames = 1,
+                Cols = 0,
+                Rows = 0,
+                GifUrl = gifUrl,
+                SheetUrl = sheetUrl
+            }
+            if not AreWheelAnimMetaEqual(wheel.Animation, newMeta) then
+                wheel.Animation = newMeta
+                WheelAnimCache[cacheKey] = newMeta
+                if currentThemeName and currentThemeName ~= "Default" then
+                    SaveThemes(themes)
+                end
+            end
             return
         end
     end
