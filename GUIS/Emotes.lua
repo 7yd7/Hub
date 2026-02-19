@@ -3486,25 +3486,6 @@ exitHUDEditor = function()
     for _, el in pairs(getMovableElements()) do
         local h = el:FindFirstChild("HUDDragHandle")
         if h then h:Destroy() end
-
-        for _, d in pairs(el:GetDescendants()) do
-            if d:IsA("TextLabel") and d.Name:sub(1, 10) == "HUDStatic_" then
-                d:Destroy()
-            end
-        end
-        for _, d in pairs(el:GetDescendants()) do
-            if d:IsA("GuiObject") and d:GetAttribute("HUDReplaced") == true then
-                local ov = d:GetAttribute("HUDOrigVisible")
-                if type(ov) == "boolean" then
-                    d.Visible = ov
-                else
-                    d.Visible = true
-                end
-                d:SetAttribute("HUDOrigVisible", nil)
-                d:SetAttribute("HUDReplaced", nil)
-            end
-        end
-
         if el:FindFirstChildOfClass("UIListLayout") then
             for _, child in pairs(el:GetChildren()) do
                 if child:IsA("GuiButton") or child:IsA("TextBox") then
@@ -3609,63 +3590,6 @@ enterHUDEditor = function()
     if Search then Search.TextEditable = false; Search.Active = false; pcall(function() Search:ReleaseFocus() end) end
     if SpeedBox then SpeedBox.TextEditable = false; SpeedBox.Active = false; pcall(function() SpeedBox:ReleaseFocus() end) end
     if _2Routenumber then _2Routenumber.TextEditable = false; _2Routenumber.Active = false; pcall(function() _2Routenumber:ReleaseFocus() end) end
-
-    local function replaceAsStatic(node)
-        if not node or not node.Parent then return end
-        if not (node:IsA("TextBox") or node:IsA("GuiButton")) then return end
-        if node:GetAttribute("HUDReplaced") == true then return end
-        if node.Name:sub(1, 10) == "HUDStatic_" then return end
-
-        local lbl = Instance.new("TextLabel")
-        lbl.Name = "HUDStatic_" .. node.Name
-        lbl.Parent = node.Parent
-        lbl.AnchorPoint = node.AnchorPoint
-        lbl.Position = node.Position
-        lbl.Size = node.Size
-        lbl.Rotation = node.Rotation
-        lbl.BackgroundTransparency = 1
-        lbl.BorderSizePixel = 0
-        lbl.TextScaled = true
-        lbl.TextWrapped = true
-        lbl.ZIndex = node.ZIndex + 1
-
-        if node:IsA("TextBox") or node:IsA("TextButton") then
-            lbl.Text = node.Text
-            lbl.Font = node.Font
-            lbl.TextSize = node.TextSize
-            lbl.TextColor3 = node.TextColor3
-            lbl.TextTransparency = node.TextTransparency
-        else
-            lbl.Text = node.Name
-            lbl.Font = Enum.Font.SourceSansBold
-            lbl.TextSize = 14
-            lbl.TextColor3 = Color3.fromRGB(255, 255, 255)
-            lbl.TextTransparency = 0.2
-        end
-
-        node:SetAttribute("HUDOrigVisible", node.Visible)
-        node:SetAttribute("HUDReplaced", true)
-        node.Visible = false
-        node.Active = false
-        if node:IsA("TextBox") then
-            node.TextEditable = false
-            pcall(function() node:ReleaseFocus() end)
-        end
-    end
-
-    local function applyStaticMode()
-        for _, el in pairs(getMovableElements()) do
-            replaceAsStatic(el)
-            for _, d in pairs(el:GetDescendants()) do
-                replaceAsStatic(d)
-            end
-        end
-    end
-    applyStaticMode()
-    table.insert(hudEditorConnections, overlay.DescendantAdded:Connect(function(d)
-        if not hudEditorActive then return end
-        replaceAsStatic(d)
-    end))
 
     local SNAP_THRESHOLD = 8
     local allMovable = getMovableElements()
