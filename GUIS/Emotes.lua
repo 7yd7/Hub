@@ -307,7 +307,8 @@ local Config = {
     EmoteSpeedEnabled = false,
     SelectedTheme = "Default",
     EmotePage = 1,
-    AnimationPage = 1
+    AnimationPage = 1,
+    HUDPositions = {}
 }
 
 local Under, UIListLayout, _1left, _9right, _4pages, _3TextLabel, _2Routenumber, Top, EmoteWalkButton, UICorner1,
@@ -317,6 +318,8 @@ local speedEmoteEnabled = false
 local currentMode = "emote"
 local emotesWalkEnabled = false
 local favoriteEnabled = false
+local hudEditorActive = false
+local enterHUDEditor, exitHUDEditor, applySavedPositions
 
 local function ApplyUIVisibility()
     pcall(function()
@@ -374,8 +377,8 @@ ToggleBtn.Name = "ToggleSettings"
 ToggleBtn.Parent = ToggleContainer
 ToggleBtn.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
 ToggleBtn.BackgroundTransparency = 0.4
-ToggleBtn.Position = UDim2.new(0.005, 0, 0.939, 0)
-ToggleBtn.Size = UDim2.new(0.027, 0, 0.049, 0)
+ToggleBtn.Position = UDim2.new(0, 10, 1, -52)
+ToggleBtn.Size = UDim2.fromOffset(42, 42)
 ToggleBtn.Image = "rbxassetid://79568054778195"
 
 local ToggleCorner = Instance.new("UICorner")
@@ -471,6 +474,21 @@ SettingsLib.AddToggle(ButtonsTab, "Page Controls", "Show/Hide navigation buttons
 end)
 
 local cachedOverlay = nil
+local hudEditorItem = SettingsLib.AddItem(GeneralTab, "HUD Editor", "Reposition buttons & UI elements")
+local hudEditorBtn = SettingsLib:Create("TextButton", {
+    Parent = hudEditorItem,
+    BackgroundColor3 = Color3.fromRGB(0, 255, 150),
+    Position = UDim2.new(1, -80, 0.5, -12),
+    Size = UDim2.new(0, 70, 0, 24),
+    Font = Enum.Font.GothamBold,
+    Text = "EDIT",
+    TextColor3 = Color3.fromRGB(24, 25, 28),
+    TextSize = 11
+}, { SettingsLib:Create("UICorner", {CornerRadius = UDim.new(0, 6)}) })
+
+hudEditorBtn.MouseButton1Click:Connect(function()
+    if enterHUDEditor then enterHUDEditor() end
+end)
 local function getBackgroundOverlay()
     if cachedOverlay and cachedOverlay.Parent then return cachedOverlay end
     
@@ -2310,6 +2328,8 @@ UICorner_6.Parent = Reload
     
     ApplyUIVisibility()
     
+    if applySavedPositions then applySavedPositions() end
+    
     return true
 end
 
@@ -3094,6 +3114,7 @@ end
     end)
 
     humanoid.Died:Connect(function()
+    if hudEditorActive and exitHUDEditor then exitHUDEditor() end
     emotesWalkEnabled = false
     speedEmoteEnabled = false
     favoriteEnabled = false
@@ -3213,6 +3234,7 @@ local clickCooldown = {}
 local CLICK_COOLDOWN_TIME = 0.1
 
 local function safeButtonClick(buttonName, callback)
+    if hudEditorActive then return end
     local currentTime = tick()
     if not clickCooldown[buttonName] or (currentTime - clickCooldown[buttonName]) > CLICK_COOLDOWN_TIME then
         clickCooldown[buttonName] = currentTime
@@ -3266,6 +3288,7 @@ function connectEvents()
 
       if _2Routenumber then
         table.insert(guiConnections, _2Routenumber.FocusLost:Connect(function(enterPressed)
+            if hudEditorActive then return end
             local pageNum = tonumber(_2Routenumber.Text)
             if pageNum then
                 goToPage(pageNum)
@@ -3277,6 +3300,7 @@ function connectEvents()
 
     if Search then
         table.insert(guiConnections, Search.Changed:Connect(function(property)
+            if hudEditorActive then return end
             if property == "Text" then
                 if currentMode == "emote" then
                     emoteSearchTerm = Search.Text
@@ -3293,6 +3317,7 @@ function connectEvents()
     local SECTOR_ANGLE = 360 / SECTOR_COUNT
 
     table.insert(guiConnections, UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        if hudEditorActive then return end
         if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then return end
         
         if not (favoriteEnabled or currentMode == "animation") then return end
@@ -3399,10 +3424,394 @@ end
 
     if SpeedBox then
         table.insert(guiConnections, SpeedBox.FocusLost:Connect(function()
+            if hudEditorActive then return end
             Config.EmoteSpeed = tonumber(SpeedBox.Text) or 1
             SaveConfig()
         end))
     end
+end
+
+
+local hudEditorConnections = {}
+local hudEditorStrokes = {}
+local hudEditorOverlay = nil
+local hudForceVisibleConn = nil
+
+local DEFAULT_POSITIONS = {
+    Top = UDim2.new(0.127499998, 0, -0.109999999, 0),
+    Under = UDim2.new(0.129999995, 0, 1, 0),
+    EmoteWalkButton = UDim2.new(0.889999986, 0, -0.107500002, 0),
+    Favorite = UDim2.new(0.0189999994, 0, -0.108000003, 0),
+    SpeedEmote = UDim2.new(0.888999999, 0, 0, 0),
+    SpeedBox = UDim2.new(0.0189999398, 0, -0.000499992399, 0),
+    Changepage = UDim2.new(0.019, 0, 1.021, 0),
+    Reload = UDim2.new(0.888999999, 0, 1.02100003, 0),
+}
+
+local function getMovableElements()
+    local elems = {}
+    if Top then elems["Top"] = Top end
+    if Under then elems["Under"] = Under end
+    if EmoteWalkButton then elems["EmoteWalkButton"] = EmoteWalkButton end
+    if Favorite then elems["Favorite"] = Favorite end
+    if SpeedEmote then elems["SpeedEmote"] = SpeedEmote end
+    if SpeedBox then elems["SpeedBox"] = SpeedBox end
+    if Changepage then elems["Changepage"] = Changepage end
+    if Reload then elems["Reload"] = Reload end
+    return elems
+end
+
+applySavedPositions = function()
+    if not Config.HUDPositions then return end
+    local elems = getMovableElements()
+    for name, pos in pairs(Config.HUDPositions) do
+        local el = elems[name]
+        if el and type(pos) == "table" and #pos == 4 then
+            el.Position = UDim2.new(pos[1], pos[2], pos[3], pos[4])
+        end
+    end
+end
+
+exitHUDEditor = function()
+    if not hudEditorActive then return end
+    hudEditorActive = false
+    for _, conn in pairs(hudEditorConnections) do
+        pcall(function() conn:Disconnect() end)
+    end
+    hudEditorConnections = {}
+    for _, stroke in pairs(hudEditorStrokes) do
+        pcall(function() if stroke and stroke.Parent then stroke:Destroy() end end)
+    end
+    hudEditorStrokes = {}
+    for _, el in pairs(getMovableElements()) do
+        local h = el:FindFirstChild("HUDDragHandle")
+        if h then h:Destroy() end
+
+        for _, d in pairs(el:GetDescendants()) do
+            if d:IsA("TextLabel") and d.Name:sub(1, 10) == "HUDStatic_" then
+                d:Destroy()
+            end
+        end
+        for _, d in pairs(el:GetDescendants()) do
+            if d:IsA("GuiObject") and d:GetAttribute("HUDReplaced") == true then
+                local ov = d:GetAttribute("HUDOrigVisible")
+                if type(ov) == "boolean" then
+                    d.Visible = ov
+                else
+                    d.Visible = true
+                end
+                d:SetAttribute("HUDOrigVisible", nil)
+                d:SetAttribute("HUDReplaced", nil)
+            end
+        end
+
+        if el:FindFirstChildOfClass("UIListLayout") then
+            for _, child in pairs(el:GetChildren()) do
+                if child:IsA("GuiButton") or child:IsA("TextBox") then
+                    child.Active = true
+                end
+            end
+        end
+    end
+    if hudEditorOverlay then
+        for _, g in pairs(hudEditorOverlay:GetChildren()) do
+            if g.Name == "SnapGuide" then g:Destroy() end
+        end
+    end
+    if hudEditorOverlay and hudEditorOverlay.Parent then hudEditorOverlay:Destroy() end
+    hudEditorOverlay = nil
+    if hudForceVisibleConn then hudForceVisibleConn:Disconnect(); hudForceVisibleConn = nil end
+    if Search then Search.TextEditable = true; Search.Active = true end
+    if SpeedBox then SpeedBox.TextEditable = true; SpeedBox.Active = true end
+    if _2Routenumber then _2Routenumber.TextEditable = true; _2Routenumber.Active = true end
+    pcall(function() game:GetService("GuiService"):SetEmotesMenuOpen(false) end)
+    pcall(function() game:GetService("CoreGui").RobloxGui.EmotesMenu.Children.Main.EmotesWheel.Visible = false end)
+end
+
+enterHUDEditor = function()
+    if hudEditorActive then return end
+    hudEditorActive = true
+
+    game:GetService("GuiService"):SetEmotesMenuOpen(false)
+    task.wait(0.15)
+
+    local exists, emotesWheel = checkEmotesMenuExists()
+    if not exists then hudEditorActive = false; return end
+    emotesWheel.Visible = true
+
+    hudForceVisibleConn = RunService.Heartbeat:Connect(function()
+        if not hudEditorActive then return end
+        pcall(function()
+            local _, ew = checkEmotesMenuExists()
+            if ew then ew.Visible = true end
+        end)
+    end)
+
+    local main = getSettingsMainFrame()
+    if main then main.Visible = false end
+    syncToggleVisibility()
+
+    local overlay = Instance.new("Frame")
+    overlay.Name = "HUDEditorOverlay"
+    overlay.Parent = SettingsLib.UI
+    overlay.BackgroundTransparency = 1
+    overlay.Size = UDim2.fromScale(1, 1)
+    overlay.ZIndex = 6000
+    overlay.Active = false
+    hudEditorOverlay = overlay
+
+    local bc = Instance.new("Frame")
+    bc.Parent = overlay
+    bc.BackgroundTransparency = 1
+    bc.AnchorPoint = Vector2.new(1, 0)
+    bc.Position = UDim2.new(1, -10, 0, 10)
+    bc.Size = UDim2.fromOffset(100, 42)
+    bc.ZIndex = 6000
+
+    local bl = Instance.new("UIListLayout")
+    bl.FillDirection = Enum.FillDirection.Horizontal
+    bl.Padding = UDim.new(0, 8)
+    bl.HorizontalAlignment = Enum.HorizontalAlignment.Right
+    bl.VerticalAlignment = Enum.VerticalAlignment.Center
+    bl.Parent = bc
+
+    local resetBtn = Instance.new("ImageButton")
+    resetBtn.Parent = bc
+    resetBtn.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    resetBtn.BackgroundTransparency = 0.4
+    resetBtn.Size = UDim2.fromOffset(42, 42)
+    resetBtn.Image = "rbxassetid://123088523596870"
+    resetBtn.ZIndex = 6001
+    Instance.new("UICorner", resetBtn).CornerRadius = UDim.new(0, 10)
+
+    local backBtn = Instance.new("ImageButton")
+    backBtn.Parent = bc
+    backBtn.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    backBtn.BackgroundTransparency = 0.4
+    backBtn.Size = UDim2.fromOffset(42, 42)
+    backBtn.Image = "rbxassetid://79024388644722"
+    backBtn.ZIndex = 6001
+    Instance.new("UICorner", backBtn).CornerRadius = UDim.new(0, 10)
+
+    table.insert(hudEditorConnections, backBtn.MouseButton1Click:Connect(function()
+        exitHUDEditor()
+    end))
+
+    table.insert(hudEditorConnections, resetBtn.MouseButton1Click:Connect(function()
+        Config.HUDPositions = {}
+        SaveConfig()
+        for name, el in pairs(getMovableElements()) do
+            if DEFAULT_POSITIONS[name] then el.Position = DEFAULT_POSITIONS[name] end
+        end
+        getgenv().Notify({ Title = "7yd7 | HUD Editor", Content = "🔄 Positions reset to default", Duration = 3 })
+    end))
+
+    if Search then Search.TextEditable = false; Search.Active = false; pcall(function() Search:ReleaseFocus() end) end
+    if SpeedBox then SpeedBox.TextEditable = false; SpeedBox.Active = false; pcall(function() SpeedBox:ReleaseFocus() end) end
+    if _2Routenumber then _2Routenumber.TextEditable = false; _2Routenumber.Active = false; pcall(function() _2Routenumber:ReleaseFocus() end) end
+
+    local function replaceAsStatic(node)
+        if not node or not node.Parent then return end
+        if not (node:IsA("TextBox") or node:IsA("GuiButton")) then return end
+        if node:GetAttribute("HUDReplaced") == true then return end
+        if node.Name:sub(1, 10) == "HUDStatic_" then return end
+
+        local lbl = Instance.new("TextLabel")
+        lbl.Name = "HUDStatic_" .. node.Name
+        lbl.Parent = node.Parent
+        lbl.AnchorPoint = node.AnchorPoint
+        lbl.Position = node.Position
+        lbl.Size = node.Size
+        lbl.Rotation = node.Rotation
+        lbl.BackgroundTransparency = 1
+        lbl.BorderSizePixel = 0
+        lbl.TextScaled = true
+        lbl.TextWrapped = true
+        lbl.ZIndex = node.ZIndex + 1
+
+        if node:IsA("TextBox") or node:IsA("TextButton") then
+            lbl.Text = node.Text
+            lbl.Font = node.Font
+            lbl.TextSize = node.TextSize
+            lbl.TextColor3 = node.TextColor3
+            lbl.TextTransparency = node.TextTransparency
+        else
+            lbl.Text = node.Name
+            lbl.Font = Enum.Font.SourceSansBold
+            lbl.TextSize = 14
+            lbl.TextColor3 = Color3.fromRGB(255, 255, 255)
+            lbl.TextTransparency = 0.2
+        end
+
+        node:SetAttribute("HUDOrigVisible", node.Visible)
+        node:SetAttribute("HUDReplaced", true)
+        node.Visible = false
+        node.Active = false
+        if node:IsA("TextBox") then
+            node.TextEditable = false
+            pcall(function() node:ReleaseFocus() end)
+        end
+    end
+
+    local function applyStaticMode()
+        for _, el in pairs(getMovableElements()) do
+            replaceAsStatic(el)
+            for _, d in pairs(el:GetDescendants()) do
+                replaceAsStatic(d)
+            end
+        end
+    end
+    applyStaticMode()
+    table.insert(hudEditorConnections, overlay.DescendantAdded:Connect(function(d)
+        if not hudEditorActive then return end
+        replaceAsStatic(d)
+    end))
+
+    local SNAP_THRESHOLD = 8
+    local allMovable = getMovableElements()
+    local snapGuideH, snapGuideV
+
+    local function createSnapGuides()
+        if not hudEditorOverlay then return end
+        snapGuideH = Instance.new("Frame")
+        snapGuideH.Name = "SnapGuide"
+        snapGuideH.BackgroundColor3 = Color3.fromRGB(0, 170, 255)
+        snapGuideH.BorderSizePixel = 0
+        snapGuideH.Size = UDim2.new(1, 0, 0, 1)
+        snapGuideH.ZIndex = 6002
+        snapGuideH.Visible = false
+        snapGuideH.Parent = hudEditorOverlay
+        snapGuideV = Instance.new("Frame")
+        snapGuideV.Name = "SnapGuide"
+        snapGuideV.BackgroundColor3 = Color3.fromRGB(0, 170, 255)
+        snapGuideV.BorderSizePixel = 0
+        snapGuideV.Size = UDim2.new(0, 1, 1, 0)
+        snapGuideV.ZIndex = 6002
+        snapGuideV.Visible = false
+        snapGuideV.Parent = hudEditorOverlay
+    end
+    createSnapGuides()
+
+    local function snapCalc(element, newPos, currentName)
+        local parent = element.Parent
+        if not parent then return newPos, nil, nil end
+        local ps = parent.AbsoluteSize
+        local pp = parent.AbsolutePosition
+        local absX = pp.X + newPos.X.Scale * ps.X + newPos.X.Offset
+        local absY = pp.Y + newPos.Y.Scale * ps.Y + newPos.Y.Offset
+        local absW = element.AbsoluteSize.X
+        local absH = element.AbsoluteSize.Y
+        local sX, sY = absX, absY
+        local didX, didY = false, false
+        local guideX, guideY
+        for oName, oEl in pairs(allMovable) do
+            if oName ~= currentName then
+                local oX = oEl.AbsolutePosition.X
+                local oY = oEl.AbsolutePosition.Y
+                local oW = oEl.AbsoluteSize.X
+                local oH = oEl.AbsoluteSize.Y
+                if not didX then
+                    if math.abs(absX - oX) < SNAP_THRESHOLD then sX = oX; didX = true; guideX = oX end
+                    if math.abs(absX - (oX + oW)) < SNAP_THRESHOLD then sX = oX + oW; didX = true; guideX = oX + oW end
+                    if math.abs((absX + absW) - oX) < SNAP_THRESHOLD then sX = oX - absW; didX = true; guideX = oX end
+                    if math.abs((absX + absW) - (oX + oW)) < SNAP_THRESHOLD then sX = oX + oW - absW; didX = true; guideX = oX + oW end
+                    if math.abs((absX + absW/2) - (oX + oW/2)) < SNAP_THRESHOLD then sX = oX + oW/2 - absW/2; didX = true; guideX = oX + oW/2 end
+                end
+                if not didY then
+                    if math.abs(absY - oY) < SNAP_THRESHOLD then sY = oY; didY = true; guideY = oY end
+                    if math.abs(absY - (oY + oH)) < SNAP_THRESHOLD then sY = oY + oH; didY = true; guideY = oY + oH end
+                    if math.abs((absY + absH) - oY) < SNAP_THRESHOLD then sY = oY - absH; didY = true; guideY = oY end
+                    if math.abs((absY + absH) - (oY + oH)) < SNAP_THRESHOLD then sY = oY + oH - absH; didY = true; guideY = oY + oH end
+                    if math.abs((absY + absH/2) - (oY + oH/2)) < SNAP_THRESHOLD then sY = oY + oH/2 - absH/2; didY = true; guideY = oY + oH/2 end
+                end
+            end
+        end
+        local fsx = (sX - pp.X) / ps.X
+        local fsy = (sY - pp.Y) / ps.Y
+        return UDim2.new(fsx, newPos.X.Offset, fsy, newPos.Y.Offset), guideX, guideY
+    end
+
+    for name, element in pairs(allMovable) do
+        element.Visible = true
+
+        local stroke = Instance.new("UIStroke")
+        stroke.Name = "HUDEditorStroke"
+        stroke.Color = Color3.fromRGB(0, 255, 100)
+        stroke.Thickness = 2
+        stroke.Parent = element
+        table.insert(hudEditorStrokes, stroke)
+
+        local hasLayout = element:FindFirstChildOfClass("UIListLayout")
+        local inputTarget
+
+        if hasLayout then
+            for _, child in pairs(element:GetChildren()) do
+                if child:IsA("GuiButton") or child:IsA("TextBox") then
+                    child.Active = false
+                end
+            end
+            element.Active = true
+            inputTarget = element
+        else
+            local dh = Instance.new("TextButton")
+            dh.Name = "HUDDragHandle"
+            dh.Parent = element
+            dh.BackgroundTransparency = 1
+            dh.Text = ""
+            dh.Size = UDim2.fromScale(1, 1)
+            dh.ZIndex = 9999
+            dh.Active = true
+            inputTarget = dh
+        end
+
+        local dragging = false
+        local dragStart, startPos
+
+        table.insert(hudEditorConnections, inputTarget.InputBegan:Connect(function(input)
+            if not hudEditorActive then return end
+            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                dragging = true
+                dragStart = input.Position
+                startPos = element.Position
+                stroke.Color = Color3.fromRGB(255, 255, 255)
+            end
+        end))
+
+        table.insert(hudEditorConnections, UserInputService.InputChanged:Connect(function(input)
+            if not dragging then return end
+            if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+                local delta = input.Position - dragStart
+                local ps = element.Parent and element.Parent.AbsoluteSize or Vector2.new(1, 1)
+                local rawPos = UDim2.new(
+                    startPos.X.Scale + delta.X / ps.X, startPos.X.Offset,
+                    startPos.Y.Scale + delta.Y / ps.Y, startPos.Y.Offset
+                )
+                local snapped, gx, gy = snapCalc(element, rawPos, name)
+                element.Position = snapped
+                local ovP = hudEditorOverlay and hudEditorOverlay.AbsolutePosition or Vector2.new(0, 0)
+                if snapGuideV then snapGuideV.Visible = (gx ~= nil); if gx then snapGuideV.Position = UDim2.fromOffset(gx - ovP.X, 0) end end
+                if snapGuideH then snapGuideH.Visible = (gy ~= nil); if gy then snapGuideH.Position = UDim2.fromOffset(0, gy - ovP.Y) end end
+            end
+        end))
+
+        table.insert(hudEditorConnections, UserInputService.InputEnded:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                if dragging then
+                    dragging = false
+                    stroke.Color = Color3.fromRGB(0, 255, 100)
+                    if snapGuideV then snapGuideV.Visible = false end
+                    if snapGuideH then snapGuideH.Visible = false end
+                    Config.HUDPositions[name] = {
+                        element.Position.X.Scale, element.Position.X.Offset,
+                        element.Position.Y.Scale, element.Position.Y.Offset
+                    }
+                    SaveConfig()
+                end
+            end
+        end))
+    end
+
+    getgenv().Notify({ Title = "7yd7 | HUD Editor", Content = "✏️ Drag elements to reposition", Duration = 5 })
 end
 
 local function checkAndRecreateGUI()
