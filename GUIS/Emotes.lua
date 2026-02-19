@@ -1,4 +1,3 @@
-
 --[[ 
     Source script taken from: https://github.com/Roblox/creator-docs/blob/main/content/en-us/characters/emotes.md
 
