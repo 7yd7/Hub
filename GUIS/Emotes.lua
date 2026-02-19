@@ -15,11 +15,129 @@ if _G.EmotesGUIRunning then
 end
 _G.EmotesGUIRunning = true
 
-loadstring(game:HttpGet("https://raw.githubusercontent.com/7yd7/Menu-7yd7/refs/heads/Script/GUIS/Off-site/Notify.lua"))()
-
 local HttpService = game:GetService("HttpService")
 local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
 local request = http_request or (syn and syn.request) or request
+
+local State = {
+    currentMode = "emote",
+    emotesWalkEnabled = false,
+    favoriteEnabled = false,
+    hudEditorActive = false,
+    speedEmoteEnabled = false,
+    isLoading = false,
+    favoriteSetVersion = 0,
+    favoriteSetBuiltVersion = -1,
+    emoteCacheVersion = 0,
+    animationCacheVersion = 0,
+    isGUICreated = false,
+    isMonitoringClicks = false,
+    lastRadialActionTime = 0,
+    lastWheelVisibleTime = 0,
+    lastActionTick = 0,
+    totalEmotesLoaded = 0,
+    currentPage = 1,
+    totalPages = 1,
+    itemsPerPage = 8,
+    emoteSearchTerm = "",
+    animationSearchTerm = "",
+    currentEmoteTrack = nil,
+    currentCharacter = nil,
+    emoteClickConnections = {},
+    guiConnections = {},
+    currentTimer = nil,
+    animationsData = {},
+    originalAnimationsData = {},
+    filteredAnimations = {},
+    favoriteAnimations = {},
+    favoriteAnimationsFileName = "FavoriteAnimations.json",
+    emotesData = {},
+    originalEmotesData = {},
+    filteredEmotes = {},
+    scannedEmotes = {},
+    favoriteEmotes = {},
+    favoriteFileName = "FavoriteEmotes.json",
+    speedEmoteConfigFile = "SpeedEmoteConfig.json",
+    favoriteEmoteSet = {},
+    favoriteAnimationSet = {},
+    emotePageCache = { version = nil, normal = {}, favorites = {} },
+    animationPageCache = { version = nil, normal = {}, favorites = {} },
+    defaultButtonImage = "rbxassetid://71408678974152",
+    enabledButtonImage = "rbxassetid://106798555684020",
+    favoriteIconId = "rbxassetid://97307461910825",
+    notFavoriteIconId = "rbxassetid://124025954365505",
+    EmoteTheme = nil,
+    isApplyingTheme = false
+}
+
+local UI = {
+    Under = nil, 
+    _1left = nil, 
+    _9right = nil, 
+    _4pages = nil, 
+    _3TextLabel = nil, 
+    _2Routenumber = nil, 
+    Top = nil, 
+    EmoteWalkButton = nil,
+    Search = nil, 
+    Favorite = nil, 
+    SpeedEmote = nil, 
+    SpeedBox = nil, 
+    Changepage = nil,
+    Reload = nil,
+    Background = nil
+}
+
+local HUD = {
+    Connections = {},
+    Strokes = {},
+    Overlay = nil,
+    ForceVisibleConn = nil,
+    DefaultPositions = {
+        Top = UDim2.new(0.127499998, 0, -0.109999999, 0),
+        Under = UDim2.new(0.129999995, 0, 1, 0),
+        EmoteWalkButton = UDim2.new(0.889999986, 0, -0.107500002, 0),
+        Favorite = UDim2.new(0.0189999994, 0, -0.108000003, 0),
+        SpeedEmote = UDim2.new(0.888999999, 0, 0, 0),
+        SpeedBox = UDim2.new(0.0189999398, 0, -0.000499992399, 0),
+        Changepage = UDim2.new(0.019, 0, 1.021, 0),
+        Reload = UDim2.new(0.888999999, 0, 1.02100003, 0),
+    }
+}
+
+local function SafeLoad(url, name)
+    local success, content
+    for i = 1, 3 do
+        success, content = pcall(function() return game:HttpGet(url) end)
+        if success and content and content ~= "" then break end
+        task.wait(0.5)
+    end
+    
+    if not success or not content or content == "" then
+        getgenv().Notify({
+            Title = '7yd7 | Error',
+            Content = 'Failed to download ' .. (name or "script") .. ' after 3 attempts.',
+            Duration = 5
+        })
+        return function() end
+    end
+
+    local func, err = loadstring(content)
+    if not func then
+        warn("7yd7 | SafeLoad: Failed to parse " .. (name or "script") .. ": " .. tostring(err))
+        return function() end
+    end
+
+    local ok, res = pcall(func)
+    if not ok then
+        warn("7yd7 | SafeLoad: Error executing " .. (name or "script") .. ": " .. tostring(res))
+        return function() end
+    end
+    return res
+end
+
+SafeLoad("https://raw.githubusercontent.com/7yd7/Menu-7yd7/refs/heads/Script/GUIS/Off-site/Notify.lua", "Notify System")
 
 local function GetAsset(asset)
     if not asset or asset == "" then return "" end
@@ -310,29 +428,22 @@ local Config = {
     HUDPositions = {}
 }
 
-local Under, UIListLayout, _1left, _9right, _4pages, _3TextLabel, _2Routenumber, Top, EmoteWalkButton, UICorner1,
-    UIListLayout_2, UICorner, Search, Favorite, UICorner2, UICorner_2, SpeedEmote, UICorner_4, SpeedBox, UICorner_5, Changepage,
-    Reload, UICorner_6
-local speedEmoteEnabled = false
-local currentMode = "emote"
-local emotesWalkEnabled = false
-local favoriteEnabled = false
-local hudEditorActive = false
-local enterHUDEditor, exitHUDEditor, applySavedPositions
+local function applySavedPositions() end 
+local enterHUDEditor, exitHUDEditor
 
 local function ApplyUIVisibility()
     pcall(function()
-        if Search and Top then Top.Visible = Config.SearchVisible end
-        if Favorite then Favorite.Visible = Config.FavVisible end
-        if Changepage then Changepage.Visible = Config.ModeVisible end
-        if EmoteWalkButton then EmoteWalkButton.Visible = Config.FreezeVisible end
-        if SpeedEmote then SpeedEmote.Visible = Config.SpeedVisible end
-        if SpeedBox then 
-            SpeedBox.Visible = (Config.SpeedVisible and speedEmoteEnabled) 
+        if UI.Search and UI.Top then UI.Top.Visible = Config.SearchVisible end
+        if UI.Favorite then UI.Favorite.Visible = Config.FavVisible end
+        if UI.Changepage then UI.Changepage.Visible = Config.ModeVisible end
+        if UI.EmoteWalkButton then UI.EmoteWalkButton.Visible = Config.FreezeVisible end
+        if UI.SpeedEmote then UI.SpeedEmote.Visible = Config.SpeedVisible end
+        if UI.SpeedBox then 
+            UI.SpeedBox.Visible = (Config.SpeedVisible and State.speedEmoteEnabled) 
         end
-        if Under then Under.Visible = Config.NavVisible end
-        if Reload then 
-            Reload.Visible = (currentMode == "animation" and Config.NavVisible) 
+        if UI.Under then UI.Under.Visible = Config.NavVisible end
+        if UI.Reload then 
+            UI.Reload.Visible = (State.currentMode == "animation" and Config.NavVisible) 
         end
     end)
 end
@@ -359,7 +470,7 @@ getgenv().Notify = function(data)
     end
 end
 
-local SettingsLib = loadstring(game:HttpGet("https://raw.githubusercontent.com/7yd7/Hub/refs/heads/Branch/GUIS/Settings.lua"))()
+local SettingsLib = SafeLoad("https://raw.githubusercontent.com/7yd7/Hub/refs/heads/Branch/GUIS/Settings.lua", "Settings Library")
 
 local ToggleContainer = Instance.new("Frame")
 ToggleContainer.Name = "open/Close"
@@ -395,8 +506,8 @@ local function applySettingsToggleStyle()
     local main = getSettingsMainFrame()
     if main then
         ToggleBtn.BackgroundColor3 = main.BackgroundColor3
-    elseif _G.EmoteTheme and _G.EmoteTheme.Background then
-        ToggleBtn.BackgroundColor3 = _G.EmoteTheme.Background
+    elseif State.EmoteTheme and State.EmoteTheme.Background then
+        ToggleBtn.BackgroundColor3 = State.EmoteTheme.Background
     end
 end
 
@@ -526,7 +637,7 @@ local function TableToColor(t)
 end
 
 local function GetThemeIconColor(key)
-    local theme = _G.EmoteTheme
+    local theme = State.EmoteTheme
     if theme and theme.IconColors and theme.IconColors[key] then
         return TableToColor(theme.IconColors[key])
     end
@@ -543,7 +654,7 @@ local function updateGUIColors()
         return
     end
 
-    local theme = _G.EmoteTheme
+    local theme = State.EmoteTheme
     if not theme then return end
     
     local bgColor = theme.Background
@@ -558,64 +669,67 @@ local function updateGUIColors()
         return imgColor
     end
 
-    if _1left then
-        _1left.ImageColor3 = getIconColor("Left")
-        _1left.ImageTransparency = bgTransparency
+    if UI._1left then
+        UI._1left.ImageColor3 = getIconColor("Left")
+        UI._1left.ImageTransparency = bgTransparency
+        UI._1left.BackgroundTransparency = 1 
     end
 
-    if _9right then
-        _9right.ImageColor3 = getIconColor("Right")
-        _9right.ImageTransparency = bgTransparency
+    if UI._9right then
+        UI._9right.ImageColor3 = getIconColor("Right")
+        UI._9right.ImageTransparency = bgTransparency
+        UI._9right.BackgroundTransparency = 1
     end
 
-    if _4pages then
-        _4pages.TextColor3 = bgColor
-        _4pages.TextTransparency = bgTransparency
+    if UI._4pages then
+        UI._4pages.TextColor3 = bgColor 
+        UI._4pages.TextTransparency = bgTransparency
     end
 
-    if _3TextLabel then
-        _3TextLabel.TextColor3 = bgColor
-        _3TextLabel.TextTransparency = bgTransparency
+    if UI._3TextLabel then
+        UI._3TextLabel.TextColor3 = bgColor
+        UI._3TextLabel.TextTransparency = bgTransparency
     end
 
-    if _2Routenumber then
-        _2Routenumber.TextColor3 = bgColor
-        _2Routenumber.TextTransparency = bgTransparency
+    if UI._2Routenumber then
+        UI._2Routenumber.TextColor3 = bgColor
+        UI._2Routenumber.PlaceholderColor3 = bgColor
+        UI._2Routenumber.TextTransparency = bgTransparency
     end
 
-    if Top then
-        Top.BackgroundColor3 = bgColor
-        Top.BackgroundTransparency = bgTransparency
+    if UI.Top then
+        UI.Top.BackgroundColor3 = bgColor
+        UI.Top.BackgroundTransparency = bgTransparency
     end
 
-    if EmoteWalkButton then
-        EmoteWalkButton.BackgroundColor3 = bgColor
-        EmoteWalkButton.BackgroundTransparency = bgTransparency
+    if UI.EmoteWalkButton then
+        UI.EmoteWalkButton.BackgroundColor3 = bgColor
+        UI.EmoteWalkButton.BackgroundTransparency = bgTransparency
     end
 
-    if SpeedEmote then
-        SpeedEmote.BackgroundColor3 = bgColor
-        SpeedEmote.BackgroundTransparency = bgTransparency
+    if UI.SpeedEmote then
+        UI.SpeedEmote.BackgroundColor3 = bgColor
+        UI.SpeedEmote.BackgroundTransparency = bgTransparency
     end
 
-     if Changepage then
-        Changepage.BackgroundColor3 = bgColor
-        Changepage.BackgroundTransparency = bgTransparency
+     if UI.Changepage then
+        UI.Changepage.BackgroundColor3 = bgColor
+        UI.Changepage.BackgroundTransparency = bgTransparency
     end
 
-    if SpeedBox then
-        SpeedBox.BackgroundColor3 = bgColor
-        SpeedBox.BackgroundTransparency = bgTransparency
+    if UI.SpeedBox then
+        UI.SpeedBox.BackgroundColor3 = bgColor
+        UI.SpeedBox.BackgroundTransparency = bgTransparency
     end
 
-    if Favorite then
-        Favorite.BackgroundColor3 = bgColor
-        Favorite.BackgroundTransparency = bgTransparency
+    if UI.Favorite then
+        UI.Favorite.BackgroundColor3 = bgColor
+        UI.Favorite.BackgroundTransparency = bgTransparency
     end
 
-    if Reload then
-        Reload.BackgroundColor3 = bgColor
-        Reload.BackgroundTransparency = bgTransparency
+    if UI.Reload then
+        UI.Reload.BackgroundColor3 = bgColor
+        UI.Reload.BackgroundTransparency = bgTransparency
     end
     
     if ApplyFavoriteButtonVisual then
@@ -626,14 +740,14 @@ local function updateGUIColors()
 end
 
 ApplyFavoriteButtonVisual = function()
-    if not Favorite then return end
-    local isOn = favoriteEnabled
-    local image = isOn and favoriteIconId or notFavoriteIconId
+    if not UI.Favorite then return end
+    local isOn = State.favoriteEnabled
+    local image = isOn and State.favoriteIconId or State.notFavoriteIconId
     if image and image ~= "" then
-        Favorite.Image = image
+        UI.Favorite.Image = image
     end
     local colorKey = isOn and "Favorite" or "NotFavorite"
-    Favorite.ImageColor3 = GetThemeIconColor(colorKey)
+    UI.Favorite.ImageColor3 = GetThemeIconColor(colorKey)
 end
 
 -- Optimizing performance: Removed RenderStepped loop
@@ -739,6 +853,13 @@ local function LoadThemes()
                 if not data.Icons then data.Icons = DeepCopy(defaultTheme.Icons) end
                 if not data.Wheel then data.Wheel = DeepCopy(defaultTheme.Wheel) end
                 loaded[name] = data
+                
+                if name == "Default" then
+                    if not data.IconColors then data.IconColors = {} end
+                    data.IconColors.Left = {0, 0, 0}
+                    data.IconColors.Right = {0, 0, 0}
+                end
+
                 if not decoded.Order and name ~= "Default" then
                     table.insert(loaded.Order, name)
                 end
@@ -948,8 +1069,11 @@ local function ApplyWheelBackgroundImage(bgImg, wheel)
 end
 
 local function ApplyTheme(themeData)
+    if State.isApplyingTheme then return end
+    State.isApplyingTheme = true
+    
     if themeData.Background then
-        _G.EmoteTheme = {
+        State.EmoteTheme = {
             Background = TableToColor(themeData.Background),
             Accent = TableToColor(themeData.Accent or {0, 255, 150}),
             ImageColor = TableToColor(themeData.ImageColor or {255, 255, 255}),
@@ -959,38 +1083,38 @@ local function ApplyTheme(themeData)
         }
         
         local function getIconColor(key)
-            if _G.EmoteTheme.IconColors and _G.EmoteTheme.IconColors[key] then
-                return TableToColor(_G.EmoteTheme.IconColors[key])
+            if State.EmoteTheme.IconColors and State.EmoteTheme.IconColors[key] then
+                return TableToColor(State.EmoteTheme.IconColors[key])
             end
-            return _G.EmoteTheme.ImageColor 
+            return State.EmoteTheme.ImageColor 
         end
         
-        favoriteIconId = GetAsset(_G.EmoteTheme.Icons.Favorite)
-        notFavoriteIconId = GetAsset(_G.EmoteTheme.Icons.NotFavorite)
+        State.favoriteIconId = GetAsset(State.EmoteTheme.Icons.Favorite)
+        State.notFavoriteIconId = GetAsset(State.EmoteTheme.Icons.NotFavorite)
         
         updateGUIColors()
         
-        if _1left then _1left.Image = GetAsset(_G.EmoteTheme.Icons.Left); _1left.ImageColor3 = getIconColor("Left") end
-        if _9right then _9right.Image = GetAsset(_G.EmoteTheme.Icons.Right); _9right.ImageColor3 = getIconColor("Right") end
-        if EmoteWalkButton then EmoteWalkButton.Image = GetAsset(_G.EmoteTheme.Icons.Walk); EmoteWalkButton.ImageColor3 = getIconColor("Walk") end
-        if SpeedEmote then SpeedEmote.Image = GetAsset(_G.EmoteTheme.Icons.Speed); SpeedEmote.ImageColor3 = getIconColor("Speed") end
-        if Changepage then Changepage.Image = GetAsset(_G.EmoteTheme.Icons.Page); Changepage.ImageColor3 = getIconColor("Page") end
-        if Reload then Reload.Image = GetAsset(_G.EmoteTheme.Icons.Reload); Reload.ImageColor3 = getIconColor("Reload") end
+        if UI._1left then UI._1left.Image = GetAsset(State.EmoteTheme.Icons.Left); UI._1left.ImageColor3 = getIconColor("Left") end
+        if UI._9right then UI._9right.Image = GetAsset(State.EmoteTheme.Icons.Right); UI._9right.ImageColor3 = getIconColor("Right") end
+        if UI.EmoteWalkButton then UI.EmoteWalkButton.Image = GetAsset(State.EmoteTheme.Icons.Walk); UI.EmoteWalkButton.ImageColor3 = getIconColor("Walk") end
+        if UI.SpeedEmote then UI.SpeedEmote.Image = GetAsset(State.EmoteTheme.Icons.Speed); UI.SpeedEmote.ImageColor3 = getIconColor("Speed") end
+        if UI.Changepage then UI.Changepage.Image = GetAsset(State.EmoteTheme.Icons.Page); UI.Changepage.ImageColor3 = getIconColor("Page") end
+        if UI.Reload then UI.Reload.Image = GetAsset(State.EmoteTheme.Icons.Reload); UI.Reload.ImageColor3 = getIconColor("Reload") end
         
-        if Favorite then ApplyFavoriteButtonVisual() end 
+        if UI.Favorite then ApplyFavoriteButtonVisual() end 
 
         
-        if UIElements.Background.Main then UIElements.Background.Main.SetValue(_G.EmoteTheme.Background) end
+        if UI.Background and UI.Background.Main then UI.Background.Main.SetValue(State.EmoteTheme.Background) end
         
         for key, comp in pairs(UIElements.Icons) do
-            local iconVal = _G.EmoteTheme.Icons[key] or ""
-            local specificColor = _G.EmoteTheme.IconColors and _G.EmoteTheme.IconColors[key]
+            local iconVal = State.EmoteTheme.Icons[key] or ""
+            local specificColor = State.EmoteTheme.IconColors and State.EmoteTheme.IconColors[key]
             local colorVal
             
             if specificColor then
                 colorVal = TableToColor(specificColor)
             else
-                colorVal = _G.EmoteTheme.ImageColor 
+                colorVal = State.EmoteTheme.ImageColor 
             end
             
             if comp then comp.SetValue(iconVal, colorVal) end
@@ -1004,7 +1128,7 @@ local function ApplyTheme(themeData)
                 if not root then return end
                 root = root.Children.Main.EmotesWheel.Back.Background
                 
-                local wheel = _G.EmoteTheme.Wheel
+                local wheel = State.EmoteTheme.Wheel
                 if not wheel then return end
 
                 local function getAsset(id)
@@ -1037,11 +1161,12 @@ local function ApplyTheme(themeData)
         applyWheel()
 
         for key, comp in pairs(UIElements.Wheel) do
-            local imgVal = _G.EmoteTheme.Wheel[key] or ""
-            local colorVal = TableToColor(_G.EmoteTheme.Wheel[key.."Color"] or {255, 255, 255})
+            local imgVal = State.EmoteTheme.Wheel[key] or ""
+            local colorVal = TableToColor(State.EmoteTheme.Wheel[key.."Color"] or {255, 255, 255})
             if comp then comp.SetValue(imgVal, colorVal) end
         end
     end
+    State.isApplyingTheme = false
 end
 
 checkEmotesMenuExists = function()
@@ -1137,7 +1262,7 @@ local function CreatePopup(title, size)
 
     local stroke = Instance.new("UIStroke")
     stroke.Parent = panel
-    stroke.Color = _G.EmoteTheme.Accent
+    stroke.Color = (State.EmoteTheme and State.EmoteTheme.Accent) or Color3.fromRGB(0, 255, 150)
     stroke.Thickness = 1.5
     stroke.Transparency = 0.5
 
@@ -1203,7 +1328,7 @@ SettingsLib.AddIconButton(BtnRow, "108445456753346", function()
     local popup, content = CreatePopup("Create Theme")
     local In = CreateInput(content, "Theme Name...")
     
-    local Save = CreateButton(content, "SAVE", _G.EmoteTheme.Accent, UDim2.new(0.05, 0, 0.6, 0))
+    local Save = CreateButton(content, "SAVE", (State.EmoteTheme and State.EmoteTheme.Accent) or Color3.fromRGB(0, 255, 150), UDim2.new(0.05, 0, 0.6, 0))
     local Cancel = CreateButton(content, "CANCEL", Color3.fromRGB(50, 50, 50), UDim2.new(0.55, 0, 0.6, 0))
     Cancel.TextColor3 = Color3.new(1,1,1)
 
@@ -1251,7 +1376,7 @@ SettingsLib.AddIconButton(BtnRow, "117761881427472", function()
     local popup, content = CreatePopup("Rename Theme")
     local In = CreateInput(content, "New Name...", currentThemeName)
     
-    local Save = CreateButton(content, "RENAME", _G.EmoteTheme.Accent, UDim2.new(0.05, 0, 0.6, 0))
+    local Save = CreateButton(content, "RENAME", (State.EmoteTheme and State.EmoteTheme.Accent) or Color3.fromRGB(0, 255, 150), UDim2.new(0.05, 0, 0.6, 0))
     local Cancel = CreateButton(content, "CANCEL", Color3.fromRGB(50, 50, 50), UDim2.new(0.55, 0, 0.6, 0))
     Cancel.TextColor3 = Color3.new(1,1,1)
 
@@ -1278,7 +1403,7 @@ SettingsLib.AddIconButton(BtnRow, "78317476576895", function()
     local box = CreateInput(content, "Paste Theme JSON here...", "", true)
     box.Size = UDim2.new(0.9, 0, 0, 130)
     
-    local imp = CreateButton(content, "IMPORT THEME", _G.EmoteTheme.Accent, UDim2.new(0.05, 0, 0.8, 0), UDim2.new(0.9, 0, 0, 35))
+    local imp = CreateButton(content, "IMPORT THEME", (State.EmoteTheme and State.EmoteTheme.Accent) or Color3.fromRGB(0, 255, 150), UDim2.new(0.05, 0, 0.8, 0), UDim2.new(0.9, 0, 0, 35))
 
     imp.MouseButton1Click:Connect(function()
         local s, d = pcall(function() return HttpService:JSONDecode(box.Text) end)
@@ -1301,13 +1426,13 @@ SettingsLib.AddIconButton(BtnRow, "78317476576895", function()
     
     local close = Instance.new("TextButton")
     close.Size = UDim2.fromOffset(24, 24)
-    close.Position = UDim2.new(1, -30, 0, -30)
+    close.Position = UDim2.new(1, -30, 0, 5)
     close.Text = "×"
     close.Font = Enum.Font.GothamBold
     close.TextSize = 20
     close.BackgroundTransparency = 1
     close.TextColor3 = Color3.new(1,1,1)
-    close.Parent = content
+    close.Parent = popup
     close.MouseButton1Click:Connect(function() popup:Destroy() end)
 end)
 
@@ -1320,7 +1445,7 @@ SettingsLib.AddIconButton(BtnRow, "107588515524752", function()
     box.Size = UDim2.new(0.9, 0, 0, 130)
     box.TextEditable = false
     
-    local copy = CreateButton(content, "COPY TO CLIPBOARD", _G.EmoteTheme.Accent, UDim2.new(0.05, 0, 0.8, 0), UDim2.new(0.9, 0, 0, 35))
+    local copy = CreateButton(content, "COPY TO CLIPBOARD", (State.EmoteTheme and State.EmoteTheme.Accent) or Color3.fromRGB(0, 255, 150), UDim2.new(0.05, 0, 0.8, 0), UDim2.new(0.9, 0, 0, 35))
 
     copy.MouseButton1Click:Connect(function()
         setclipboard(json)
@@ -1330,13 +1455,13 @@ SettingsLib.AddIconButton(BtnRow, "107588515524752", function()
     
     local close = Instance.new("TextButton")
     close.Size = UDim2.fromOffset(24, 24)
-    close.Position = UDim2.new(1, -30, 0, -30)
+    close.Position = UDim2.new(1, -30, 0, 5)
     close.Text = "×"
     close.Font = Enum.Font.GothamBold
     close.TextSize = 20
     close.BackgroundTransparency = 1
     close.TextColor3 = Color3.new(1,1,1)
-    close.Parent = content
+    close.Parent = popup
     close.MouseButton1Click:Connect(function() popup:Destroy() end)
 end)
 
@@ -1480,7 +1605,7 @@ AddAssetInput("Not Favorite", "NotFavorite")
 
 
 pcall(function()
-    loadstring(game:HttpGet("https://raw.githubusercontent.com/7yd7/Hub/Branch/GUIS/count-emote"))()
+    SafeLoad("https://raw.githubusercontent.com/7yd7/Hub/Branch/GUIS/count-emote", "Count Emote")
 end)
 
 getgenv().Notify({
@@ -1496,32 +1621,6 @@ local humanoid = character:WaitForChild("Humanoid")
 local UserInputService = game:GetService("UserInputService")
 local CoreGui = game:GetService("CoreGui")
 
-_G.EmoteTheme = _G.EmoteTheme or {
-    Background = Color3.fromRGB(28, 30, 32),
-    Accent = Color3.fromRGB(0, 255, 150),
-    ImageColor = Color3.fromRGB(255, 255, 255)
-}
-
-local emoteClickConnections = {}
-local guiConnections = {}
-local isMonitoringClicks = false
-local currentTimer = nil
-
-local animationsData = {}
-local originalAnimationsData = {}
-local filteredAnimations = {}
-local favoriteAnimations = {}
-local favoriteAnimationsFileName = "FavoriteAnimations.json"
-local emoteSearchTerm = ""
-local animationSearchTerm = ""
-
-getgenv().lastPlayedAnimation = getgenv().lastPlayedAnimation or nil
-getgenv().autoReloadEnabled = getgenv().autoReloadEnabled or false
-
-local lastRadialActionTime = 0
-local lastWheelVisibleTime = 0
-
-
 RunService.Heartbeat:Connect(function()
     local success, menu = pcall(function() return CoreGui.RobloxGui.EmotesMenu.Children end)
     if not (success and menu) then return end
@@ -1529,7 +1628,7 @@ RunService.Heartbeat:Connect(function()
     pcall(function()
         local wheelVisible = menu.Main.EmotesWheel.Visible
         if wheelVisible then
-            lastWheelVisibleTime = tick()
+            State.lastWheelVisibleTime = tick()
         end
         ToggleContainer.Visible = wheelVisible
     end)
@@ -1539,7 +1638,7 @@ RunService.Heartbeat:Connect(function()
     if errorMsg and errorMsg.Visible then
         if player.Character and player.Character:FindFirstChild("Humanoid") and player.Character.Humanoid.RigType == Enum.HumanoidRigType.R6 then
             errorMsg.ErrorText.Text = "Only r15 does not work r6"
-        elseif tick() - lastRadialActionTime < 2 then
+        elseif tick() - State.lastRadialActionTime < 2 then
             errorMsg.Visible = false
         end
     end
@@ -1548,9 +1647,9 @@ end)
 
 function ErrorMessage(text, duration)
 
-    if currentTimer then
-        task.cancel(currentTimer)
-        currentTimer = nil
+    if State.currentTimer then
+        task.cancel(State.currentTimer)
+        State.currentTimer = nil
     end
     
     local errorMessage = CoreGui.RobloxGui.EmotesMenu.Children.ErrorMessage
@@ -1560,9 +1659,9 @@ function ErrorMessage(text, duration)
     
     errorMessage.Visible = true
     
-    currentTimer = task.delay(duration, function()
+    State.currentTimer = task.delay(duration, function()
         errorMessage.Visible = false
-        currentTimer = nil
+        State.currentTimer = nil
     end)
 end
 
@@ -1571,37 +1670,6 @@ local function stopEmotes()
         track:Stop()
     end
 end
-
-local emotesData = {}
-local currentPage = 1
-local itemsPerPage = 8
-local totalPages = 1
-local filteredEmotes = {}
-local isLoading = false
-local originalEmotesData = {}
-local totalEmotesLoaded = 0
-local scannedEmotes = {}
-local favoriteEmotes = {}
-local favoriteFileName = "FavoriteEmotes.json"
-local currentEmoteTrack = nil
-local currentCharacter = nil
-local isGUICreated = false
-local speedEmoteConfigFile = "SpeedEmoteConfig.json"
-
-local favoriteSetVersion = 0
-local favoriteSetBuiltVersion = -1
-local favoriteEmoteSet = {}
-local favoriteAnimationSet = {}
-local emoteCacheVersion = 0
-local animationCacheVersion = 0
-local emotePageCache = { version = nil, normal = {}, favorites = {} }
-local animationPageCache = { version = nil, normal = {}, favorites = {} }
-
-local defaultButtonImage = "rbxassetid://71408678974152"
-local enabledButtonImage = "rbxassetid://106798555684020"
-
-local favoriteIconId = "rbxassetid://97307461910825" 
-local notFavoriteIconId = "rbxassetid://124025954365505"
 
 local function getCharacterAndHumanoid()
     local character = player.Character
@@ -1623,58 +1691,58 @@ end
 
 local function saveFavorites()
     if writefile then
-        local jsonData = HttpService:JSONEncode(favoriteEmotes)
-        writefile(favoriteFileName, jsonData)
+        local jsonData = HttpService:JSONEncode(State.favoriteEmotes)
+        writefile(State.favoriteFileName, jsonData)
     end
 end
 
 local function saveFavoritesAnimations()
     if writefile then
-        local jsonData = HttpService:JSONEncode(favoriteAnimations)
-        writefile(favoriteAnimationsFileName, jsonData)
+        local jsonData = HttpService:JSONEncode(State.favoriteAnimations)
+        writefile(State.favoriteAnimationsFileName, jsonData)
     end
 end
 
 local function loadFavorites()
-    if readfile and isfile and isfile(favoriteFileName) then
+    if readfile and isfile and isfile(State.favoriteFileName) then
         local success, result = pcall(function()
-            local fileContent = readfile(favoriteFileName)
+            local fileContent = readfile(State.favoriteFileName)
             return HttpService:JSONDecode(fileContent)
         end)
         if success and result then
-            favoriteEmotes = result
-            favoriteSetVersion = favoriteSetVersion + 1
+            State.favoriteEmotes = result
+            State.favoriteSetVersion = State.favoriteSetVersion + 1
         end
     end
 end
 
 local function loadFavoritesAnimations()
-    if readfile and isfile and isfile(favoriteAnimationsFileName) then
+    if readfile and isfile and isfile(State.favoriteAnimationsFileName) then
         local success, result = pcall(function()
-            local fileContent = readfile(favoriteAnimationsFileName)
+            local fileContent = readfile(State.favoriteAnimationsFileName)
             return HttpService:JSONDecode(fileContent)
         end)
         if success and result then
-            favoriteAnimations = result
-            favoriteSetVersion = favoriteSetVersion + 1
+            State.favoriteAnimations = result
+            State.favoriteSetVersion = State.favoriteSetVersion + 1
         end
     end
 end
 
 local function disconnectAllConnections()
-    for _, connection in pairs(guiConnections) do
+    for _, connection in pairs(State.guiConnections) do
         if connection then
             connection:Disconnect()
         end
     end
-    guiConnections = {}
+    State.guiConnections = {}
 end
 
 local function loadSpeedEmoteConfig()
-    speedEmoteEnabled = Config.EmoteSpeedEnabled
-    if SpeedBox then
-        SpeedBox.Text = tostring(Config.EmoteSpeed)
-        SpeedBox.Visible = (speedEmoteEnabled and Config.SpeedVisible)
+    State.speedEmoteEnabled = Config.EmoteSpeedEnabled
+    if UI.SpeedBox then
+        UI.SpeedBox.Text = tostring(Config.EmoteSpeed)
+        UI.SpeedBox.Visible = (State.speedEmoteEnabled and Config.SpeedVisible)
     end
 end
 
@@ -1696,73 +1764,73 @@ local function getEmoteName(assetId)
 end
 
 local function isInFavorites(assetId)
-    if favoriteSetBuiltVersion ~= favoriteSetVersion then
-        favoriteEmoteSet = {}
-        for _, favorite in pairs(favoriteEmotes) do
-            favoriteEmoteSet[tostring(favorite.id)] = true
+    if State.favoriteSetBuiltVersion ~= State.favoriteSetVersion then
+        State.favoriteEmoteSet = {}
+        for _, favorite in pairs(State.favoriteEmotes) do
+            State.favoriteEmoteSet[tostring(favorite.id)] = true
         end
-        favoriteAnimationSet = {}
-        for _, favorite in pairs(favoriteAnimations) do
-            favoriteAnimationSet[tostring(favorite.id)] = true
+        State.favoriteAnimationSet = {}
+        for _, favorite in pairs(State.favoriteAnimations) do
+            State.favoriteAnimationSet[tostring(favorite.id)] = true
         end
-        favoriteSetBuiltVersion = favoriteSetVersion
+        State.favoriteSetBuiltVersion = State.favoriteSetVersion
     end
-    if currentMode == "animation" then
-        return favoriteAnimationSet[tostring(assetId)] == true
+    if State.currentMode == "animation" then
+        return State.favoriteAnimationSet[tostring(assetId)] == true
     end
-    return favoriteEmoteSet[tostring(assetId)] == true
+    return State.favoriteEmoteSet[tostring(assetId)] == true
 end
 
 local function rebuildEmoteNormalCache()
-    if emotePageCache.version == emoteCacheVersion and emotePageCache.favVersion == favoriteSetVersion then
+    if State.emotePageCache.version == State.emoteCacheVersion and State.emotePageCache.favVersion == State.favoriteSetVersion then
         return
     end
-    if favoriteSetBuiltVersion ~= favoriteSetVersion then
-        favoriteEmoteSet = {}
-        for _, favorite in pairs(favoriteEmotes) do
-            favoriteEmoteSet[tostring(favorite.id)] = true
+    if State.favoriteSetBuiltVersion ~= State.favoriteSetVersion then
+        State.favoriteEmoteSet = {}
+        for _, favorite in pairs(State.favoriteEmotes) do
+            State.favoriteEmoteSet[tostring(favorite.id)] = true
         end
-        favoriteAnimationSet = {}
-        for _, favorite in pairs(favoriteAnimations) do
-            favoriteAnimationSet[tostring(favorite.id)] = true
+        State.favoriteAnimationSet = {}
+        for _, favorite in pairs(State.favoriteAnimations) do
+            State.favoriteAnimationSet[tostring(favorite.id)] = true
         end
-        favoriteSetBuiltVersion = favoriteSetVersion
+        State.favoriteSetBuiltVersion = State.favoriteSetVersion
     end
     local normal = {}
-    for _, emote in ipairs(filteredEmotes) do
-        if not favoriteEmoteSet[tostring(emote.id)] then
+    for _, emote in ipairs(State.filteredEmotes) do
+        if not State.favoriteEmoteSet[tostring(emote.id)] then
             table.insert(normal, emote)
         end
     end
-    emotePageCache.normal = normal
-    emotePageCache.version = emoteCacheVersion
-    emotePageCache.favVersion = favoriteSetVersion
+    State.emotePageCache.normal = normal
+    State.emotePageCache.version = State.emoteCacheVersion
+    State.emotePageCache.favVersion = State.favoriteSetVersion
 end
 
 local function rebuildAnimationNormalCache()
-    if animationPageCache.version == animationCacheVersion and animationPageCache.favVersion == favoriteSetVersion then
+    if State.animationPageCache.version == State.animationCacheVersion and State.animationPageCache.favVersion == State.favoriteSetVersion then
         return
     end
-    if favoriteSetBuiltVersion ~= favoriteSetVersion then
-        favoriteEmoteSet = {}
-        for _, favorite in pairs(favoriteEmotes) do
-            favoriteEmoteSet[tostring(favorite.id)] = true
+    if State.favoriteSetBuiltVersion ~= State.favoriteSetVersion then
+        State.favoriteEmoteSet = {}
+        for _, favorite in pairs(State.favoriteEmotes) do
+            State.favoriteEmoteSet[tostring(favorite.id)] = true
         end
-        favoriteAnimationSet = {}
-        for _, favorite in pairs(favoriteAnimations) do
-            favoriteAnimationSet[tostring(favorite.id)] = true
+        State.favoriteAnimationSet = {}
+        for _, favorite in pairs(State.favoriteAnimations) do
+            State.favoriteAnimationSet[tostring(favorite.id)] = true
         end
-        favoriteSetBuiltVersion = favoriteSetVersion
+        State.favoriteSetBuiltVersion = State.favoriteSetVersion
     end
     local normal = {}
-    for _, animation in ipairs(filteredAnimations) do
-        if not favoriteAnimationSet[tostring(animation.id)] then
+    for _, animation in ipairs(State.filteredAnimations) do
+        if not State.favoriteAnimationSet[tostring(animation.id)] then
             table.insert(normal, animation)
         end
     end
-    animationPageCache.normal = normal
-    animationPageCache.version = animationCacheVersion
-    animationPageCache.favVersion = favoriteSetVersion
+    State.animationPageCache.normal = normal
+    State.animationPageCache.version = State.animationCacheVersion
+    State.animationPageCache.favVersion = State.favoriteSetVersion
 end
 
 local function updateAnimationImages(currentPageAnimations)
@@ -1786,7 +1854,7 @@ local function updateAnimationImages(currentPageAnimations)
                 idValue.Value = animationData.id
                 idValue.Parent = child
 
-                child.Active = not favoriteEnabled
+                child.Active = not State.favoriteEnabled
 
                 buttonIndex = buttonIndex + 1
             else
@@ -1800,7 +1868,7 @@ local function updateAnimationImages(currentPageAnimations)
         end
     end
     
-    frontFrame.Active = not favoriteEnabled
+    frontFrame.Active = not State.favoriteEnabled
 end
 
 
@@ -1820,9 +1888,9 @@ local function updateFavoriteIcon(imageLabel, assetId, isFavorite)
     end
     
     if isFavorite then
-        favoriteIcon.Image = favoriteIconId
+        favoriteIcon.Image = State.favoriteIconId
     else
-        favoriteIcon.Image = notFavoriteIconId 
+        favoriteIcon.Image = State.notFavoriteIconId 
     end
 end
 
@@ -1835,7 +1903,7 @@ local function updateAllFavoriteIcons()
         for _, child in pairs(frontFrame:GetChildren()) do
             if child:IsA("ImageLabel") and child.Image ~= "" then
                 local assetId
-                if currentMode == "animation" then
+                if State.currentMode == "animation" then
                     local idValue = child:FindFirstChild("AnimationID")
                     if idValue then
                         assetId = idValue.Value
@@ -1848,10 +1916,10 @@ local function updateAllFavoriteIcons()
                     local isFavorite = isInFavorites(assetId)
                     updateFavoriteIcon(child, assetId, isFavorite)
                 end
-                child.Active = not favoriteEnabled
+                child.Active = not State.favoriteEnabled
             end
         end
-        frontFrame.Active = not favoriteEnabled
+        frontFrame.Active = not State.favoriteEnabled
     end
 end
 
@@ -1871,14 +1939,14 @@ local function updateAnimations()
     local equippedAnimations = {}
 
     rebuildAnimationNormalCache()
-    local favoritesToUse = _G.filteredFavoritesAnimationsForDisplay or favoriteAnimations
+    local favoritesToUse = _G.filteredFavoritesAnimationsForDisplay or State.favoriteAnimations
     local hasFavorites = #favoritesToUse > 0
-    local favoritePagesCount = hasFavorites and math.ceil(#favoritesToUse / itemsPerPage) or 0
-    local isInFavoritesPages = currentPage <= favoritePagesCount
+    local favoritePagesCount = hasFavorites and math.ceil(#favoritesToUse / State.itemsPerPage) or 0
+    local isInFavoritesPages = State.currentPage <= favoritePagesCount
 
     if isInFavoritesPages and hasFavorites then
-        local startIndex = (currentPage - 1) * itemsPerPage + 1
-        local endIndex = math.min(startIndex + itemsPerPage - 1, #favoritesToUse)
+        local startIndex = (State.currentPage - 1) * State.itemsPerPage + 1
+        local endIndex = math.min(startIndex + State.itemsPerPage - 1, #favoritesToUse)
 
         for i = startIndex, endIndex do
             if favoritesToUse[i] then
@@ -1889,10 +1957,10 @@ local function updateAnimations()
             end
         end
     else
-        local normalAnimations = animationPageCache.normal or {}
-        local adjustedPage = currentPage - favoritePagesCount
-        local startIndex = (adjustedPage - 1) * itemsPerPage + 1
-        local endIndex = math.min(startIndex + itemsPerPage - 1, #normalAnimations)
+        local normalAnimations = State.animationPageCache.normal or {}
+        local adjustedPage = State.currentPage - favoritePagesCount
+        local startIndex = (adjustedPage - 1) * State.itemsPerPage + 1
+        local endIndex = math.min(startIndex + State.itemsPerPage - 1, #normalAnimations)
 
         for i = startIndex, endIndex do
             if normalAnimations[i] then
@@ -1915,7 +1983,7 @@ local function updateAnimations()
     updateAnimationImages(currentPageAnimations)
 
     task.delay(0.2, function()
-        if favoriteEnabled then
+        if State.favoriteEnabled then
             updateAllFavoriteIcons()
         end
     end)
@@ -1927,7 +1995,7 @@ local function updateEmotes()
         return
     end
 
-    if currentMode == "animation" then
+    if State.currentMode == "animation" then
         updateAnimations()
         return
     end
@@ -1942,14 +2010,14 @@ local function updateEmotes()
     local equippedEmotes = {}
 
     rebuildEmoteNormalCache()
-    local favoritesToUse = _G.filteredFavoritesForDisplay or favoriteEmotes
+    local favoritesToUse = _G.filteredFavoritesForDisplay or State.favoriteEmotes
     local hasFavorites = #favoritesToUse > 0
-    local favoritePagesCount = hasFavorites and math.ceil(#favoritesToUse / itemsPerPage) or 0
-    local isInFavoritesPages = currentPage <= favoritePagesCount
+    local favoritePagesCount = hasFavorites and math.ceil(#favoritesToUse / State.itemsPerPage) or 0
+    local isInFavoritesPages = State.currentPage <= favoritePagesCount
 
     if isInFavoritesPages and hasFavorites then
-        local startIndex = (currentPage - 1) * itemsPerPage + 1
-        local endIndex = math.min(startIndex + itemsPerPage - 1, #favoritesToUse)
+        local startIndex = (State.currentPage - 1) * State.itemsPerPage + 1
+        local endIndex = math.min(startIndex + State.itemsPerPage - 1, #favoritesToUse)
 
         for i = startIndex, endIndex do
             if favoritesToUse[i] then
@@ -1960,10 +2028,10 @@ local function updateEmotes()
             end
         end
     else
-        local normalEmotes = emotePageCache.normal or {}
-        local adjustedPage = currentPage - favoritePagesCount
-        local startIndex = (adjustedPage - 1) * itemsPerPage + 1
-        local endIndex = math.min(startIndex + itemsPerPage - 1, #normalEmotes)
+        local normalEmotes = State.emotePageCache.normal or {}
+        local adjustedPage = State.currentPage - favoritePagesCount
+        local startIndex = (adjustedPage - 1) * State.itemsPerPage + 1
+        local endIndex = math.min(startIndex + State.itemsPerPage - 1, #normalEmotes)
 
         for i = startIndex, endIndex do
             if normalEmotes[i] then
@@ -1983,42 +2051,42 @@ local function updateEmotes()
     humanoidDescription:SetEquippedEmotes(equippedEmotes)
     
     task.delay(0.2, function()
-        if favoriteEnabled then
+        if State.favoriteEnabled then
             updateAllFavoriteIcons()
         end
     end)
 end
 
 local function calculateTotalPages()
-      if currentMode == "animation" then
-        local favoritesToUse = _G.filteredFavoritesAnimationsForDisplay or favoriteAnimations
+      if State.currentMode == "animation" then
+        local favoritesToUse = _G.filteredFavoritesAnimationsForDisplay or State.favoriteAnimations
         local hasFavorites = #favoritesToUse > 0
         rebuildAnimationNormalCache()
-        local normalAnimationsCount = #animationPageCache.normal
+        local normalAnimationsCount = #(State.animationPageCache.normal or {})
 
         local pages = 0
         if hasFavorites then
-            pages = pages + math.ceil(#favoritesToUse / itemsPerPage)
+            pages = pages + math.ceil(#favoritesToUse / State.itemsPerPage)
         end
         if normalAnimationsCount > 0 then
-            pages = pages + math.ceil(normalAnimationsCount / itemsPerPage)
+            pages = pages + math.ceil(normalAnimationsCount / State.itemsPerPage)
         end
         return math.max(pages, 1)
     end
     
-    local favoritesToUse = _G.filteredFavoritesForDisplay or favoriteEmotes
+    local favoritesToUse = _G.filteredFavoritesForDisplay or State.favoriteEmotes
     local hasFavorites = #favoritesToUse > 0
     rebuildEmoteNormalCache()
-    local normalEmotesCount = #emotePageCache.normal
+    local normalEmotesCount = #(State.emotePageCache.normal or {})
 
     local pages = 0
 
     if hasFavorites then
-        pages = pages + math.ceil(#favoritesToUse / itemsPerPage)
+        pages = pages + math.ceil(#favoritesToUse / State.itemsPerPage)
     end
 
     if normalEmotesCount > 0 then
-        pages = pages + math.ceil(normalEmotesCount / itemsPerPage)
+        pages = pages + math.ceil(normalEmotesCount / State.itemsPerPage)
     end
 
     return math.max(pages, 1)
@@ -2077,249 +2145,227 @@ local function createGUIElements()
         emotesWheel.Reload:Destroy()
     end
 
-    Under = Instance.new("Frame")
-    UIListLayout = Instance.new("UIListLayout")
-    _1left = Instance.new("ImageButton")
-    _9right = Instance.new("ImageButton")
-    _4pages = Instance.new("TextLabel")
-    _3TextLabel = Instance.new("TextLabel")
-    _2Routenumber = Instance.new("TextBox")
-    EmoteWalkButton = Instance.new("ImageButton")
-    UICorner1 = Instance.new("UICorner")
-    Top = Instance.new("Frame")
-    UIListLayout_2 = Instance.new("UIListLayout")
-    UICorner = Instance.new("UICorner")
-    Search = Instance.new("TextBox")
-    Favorite = Instance.new("ImageButton")
-    UICorner2 = Instance.new("UICorner")
-    SpeedBox = Instance.new("TextBox")
-    UICorner_4 = Instance.new("UICorner")
-    SpeedEmote = Instance.new("ImageButton")
-    UICorner_2 = Instance.new("UICorner")
-    Changepage = Instance.new("ImageButton")
-     UICorner_5 = Instance.new("UICorner")
-     Reload = Instance.new("ImageButton")
-     UICorner_6 = Instance.new("UICorner")
+    UI.Under = Instance.new("Frame")
+    local UIListLayout = Instance.new("UIListLayout")
+    UI._1left = Instance.new("ImageButton")
+    UI._9right = Instance.new("ImageButton")
+    UI._4pages = Instance.new("TextLabel")
+    UI._3TextLabel = Instance.new("TextLabel")
+    UI._2Routenumber = Instance.new("TextBox")
+    UI.EmoteWalkButton = Instance.new("ImageButton")
+    local UICorner_Left = Instance.new("UICorner")
+    UICorner_Left.CornerRadius = UDim.new(0, 10)
+    UICorner_Left.Parent = UI._1left
+    
+    local UICorner_Right = Instance.new("UICorner")
+    UICorner_Right.CornerRadius = UDim.new(0, 10)
+    UICorner_Right.Parent = UI._9right
 
-    Under.Name = "Under"
-    Under.Parent = emotesWheel
-    Under.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    Under.BackgroundTransparency = 1.000
-    Under.BorderColor3 = Color3.fromRGB(0, 0, 0)
-    Under.BorderSizePixel = 0
-    Under.Position = UDim2.new(0.129999995, 0, 1, 0)
-    Under.Size = UDim2.new(0.737500012, 0, 0.132499993, 0)
+    local UICorner1 = Instance.new("UICorner")
+    UI.Top = Instance.new("Frame")
+    local UIListLayout_2 = Instance.new("UIListLayout")
+    local UICorner = Instance.new("UICorner")
+    UI.Search = Instance.new("TextBox")
+    UI.Favorite = Instance.new("ImageButton")
+    local UICorner2 = Instance.new("UICorner")
+    UI.SpeedBox = Instance.new("TextBox")
+    local UICorner_4 = Instance.new("UICorner")
+    UI.SpeedEmote = Instance.new("ImageButton")
+    local UICorner_2 = Instance.new("UICorner")
+    UI.Changepage = Instance.new("ImageButton")
+    local UICorner_5 = Instance.new("UICorner")
+    UI.Reload = Instance.new("ImageButton")
+    local UICorner_6 = Instance.new("UICorner")
 
-    UIListLayout.Parent = Under
+    UI.Under.Name = "Under"
+    UI.Under.Parent = emotesWheel
+    UI.Under.BackgroundTransparency = 1.000
+    UI.Under.BorderSizePixel = 0
+    UI.Under.Position = UDim2.new(0.129999995, 0, 1, 0)
+    UI.Under.Size = UDim2.new(0.737500012, 0, 0.132499993, 0)
+
+    UIListLayout.Parent = UI.Under
     UIListLayout.FillDirection = Enum.FillDirection.Horizontal
     UIListLayout.VerticalAlignment = Enum.VerticalAlignment.Center
 
-    _1left.Name = "1left"
-    _1left.Parent = Under
-    _1left.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    _1left.BackgroundTransparency = 1.000
-    _1left.BorderColor3 = Color3.fromRGB(0, 0, 0)
-    _1left.BorderSizePixel = 0
-    _1left.Position = UDim2.new(0.0289389063, 0, -0.0849056691, 0)
-    _1left.Rotation = 7456.000
-    _1left.Size = UDim2.new(0.169491529, 0, 0.94339627, 0)
-    _1left.Image = "rbxassetid://93111945058621"
-    _1left.ImageColor3 = Color3.fromRGB(0, 0, 0)
-    _1left.ImageTransparency = 0.400
+    UI._1left.Name = "1left"
+    UI._1left.Parent = UI.Under
+    UI._1left.BackgroundTransparency = 1.000
+    UI._1left.BorderSizePixel = 0
+    UI._1left.Size = UDim2.new(0.169491529, 0, 0.94339627, 0)
+    UI._1left.Image = "rbxassetid://93111945058621"
+    UI._1left.ImageColor3 = Color3.fromRGB(0, 0, 0)
+    UI._1left.ImageTransparency = 0.400
 
-    _9right.Name = "9right"
-    _9right.Parent = Under
-    _9right.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    _9right.BackgroundTransparency = 1.000
-    _9right.BorderColor3 = Color3.fromRGB(0, 0, 0)
-    _9right.BorderSizePixel = 0
-    _9right.Position = UDim2.new(0.0289389063, 0, -0.0849056691, 0)
-    _9right.Rotation = 7456.000
-    _9right.Size = UDim2.new(0.169491529, 0, 0.94339627, 0)
-    _9right.Image = "rbxassetid://107938916240738"
-    _9right.ImageColor3 = Color3.fromRGB(0, 0, 0)
-    _9right.ImageTransparency = 0.400
+    UI._9right.Name = "9right"
+    UI._9right.Parent = UI.Under
+    UI._9right.BackgroundTransparency = 1.000
+    UI._9right.BorderSizePixel = 0
+    UI._9right.Size = UDim2.new(0.169491529, 0, 0.94339627, 0)
+    UI._9right.Image = "rbxassetid://107938916240738"
+    UI._9right.ImageColor3 = Color3.fromRGB(0, 0, 0)
+    UI._9right.ImageTransparency = 0.400
 
-    _4pages.Name = "4pages"
-    _4pages.Parent = Under
-    _4pages.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    _4pages.BackgroundTransparency = 1.000
-    _4pages.BorderColor3 = Color3.fromRGB(0, 0, 0)
-    _4pages.BorderSizePixel = 0
-    _4pages.Position = UDim2.new(0.630225062, 0, 0.188679263, 0)
-    _4pages.Size = UDim2.new(0.159322038, 0, 0.811320841, 0)
-    _4pages.Font = Enum.Font.SourceSansBold
-    _4pages.Text = "1"
-    _4pages.TextColor3 = Color3.fromRGB(0, 0, 0)
-    _4pages.TextScaled = true
-    _4pages.TextSize = 14.000
-    _4pages.TextTransparency = 0.400
-    _4pages.TextWrapped = true
+    UI._4pages.Name = "4pages"
+    UI._4pages.Parent = UI.Under
+    UI._4pages.BackgroundTransparency = 1.000
+    UI._4pages.BorderSizePixel = 0
+    UI._4pages.Size = UDim2.new(0.159322038, 0, 0.811320841, 0)
+    UI._4pages.Font = Enum.Font.SourceSansBold
+    UI._4pages.Text = "1"
+    UI._4pages.TextColor3 = Color3.fromRGB(0, 0, 0)
+    UI._4pages.TextScaled = true
+    UI._4pages.TextSize = 14.000
+    UI._4pages.TextTransparency = 0.400
+    UI._4pages.TextWrapped = true
 
-    _3TextLabel.Name = "3TextLabel"
-    _3TextLabel.Parent = Under
-    _3TextLabel.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    _3TextLabel.BackgroundTransparency = 1.000
-    _3TextLabel.BorderColor3 = Color3.fromRGB(0, 0, 0)
-    _3TextLabel.BorderSizePixel = 0
-    _3TextLabel.Position = UDim2.new(0.363344043, 0, 0.0283018891, 0)
-    _3TextLabel.Size = UDim2.new(0.338983059, 0, 0.94339627, 0)
-    _3TextLabel.Font = Enum.Font.SourceSansBold
-    _3TextLabel.Text = " ------ "
-    _3TextLabel.TextColor3 = Color3.fromRGB(0, 0, 0)
-    _3TextLabel.TextScaled = true
-    _3TextLabel.TextSize = 14.000
-    _3TextLabel.TextTransparency = 0.400
-    _3TextLabel.TextWrapped = true
+    UI._3TextLabel.Name = "3TextLabel"
+    UI._3TextLabel.Parent = UI.Under
+    UI._3TextLabel.BackgroundTransparency = 1.000
+    UI._3TextLabel.BorderSizePixel = 0
+    UI._3TextLabel.Size = UDim2.new(0.338983059, 0, 0.94339627, 0)
+    UI._3TextLabel.Font = Enum.Font.SourceSansBold
+    UI._3TextLabel.Text = " ------ "
+    UI._3TextLabel.TextColor3 = Color3.fromRGB(0, 0, 0)
+    UI._3TextLabel.TextScaled = true
+    UI._3TextLabel.TextSize = 14.000
+    UI._3TextLabel.TextTransparency = 0.400
+    UI._3TextLabel.TextWrapped = true
 
-    _2Routenumber.Name = "2Route-number"
-    _2Routenumber.Parent = Under
-    _2Routenumber.Active = true
-    _2Routenumber.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    _2Routenumber.BackgroundTransparency = 1.000
-    _2Routenumber.BorderColor3 = Color3.fromRGB(0, 0, 0)
-    _2Routenumber.BorderSizePixel = 0
-    _2Routenumber.Position = UDim2.new(0.138263673, 0, 0.0283018891, 0)
-    _2Routenumber.Selectable = true
-    _2Routenumber.Size = UDim2.new(0.159322038, 0, 0.811320841, 0)
-    _2Routenumber.Font = Enum.Font.SourceSansBold
-    _2Routenumber.PlaceholderColor3 = Color3.fromRGB(0, 0, 0)
-    _2Routenumber.Text = "1"
-    _2Routenumber.TextColor3 = Color3.fromRGB(0, 0, 0)
-    _2Routenumber.TextScaled = true
-    _2Routenumber.TextSize = 14.000
-    _2Routenumber.TextStrokeColor3 = Color3.fromRGB(255, 255, 255)
-    _2Routenumber.TextTransparency = 0.400
-    _2Routenumber.TextWrapped = true
+    UI._2Routenumber.Name = "2Route-number"
+    UI._2Routenumber.Parent = UI.Under
+    UI._2Routenumber.Active = true
+    UI._2Routenumber.BackgroundTransparency = 1.000
+    UI._2Routenumber.BorderSizePixel = 0
+    UI._2Routenumber.Size = UDim2.new(0.159322038, 0, 0.811320841, 0)
+    UI._2Routenumber.Font = Enum.Font.SourceSansBold
+    UI._2Routenumber.PlaceholderColor3 = Color3.fromRGB(0, 0, 0)
+    UI._2Routenumber.Text = "1"
+    UI._2Routenumber.TextColor3 = Color3.fromRGB(0, 0, 0)
+    UI._2Routenumber.TextScaled = true
+    UI._2Routenumber.TextSize = 14.000
+    UI._2Routenumber.TextTransparency = 0.400
+    UI._2Routenumber.TextWrapped = true
 
-    Top.Name = "Top"
-    Top.Parent = emotesWheel
-    Top.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-    Top.BackgroundTransparency = 0.400
-    Top.BorderColor3 = Color3.fromRGB(0, 0, 0)
-    Top.BorderSizePixel = 0
-    Top.Position = UDim2.new(0.127499998, 0, -0.109999999, 0)
-    Top.Size = UDim2.new(0.737500012, 0, 0.0949999914, 0)
+    UI.Top.Name = "Top"
+    UI.Top.Parent = emotesWheel
+    UI.Top.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    UI.Top.BackgroundTransparency = 0.400
+    UI.Top.BorderSizePixel = 0
+    UI.Top.Position = UDim2.new(0.127499998, 0, -0.109999999, 0)
+    UI.Top.Size = UDim2.new(0.737500012, 0, 0.0949999914, 0)
 
-    UIListLayout_2.Parent = Top
+    UIListLayout_2.Parent = UI.Top
     UIListLayout_2.FillDirection = Enum.FillDirection.Horizontal
     UIListLayout_2.HorizontalAlignment = Enum.HorizontalAlignment.Center
     UIListLayout_2.SortOrder = Enum.SortOrder.LayoutOrder
     UIListLayout_2.VerticalAlignment = Enum.VerticalAlignment.Center
 
     UICorner.CornerRadius = UDim.new(0, 20)
-    UICorner.Parent = Top
+    UICorner.Parent = UI.Top
 
-    Search.Name = "Search"
-    Search.Parent = Top
-    Search.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    Search.BackgroundTransparency = 1.000
-    Search.BorderColor3 = Color3.fromRGB(0, 0, 0)
-    Search.Position = UDim2.new(0.0677966103, 0, 0)
-    Search.Size = UDim2.new(0.864406765, 0, 0.81578958, 0)
-    Search.Font = Enum.Font.SourceSansBold
-    Search.PlaceholderText = "Search/ID"
-    Search.Text = ""
-    Search.TextColor3 = Color3.fromRGB(255, 255, 255)
-    Search.TextScaled = true
-    Search.TextSize = 14.000
-    Search.TextWrapped = true
+    UI.Search.Name = "Search"
+    UI.Search.Parent = UI.Top
+    UI.Search.BackgroundTransparency = 1.000
+    UI.Search.Size = UDim2.new(0.864406765, 0, 0.81578958, 0)
+    UI.Search.Font = Enum.Font.SourceSansBold
+    UI.Search.PlaceholderText = "Search/ID"
+    UI.Search.Text = ""
+    UI.Search.TextColor3 = Color3.fromRGB(255, 255, 255)
+    UI.Search.TextScaled = true
+    UI.Search.TextSize = 14.000
+    UI.Search.TextWrapped = true
 
-    EmoteWalkButton.Name = "EmoteWalkButton"
-    EmoteWalkButton.Parent = emotesWheel
-    EmoteWalkButton.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-    EmoteWalkButton.BackgroundTransparency = 0.400
-    EmoteWalkButton.BorderColor3 = Color3.fromRGB(0, 0, 0)
-    EmoteWalkButton.BorderSizePixel = 0
-    EmoteWalkButton.Position = UDim2.new(0.889999986, 0, -0.107500002, 0)
-    EmoteWalkButton.Size = UDim2.new(0.0874999985, 0, 0.0874999985, 0)
-    EmoteWalkButton.Image = defaultButtonImage
+    UI.EmoteWalkButton.Name = "EmoteWalkButton"
+    UI.EmoteWalkButton.Parent = emotesWheel
+    UI.EmoteWalkButton.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    UI.EmoteWalkButton.BackgroundTransparency = 0.400
+    UI.EmoteWalkButton.BorderSizePixel = 0
+    UI.EmoteWalkButton.Position = UDim2.new(0.889999986, 0, -0.107500002, 0)
+    UI.EmoteWalkButton.Size = UDim2.new(0.0874999985, 0, 0.0874999985, 0)
+    UI.EmoteWalkButton.Image = State.defaultButtonImage
 
     UICorner1.CornerRadius = UDim.new(0, 10)
-    UICorner1.Parent = EmoteWalkButton
+    UICorner1.Parent = UI.EmoteWalkButton
 
-    Favorite.Name = "Favorite"
-    Favorite.Parent = emotesWheel
-    Favorite.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-    Favorite.BackgroundTransparency = 0.400
-    Favorite.BorderColor3 = Color3.fromRGB(0, 0, 0)
-    Favorite.BorderSizePixel = 0
-    Favorite.Position = UDim2.new(0.0189999994, 0, -0.108000003, 0)
-    Favorite.Size = UDim2.new(0.0874999985, 0, 0.0874999985, 0)
-    Favorite.Image = "rbxassetid://124025954365505"
+    UI.Favorite.Name = "Favorite"
+    UI.Favorite.Parent = emotesWheel
+    UI.Favorite.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    UI.Favorite.BackgroundTransparency = 0.400
+    UI.Favorite.BorderSizePixel = 0
+    UI.Favorite.Position = UDim2.new(0.0189999994, 0, -0.108000003, 0)
+    UI.Favorite.Size = UDim2.new(0.0874999985, 0, 0.0874999985, 0)
+    UI.Favorite.Image = "rbxassetid://124025954365505"
 
     UICorner2.CornerRadius = UDim.new(0, 10)
-    UICorner2.Parent = Favorite
+    UICorner2.Parent = UI.Favorite
 
-    SpeedBox.Name = "SpeedBox"
-    SpeedBox.Parent = emotesWheel
-    SpeedBox.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-    SpeedBox.BackgroundTransparency = 0.400
-    SpeedBox.BorderColor3 = Color3.fromRGB(0, 0, 0)
-    SpeedBox.BorderSizePixel = 0
-    SpeedBox.Position = UDim2.new(0.0189999398, 0, -0.000499992399, 0)
-    SpeedBox.Size = UDim2.new(0.0874999985, 0, 0.0874999985, 0)
-    SpeedBox.Visible = false
-    SpeedBox.Font = Enum.Font.SourceSansBold
-    SpeedBox.PlaceholderColor3 = Color3.fromRGB(178, 178, 178)
-    SpeedBox.Text = "1"
-    SpeedBox.TextColor3 = Color3.fromRGB(255, 255, 255)
-    SpeedBox.TextScaled = true
-    SpeedBox.TextWrapped = true
-    SpeedBox:GetPropertyChangedSignal("Text"):Connect(function()
-       SpeedBox.Text = SpeedBox.Text:gsub("[^%d.]", "")
+    UI.SpeedBox.Name = "SpeedBox"
+    UI.SpeedBox.Parent = emotesWheel
+    UI.SpeedBox.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    UI.SpeedBox.BackgroundTransparency = 0.400
+    UI.SpeedBox.BorderSizePixel = 0
+    UI.SpeedBox.Position = UDim2.new(0.0189999398, 0, -0.000499992399, 0)
+    UI.SpeedBox.Size = UDim2.new(0.0874999985, 0, 0.0874999985, 0)
+    UI.SpeedBox.Visible = false
+    UI.SpeedBox.Font = Enum.Font.SourceSansBold
+    UI.SpeedBox.PlaceholderColor3 = Color3.fromRGB(178, 178, 178)
+    UI.SpeedBox.Text = "1"
+    UI.SpeedBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+    UI.SpeedBox.TextScaled = true
+    UI.SpeedBox.TextWrapped = true
+    UI.SpeedBox:GetPropertyChangedSignal("Text"):Connect(function()
+       UI.SpeedBox.Text = UI.SpeedBox.Text:gsub("[^%d.]", "")
     end)
-    SpeedBox.ZIndex = 2
+    UI.SpeedBox.ZIndex = 2
 
     UICorner_4.CornerRadius = UDim.new(0, 10)
-    UICorner_4.Parent = SpeedBox
+    UICorner_4.Parent = UI.SpeedBox
 
-    SpeedEmote.Name = "SpeedEmote"
-    SpeedEmote.Parent = emotesWheel
-    SpeedEmote.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-    SpeedEmote.BackgroundTransparency = 0.400
-    SpeedEmote.BorderColor3 = Color3.fromRGB(0, 0, 0)
-    SpeedEmote.BorderSizePixel = 0
-    SpeedEmote.Position = UDim2.new(0.888999999, 0, -0, 0)
-    SpeedEmote.Size = UDim2.new(0.0874999985, 0, 0.0874999985, 0)
-    SpeedEmote.Image = "rbxassetid://116056570415896"
-    SpeedEmote.ZIndex = 2
+    UI.SpeedEmote.Name = "SpeedEmote"
+    UI.SpeedEmote.Parent = emotesWheel
+    UI.SpeedEmote.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    UI.SpeedEmote.BackgroundTransparency = 0.400
+    UI.SpeedEmote.BorderSizePixel = 0
+    UI.SpeedEmote.Position = UDim2.new(0.888999999, 0, -0, 0)
+    UI.SpeedEmote.Size = UDim2.new(0.0874999985, 0, 0.0874999985, 0)
+    UI.SpeedEmote.Image = "rbxassetid://116056570415896"
+    UI.SpeedEmote.ZIndex = 2
 
     UICorner_2.CornerRadius = UDim.new(0, 10)
-    UICorner_2.Parent = SpeedEmote
+    UICorner_2.Parent = UI.SpeedEmote
 
-Changepage.Name = "Changepage"
-Changepage.Parent = emotesWheel
-Changepage.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-Changepage.BackgroundTransparency = 0.400
-Changepage.BorderColor3 = Color3.fromRGB(0, 0, 0)
-Changepage.BorderSizePixel = 0
-Changepage.Position = UDim2.new(0.019, 0,1.021, 0)
-Changepage.Size = UDim2.new(0.087, 0,0.087, 0)
-Changepage.ZIndex = 3
-Changepage.Image = "rbxassetid://13285615740"
+UI.Changepage.Name = "Changepage"
+UI.Changepage.Parent = emotesWheel
+UI.Changepage.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+UI.Changepage.BackgroundTransparency = 0.400
+UI.Changepage.BorderColor3 = Color3.fromRGB(0, 0, 0)
+UI.Changepage.BorderSizePixel = 0
+UI.Changepage.Position = UDim2.new(0.019, 0,1.021, 0)
+UI.Changepage.Size = UDim2.new(0.087, 0,0.087, 0)
+UI.Changepage.ZIndex = 3
+UI.Changepage.Image = "rbxassetid://13285615740"
 
 UICorner_5.CornerRadius = UDim.new(0, 10)
-UICorner_5.Parent = Changepage
+UICorner_5.Parent = UI.Changepage
 
-Reload.Name = "Reload"
-Reload.Parent = emotesWheel
-Reload.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-Reload.BackgroundTransparency = 0.400
-Reload.BorderColor3 = Color3.fromRGB(0, 0, 0)
-Reload.BorderSizePixel = 0
-Reload.Position = UDim2.new(0.888999999, 0, 1.02100003, 0)
-Reload.Size = UDim2.new(0.0869999975, 0, 0.0869999975, 0)
-Reload.ZIndex = 3
-Reload.Image = "rbxassetid://127493377027615"
+    UI.Reload.Name = "Reload"
+    UI.Reload.Parent = emotesWheel
+    UI.Reload.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    UI.Reload.BackgroundTransparency = 0.400
+    UI.Reload.BorderSizePixel = 0
+    UI.Reload.Position = UDim2.new(0.888999999, 0, 1.02100003, 0)
+    UI.Reload.Size = UDim2.new(0.0869999975, 0, 0.0869999975, 0)
+    UI.Reload.ZIndex = 3
+    UI.Reload.Image = "rbxassetid://127493377027615"
 
-UICorner_6.CornerRadius = UDim.new(0, 10)
-UICorner_6.Parent = Reload
+    UICorner_6.CornerRadius = UDim.new(0, 10)
+    UICorner_6.Parent = UI.Reload
 
     loadSpeedEmoteConfig()
 
     connectEvents()
-    isGUICreated = true
+    State.isGUICreated = true
     
     ApplyTheme(themes[currentThemeName] or themes.Default)
     
@@ -2333,14 +2379,14 @@ UICorner_6.Parent = Reload
 end
 
 local function updatePageDisplay()
-    if _4pages and _2Routenumber then
-        _4pages.Text = tostring(totalPages)
-        _2Routenumber.Text = tostring(currentPage)
+    if UI._4pages and UI._2Routenumber then
+        UI._4pages.Text = tostring(State.totalPages)
+        UI._2Routenumber.Text = tostring(State.currentPage)
     end
-    if currentMode == "animation" then
-        Config.AnimationPage = currentPage
+    if State.currentMode == "animation" then
+        Config.AnimationPage = State.currentPage
     else
-        Config.EmotePage = currentPage
+        Config.EmotePage = State.currentPage
     end
     SaveConfig()
 end
@@ -2351,7 +2397,7 @@ local function toggleFavorite(emoteId, emoteName)
 
     local index = 0
 
-    for i, fav in pairs(favoriteEmotes) do
+    for i, fav in pairs(State.favoriteEmotes) do
         if fav.id == emoteId then
             found = true
             index = i
@@ -2360,14 +2406,14 @@ local function toggleFavorite(emoteId, emoteName)
     end
 
     if found then
-        table.remove(favoriteEmotes, index)
+        table.remove(State.favoriteEmotes, index)
         getgenv().Notify({
             Title = '7yd7 | Favorite System',
             Content = '🗑️ Removed "' .. emoteName .. '" from favorites',
             Duration = 3
         })
     else
-        table.insert(favoriteEmotes, {
+        table.insert(State.favoriteEmotes, {
             id = emoteId,
             name = emoteName .. " - ⭐"
         })
@@ -2378,9 +2424,9 @@ local function toggleFavorite(emoteId, emoteName)
         })
     end
 
-    favoriteSetVersion = favoriteSetVersion + 1
+    State.favoriteSetVersion = State.favoriteSetVersion + 1
     saveFavorites()
-    totalPages = calculateTotalPages()
+    State.totalPages = calculateTotalPages()
     updatePageDisplay()
     updateEmotes()
     updateAllFavoriteIcons()
@@ -2393,7 +2439,7 @@ local function toggleFavoriteAnimation(animationData)
 
     local index = 0
 
-    for i, fav in pairs(favoriteAnimations) do
+    for i, fav in pairs(State.favoriteAnimations) do
         if fav.id == animationData.id then
             found = true
             index = i
@@ -2402,14 +2448,14 @@ local function toggleFavoriteAnimation(animationData)
     end
 
     if found then
-        table.remove(favoriteAnimations, index)
+        table.remove(State.favoriteAnimations, index)
         getgenv().Notify({
             Title = '7yd7 | Favorite System',
             Content = '🗑️ Removed "' .. animationData.name .. '" from favorites',
             Duration = 3
         })
     else
-        table.insert(favoriteAnimations, {
+        table.insert(State.favoriteAnimations, {
             id = animationData.id,
             name = animationData.name .. " - ⭐",
             bundledItems = animationData.bundledItems
@@ -2421,9 +2467,9 @@ local function toggleFavoriteAnimation(animationData)
         })
     end
 
-    favoriteSetVersion = favoriteSetVersion + 1
+    State.favoriteSetVersion = State.favoriteSetVersion + 1
     saveFavoritesAnimations()
-    totalPages = calculateTotalPages()
+    State.totalPages = calculateTotalPages()
     updatePageDisplay()
     updateAnimations()
     updateAllFavoriteIcons()
@@ -2431,23 +2477,29 @@ end
 
 
 local function setupEmoteClickDetection()
-    if isMonitoringClicks then
+    if State.isMonitoringClicks then
+        return
+    end
+end
+   
+local function setupEmoteClickDetection()
+    if State.isMonitoringClicks then
         return
     end
    
     local function monitorEmotes()
-        while favoriteEnabled do
+        while State.favoriteEnabled do
             local success, frontFrame = pcall(function()
                 return game:GetService("CoreGui").RobloxGui.EmotesMenu.Children.Main.EmotesWheel.Front.EmotesButtons
             end)
            
             if success and frontFrame then
-                for _, connection in pairs(emoteClickConnections) do
+                for _, connection in pairs(State.emoteClickConnections) do
                     if connection then
                         connection:Disconnect()
                     end
                 end
-                emoteClickConnections = {}
+                State.emoteClickConnections = {}
                
                 for _, child in pairs(frontFrame:GetChildren()) do
                     if child:IsA("ImageLabel") and child.Image ~= "" then
@@ -2457,26 +2509,18 @@ local function setupEmoteClickDetection()
                             local isFavorite = isInFavorites(assetId)
                             updateFavoriteIcon(child, assetId, isFavorite)
                         end
-                        child.Active = not favoriteEnabled
+                        child.Active = not State.favoriteEnabled
                     end
                 end
-                frontFrame.Active = not favoriteEnabled
+                frontFrame.Active = not State.favoriteEnabled
             end
-           
+            
             task.wait(0.1)
         end
-       
-        for _, connection in pairs(emoteClickConnections) do
-            if connection then
-                connection:Disconnect()
-            end
-        end
-        emoteClickConnections = {}
-        isMonitoringClicks = false
     end
    
-    if favoriteEnabled then
-        isMonitoringClicks = true
+    if State.favoriteEnabled then
+        State.isMonitoringClicks = true
         task.spawn(monitorEmotes)
     end
 end
@@ -2569,32 +2613,31 @@ local function applyAnimation(animationData)
     end
 end
 
-local lastActionTick = 0
 local function handleSectorAction(index)
-    if tick() - lastActionTick < 0.25 then return end
-    lastActionTick = tick()
+    if tick() - State.lastActionTick < 0.25 then return end
+    State.lastActionTick = tick()
     
     task.wait(0.05)
 
-    local favoritesToUse = (currentMode == "animation") and (_G.filteredFavoritesAnimationsForDisplay or favoriteAnimations) or (_G.filteredFavoritesForDisplay or favoriteEmotes)
+    local favoritesToUse = (State.currentMode == "animation") and (_G.filteredFavoritesAnimationsForDisplay or State.favoriteAnimations) or (_G.filteredFavoritesForDisplay or State.favoriteEmotes)
     local hasFavorites = #favoritesToUse > 0
-    local favoritePagesCount = hasFavorites and math.ceil(#favoritesToUse / itemsPerPage) or 0
-    local isInFavoritesPages = currentPage <= favoritePagesCount
+    local favoritePagesCount = hasFavorites and math.ceil(#favoritesToUse / State.itemsPerPage) or 0
+    local isInFavoritesPages = State.currentPage <= favoritePagesCount
 
     local function getEmoteAtIndex(idx)
         if isInFavoritesPages and hasFavorites then
-            local startIndex = (currentPage - 1) * itemsPerPage + 1
+            local startIndex = (State.currentPage - 1) * State.itemsPerPage + 1
             return favoritesToUse[startIndex + idx - 1]
         else
-            local filteredList = (currentMode == "animation") and filteredAnimations or filteredEmotes
+            local filteredList = (State.currentMode == "animation") and State.filteredAnimations or State.filteredEmotes
             local normalList = {}
             for _, item in pairs(filteredList) do
                 if not isInFavorites(item.id) then
                     table.insert(normalList, item)
                 end
             end
-            local adjustedPage = currentPage - favoritePagesCount
-            local startIndex = (adjustedPage - 1) * itemsPerPage + 1
+            local adjustedPage = State.currentPage - favoritePagesCount
+            local startIndex = (adjustedPage - 1) * State.itemsPerPage + 1
             return normalList[startIndex + idx - 1]
         end
     end
@@ -2602,17 +2645,17 @@ local function handleSectorAction(index)
     local itemData = getEmoteAtIndex(index)
     if not itemData then return end
 
-    lastRadialActionTime = tick()
+    State.lastRadialActionTime = tick()
 
 
-    if favoriteEnabled then
-        if currentMode == "animation" then
+    if State.favoriteEnabled then
+        if State.currentMode == "animation" then
             toggleFavoriteAnimation(itemData)
         else
             toggleFavorite(itemData.id, itemData.name)
         end
     else
-        if currentMode == "animation" then
+        if State.currentMode == "animation" then
             applyAnimation(itemData)
         else
             local _, hum = getCharacterAndHumanoid()
@@ -2626,29 +2669,29 @@ end
 
 
 local function monitorAnimations()
-    while currentMode == "animation" do
+    while State.currentMode == "animation" do
         local success, frontFrame = pcall(function()
             return game:GetService("CoreGui").RobloxGui.EmotesMenu.Children.Main.EmotesWheel.Front.EmotesButtons
         end)
         
         if success and frontFrame then
-            for _, connection in pairs(emoteClickConnections) do
+            for _, connection in pairs(State.emoteClickConnections) do
                 if connection then
                     connection:Disconnect()
                 end
             end
-            emoteClickConnections = {}
+            State.emoteClickConnections = {}
             
-            local favoritesToUse = _G.filteredFavoritesAnimationsForDisplay or favoriteAnimations
+            local favoritesToUse = _G.filteredFavoritesAnimationsForDisplay or State.favoriteAnimations
             local hasFavorites = #favoritesToUse > 0
-            local favoritePagesCount = hasFavorites and math.ceil(#favoritesToUse / itemsPerPage) or 0
-            local isInFavoritesPages = currentPage <= favoritePagesCount
+            local favoritePagesCount = hasFavorites and math.ceil(#favoritesToUse / State.itemsPerPage) or 0
+            local isInFavoritesPages = State.currentPage <= favoritePagesCount
             
             local currentPageAnimations = {}
             
             if isInFavoritesPages and hasFavorites then
-                local startIndex = (currentPage - 1) * itemsPerPage + 1
-                local endIndex = math.min(startIndex + itemsPerPage - 1, #favoritesToUse)
+                local startIndex = (State.currentPage - 1) * State.itemsPerPage + 1
+                local endIndex = math.min(startIndex + State.itemsPerPage - 1, #favoritesToUse)
                 
                 for i = startIndex, endIndex do
                     if favoritesToUse[i] then
@@ -2657,15 +2700,15 @@ local function monitorAnimations()
                 end
             else
                 local normalAnimations = {}
-                for _, animation in pairs(filteredAnimations) do
+                for _, animation in pairs(State.filteredAnimations) do
                     if not isInFavorites(animation.id) then
                         table.insert(normalAnimations, animation)
                     end
                 end
                 
-                local adjustedPage = currentPage - favoritePagesCount
-                local startIndex = (adjustedPage - 1) * itemsPerPage + 1
-                local endIndex = math.min(startIndex + itemsPerPage - 1, #normalAnimations)
+                local adjustedPage = State.currentPage - favoritePagesCount
+                local startIndex = (adjustedPage - 1) * State.itemsPerPage + 1
+                local endIndex = math.min(startIndex + State.itemsPerPage - 1, #normalAnimations)
                 
                 for i = startIndex, endIndex do
                     if normalAnimations[i] then
@@ -2680,7 +2723,7 @@ local function monitorAnimations()
                     if buttonIndex <= #currentPageAnimations then
                         local animationData = currentPageAnimations[buttonIndex]
                         
-                        if favoriteEnabled then
+                        if State.favoriteEnabled then
                             local isFavorite = isInFavorites(animationData.id)
                             updateFavoriteIcon(child, animationData.id, isFavorite)
                         else
@@ -2706,14 +2749,14 @@ local function monitorAnimations()
 end
 
 local function stopEmoteClickDetection()
-    isMonitoringClicks = false
+    State.isMonitoringClicks = false
     
-    for _, connection in pairs(emoteClickConnections) do
+    for _, connection in pairs(State.emoteClickConnections) do
         if connection then
             connection:Disconnect()
         end
     end
-    emoteClickConnections = {}
+    State.emoteClickConnections = {}
     
     local success, frontFrame = pcall(function()
         return game:GetService("CoreGui").RobloxGui.EmotesMenu.Children.Main.EmotesWheel.Front.EmotesButtons
@@ -2738,12 +2781,12 @@ end
 
 
 local function fetchAllEmotes()
-    if isLoading then
+    if State.isLoading then
         return
     end
-    isLoading = true
-    emotesData = {}
-    totalEmotesLoaded = 0
+    State.isLoading = true
+    State.emotesData = {}
+    State.totalEmotesLoaded = 0
 
     local success, result = pcall(function()
         local jsonContent = game:HttpGet("https://raw.githubusercontent.com/7yd7/sniper-Emote/refs/heads/test/EmoteSniper.json")
@@ -2763,44 +2806,44 @@ local function fetchAllEmotes()
                 name = item.name or ("Emote_" .. (item.id or "Unknown"))
             }
             if emoteData.id and emoteData.id > 0 then
-                table.insert(emotesData, emoteData)
-                totalEmotesLoaded = totalEmotesLoaded + 1
+                table.insert(State.emotesData, emoteData)
+                State.totalEmotesLoaded = State.totalEmotesLoaded + 1
             end
         end
     else
-        emotesData = {
+        State.emotesData = {
             {id = 3360686498, name = "Stadium"},
             {id = 3360692915, name = "Tilt"},
             {id = 3576968026, name = "Shrug"},
             {id = 3360689775, name = "Salute"}
         }
-        totalEmotesLoaded = #emotesData
+        State.totalEmotesLoaded = #State.emotesData
     end
 
-    originalEmotesData = emotesData
-    filteredEmotes = emotesData
-    emoteCacheVersion = emoteCacheVersion + 1
+    State.originalEmotesData = State.emotesData
+    State.filteredEmotes = State.emotesData
+    State.emoteCacheVersion = State.emoteCacheVersion + 1
 
-    totalPages = calculateTotalPages()
-    currentPage = 1
+    State.totalPages = calculateTotalPages()
+    State.currentPage = 1
     updatePageDisplay()
     updateEmotes()
     
     getgenv().Notify({
         Title = '7yd7 | Emote',
-        Content = "🎉 Loaded Successfully! Total Emotes: " .. totalEmotesLoaded,
+        Content = "🎉 Loaded Successfully! Total Emotes: " .. State.totalEmotesLoaded,
         Duration = 5
     })
     
-    isLoading = false
+    State.isLoading = false
 end
 
 local function fetchAllAnimations()
-    if isLoading then
+    if State.isLoading then
         return
     end
-    isLoading = true
-    animationsData = {}
+    State.isLoading = true
+    State.animationsData = {}
     
     local success, result = pcall(function()
         local jsonContent = game:HttpGet("https://raw.githubusercontent.com/7yd7/sniper-Emote/refs/heads/test/AnimationSniper.json")
@@ -2821,19 +2864,19 @@ local function fetchAllAnimations()
                 bundledItems = item.bundledItems
             }
             if animationData.id and animationData.id > 0 then
-                table.insert(animationsData, animationData)
+                table.insert(State.animationsData, animationData)
             end
         end
     end
 
-    originalAnimationsData = animationsData
-    filteredAnimations = animationsData
-    animationCacheVersion = animationCacheVersion + 1
-    isLoading = false
+    State.originalAnimationsData = State.animationsData
+    State.filteredAnimations = State.animationsData
+    State.animationCacheVersion = State.animationCacheVersion + 1
+    State.isLoading = false
 end
 
 local function searchEmotes(searchTerm)
-    if isLoading then
+    if State.isLoading then
         getgenv().Notify({
             Title = '7yd7 | Emote',
             Content = '⚠️ Loading please wait...',
@@ -2845,8 +2888,8 @@ local function searchEmotes(searchTerm)
     searchTerm = searchTerm:lower()
 
     if searchTerm == "" then
-        filteredEmotes = originalEmotesData
-        emoteCacheVersion = emoteCacheVersion + 1
+        State.filteredEmotes = State.originalEmotesData
+        State.emoteCacheVersion = State.emoteCacheVersion + 1
         if _G.originalFavoritesBackup then
             _G.originalFavoritesBackup = nil
         end
@@ -2857,7 +2900,7 @@ local function searchEmotes(searchTerm)
         local newFilteredList = {}
         
         if isIdSearch then
-            for _, emote in pairs(originalEmotesData) do
+            for _, emote in pairs(State.originalEmotesData) do
                 if tostring(emote.id) == searchTerm then
                     table.insert(newFilteredList, emote)
                 end
@@ -2872,25 +2915,25 @@ local function searchEmotes(searchTerm)
                         name = emoteName
                     }
                     
-                    table.insert(originalEmotesData, newEmote)
+                    table.insert(State.originalEmotesData, newEmote)
                     table.insert(newFilteredList, newEmote)
                 end
             end
         else
-            for _, emote in pairs(originalEmotesData) do
+            for _, emote in pairs(State.originalEmotesData) do
                 if emote.name:lower():find(searchTerm) then
                     table.insert(newFilteredList, emote)
                 end
             end
         end
         
-        filteredEmotes = newFilteredList
-        emoteCacheVersion = emoteCacheVersion + 1
+        State.filteredEmotes = newFilteredList
+        State.emoteCacheVersion = State.emoteCacheVersion + 1
 
         if not isIdSearch then
             if not _G.originalFavoritesBackup then
                 _G.originalFavoritesBackup = {}
-                for i, favorite in pairs(favoriteEmotes) do
+                for i, favorite in pairs(State.favoriteEmotes) do
                     _G.originalFavoritesBackup[i] = {
                         id = favorite.id,
                         name = favorite.name
@@ -2899,7 +2942,7 @@ local function searchEmotes(searchTerm)
             end
 
             _G.filteredFavoritesForDisplay = {}
-            for _, favorite in pairs(favoriteEmotes) do
+            for _, favorite in pairs(State.favoriteEmotes) do
                 if favorite.name:lower():find(searchTerm) then
                     table.insert(_G.filteredFavoritesForDisplay, favorite)
                 end
@@ -2907,14 +2950,14 @@ local function searchEmotes(searchTerm)
         end
     end
 
-    totalPages = calculateTotalPages()
-    currentPage = 1
+    State.totalPages = calculateTotalPages()
+    State.currentPage = 1
     updatePageDisplay()
     updateEmotes()
 end
 
 local function searchAnimations(searchTerm)
-    if isLoading then
+    if State.isLoading then
         getgenv().Notify({
             Title = '7yd7 | Animation',
             Content = '⚠️ Loading please wait...',
@@ -2926,8 +2969,8 @@ local function searchAnimations(searchTerm)
     searchTerm = searchTerm:lower()
 
     if searchTerm == "" then
-        filteredAnimations = originalAnimationsData
-        animationCacheVersion = animationCacheVersion + 1
+        State.filteredAnimations = State.originalAnimationsData
+        State.animationCacheVersion = State.animationCacheVersion + 1
         if _G.originalAnimationFavoritesBackup then
             _G.originalAnimationFavoritesBackup = nil
         end
@@ -2938,26 +2981,26 @@ local function searchAnimations(searchTerm)
         local newFilteredList = {}
         
         if isIdSearch then
-            for _, animation in pairs(originalAnimationsData) do
+            for _, animation in pairs(State.originalAnimationsData) do
                 if tostring(animation.id) == searchTerm then
                     table.insert(newFilteredList, animation)
                 end
             end
         else
-            for _, animation in pairs(originalAnimationsData) do
+            for _, animation in pairs(State.originalAnimationsData) do
                 if animation.name:lower():find(searchTerm) then
                     table.insert(newFilteredList, animation)
                 end
             end
         end
         
-        filteredAnimations = newFilteredList
-        animationCacheVersion = animationCacheVersion + 1
+        State.filteredAnimations = newFilteredList
+        State.animationCacheVersion = State.animationCacheVersion + 1
 
         if not isIdSearch then
             if not _G.originalAnimationFavoritesBackup then
                 _G.originalAnimationFavoritesBackup = {}
-                for i, favorite in pairs(favoriteAnimations) do
+                for i, favorite in pairs(State.favoriteAnimations) do
                     _G.originalAnimationFavoritesBackup[i] = {
                         id = favorite.id,
                         name = favorite.name,
@@ -2967,7 +3010,7 @@ local function searchAnimations(searchTerm)
             end
 
             _G.filteredFavoritesAnimationsForDisplay = {}
-            for _, favorite in pairs(favoriteAnimations) do
+            for _, favorite in pairs(State.favoriteAnimations) do
                 if favorite.name:lower():find(searchTerm) then
                     table.insert(_G.filteredFavoritesAnimationsForDisplay, favorite)
                 end
@@ -2975,48 +3018,48 @@ local function searchAnimations(searchTerm)
         end
     end
 
-    totalPages = calculateTotalPages()
-    currentPage = 1
+    State.totalPages = calculateTotalPages()
+    State.currentPage = 1
     updatePageDisplay()
     updateAnimations()
 end
 
 local function goToPage(pageNumber)
     if pageNumber < 1 then
-        currentPage = 1
-    elseif pageNumber > totalPages then
-        currentPage = totalPages
+        State.currentPage = 1
+    elseif pageNumber > State.totalPages then
+        State.currentPage = State.totalPages
     else
-        currentPage = pageNumber
+        State.currentPage = pageNumber
     end
     updatePageDisplay()
     updateEmotes()
 end
 
 local function previousPage()
-    if currentPage <= 1 then
-        currentPage = totalPages
+    if State.currentPage <= 1 then
+        State.currentPage = State.totalPages
     else
-        currentPage = currentPage - 1
+        State.currentPage = State.currentPage - 1
     end
     updatePageDisplay()
     updateEmotes()
 end
 
 local function nextPage()
-    if currentPage >= totalPages then
-        currentPage = 1
+    if State.currentPage >= State.totalPages then
+        State.currentPage = 1
     else
-        currentPage = currentPage + 1
+        State.currentPage = State.currentPage + 1
     end
     updatePageDisplay()
     updateEmotes()
 end
 
 local function stopCurrentEmote()
-    if currentEmoteTrack then
-        currentEmoteTrack:Stop()
-        currentEmoteTrack = nil
+    if State.currentEmoteTrack then
+        State.currentEmoteTrack:Stop()
+        State.currentEmoteTrack = nil
     end
 end
 
@@ -3032,23 +3075,23 @@ local function playEmote(humanoid, emoteId)
     end)
 
     if success and animTrack then
-        currentEmoteTrack = animTrack
-        currentEmoteTrack.Priority = Enum.AnimationPriority.Action
-        currentEmoteTrack.Looped = true
+        State.currentEmoteTrack = animTrack
+        State.currentEmoteTrack.Priority = Enum.AnimationPriority.Action
+        State.currentEmoteTrack.Looped = true
         task.wait(0.1)
-        if speedEmoteEnabled or emotesWalkEnabled then
-            currentEmoteTrack:Play()
+        if State.speedEmoteEnabled or State.emotesWalkEnabled then
+            State.currentEmoteTrack:Play()
 
-            if speedEmoteEnabled then
-                local speedValue = tonumber(SpeedBox.Text) or 1
-                currentEmoteTrack:AdjustSpeed(speedValue)
+            if State.speedEmoteEnabled then
+                local speedValue = tonumber(UI.SpeedBox.Text) or 1
+                State.currentEmoteTrack:AdjustSpeed(speedValue)
             end
         end
     end
 end
 
 local function onCharacterAdded(character)
-    currentCharacter = character
+    State.currentCharacter = character
     stopCurrentEmote()
 
     local humanoid = character:WaitForChild("Humanoid")
@@ -3068,9 +3111,9 @@ end
         if isDancing(character, animationTrack) then
             local playedEmoteId = urlToId(animationTrack.Animation.AnimationId)
 
-            if emotesWalkEnabled then
-                if currentEmoteTrack then
-                    local currentEmoteId = urlToId(currentEmoteTrack.Animation.AnimationId)
+            if State.emotesWalkEnabled then
+                if State.currentEmoteTrack then
+                    local currentEmoteId = urlToId(State.currentEmoteTrack.Animation.AnimationId)
                     if currentEmoteId == playedEmoteId then
                         return
                     else
@@ -3089,9 +3132,9 @@ end
                 end
             end
 
-            if speedEmoteEnabled and not emotesWalkEnabled then
-                if currentEmoteTrack then
-                    local currentEmoteId = urlToId(currentEmoteTrack.Animation.AnimationId)
+            if State.speedEmoteEnabled and not State.emotesWalkEnabled then
+                if State.currentEmoteTrack then
+                    local currentEmoteId = urlToId(State.currentEmoteTrack.Animation.AnimationId)
                     if currentEmoteId == playedEmoteId then
                         return
                     else
@@ -3113,11 +3156,11 @@ end
     end)
 
     humanoid.Died:Connect(function()
-    if hudEditorActive and exitHUDEditor then exitHUDEditor() end
-    emotesWalkEnabled = false
-    speedEmoteEnabled = false
-    favoriteEnabled = false
-    currentEmoteTrack = nil
+    if State.hudEditorActive and exitHUDEditor then exitHUDEditor() end
+    State.emotesWalkEnabled = false
+    State.speedEmoteEnabled = false
+    State.favoriteEnabled = false
+    State.currentEmoteTrack = nil
 
     stopEmotes()
         stopCurrentEmote()
@@ -3125,20 +3168,20 @@ end
 end
 
 local function toggleEmoteWalk()
-    emotesWalkEnabled = not emotesWalkEnabled
+    State.emotesWalkEnabled = not State.emotesWalkEnabled
 
-    if emotesWalkEnabled then
+    if State.emotesWalkEnabled then
         getgenv().Notify({
             Title = '7yd7 | Emote Freeze',
             Content = "🔒 Emote freeze ON",
             Duration = 5
         })
 
-        EmoteWalkButton.Image = enabledButtonImage
+        UI.EmoteWalkButton.Image = State.enabledButtonImage
         task.wait(0.1)
         stopCurrentEmote()
-        if currentEmoteTrack and currentEmoteTrack.IsPlaying then
-            currentEmoteTrack:AdjustSpeed(1)
+        if State.currentEmoteTrack and State.currentEmoteTrack.IsPlaying then
+            State.currentEmoteTrack:AdjustSpeed(1)
         end
     else
         getgenv().Notify({
@@ -3146,25 +3189,25 @@ local function toggleEmoteWalk()
             Content = '🔓 Emote freeze OFF',
             Duration = 5
         })
-        EmoteWalkButton.Image = defaultButtonImage
+        UI.EmoteWalkButton.Image = State.defaultButtonImage
         task.wait(0.1)
         stopCurrentEmote()
 
-        if currentEmoteTrack and currentEmoteTrack.IsPlaying and speedEmoteEnabled then
-            local speedValue = tonumber(SpeedBox.Text) or 1
-            currentEmoteTrack:AdjustSpeed(speedValue)
-        elseif currentEmoteTrack and currentEmoteTrack.IsPlaying then
-            currentEmoteTrack:AdjustSpeed(1)
+        if State.currentEmoteTrack and State.currentEmoteTrack.IsPlaying and State.speedEmoteEnabled then
+            local speedValue = tonumber(UI.SpeedBox.Text) or 1
+            State.currentEmoteTrack:AdjustSpeed(speedValue)
+        elseif State.currentEmoteTrack and State.currentEmoteTrack.IsPlaying then
+            State.currentEmoteTrack:AdjustSpeed(1)
         end
     end
 end
 print(Players.LocalPlayer.Name)
 local function toggleSpeedEmote()
-    speedEmoteEnabled = not speedEmoteEnabled
+    State.speedEmoteEnabled = not State.speedEmoteEnabled
 
-    SpeedBox.Visible = speedEmoteEnabled
+    UI.SpeedBox.Visible = State.speedEmoteEnabled
 
-    if speedEmoteEnabled then
+    if State.speedEmoteEnabled then
         getgenv().Notify({
             Title = '7yd7 | Speed Emote',
             Content = "⚡ Speed Emote ON",
@@ -3182,15 +3225,15 @@ local function toggleSpeedEmote()
         stopCurrentEmote()
     end
 
-    Config.EmoteSpeedEnabled = speedEmoteEnabled
-    Config.EmoteSpeed = tonumber(SpeedBox.Text) or 1
+    Config.EmoteSpeedEnabled = State.speedEmoteEnabled
+    Config.EmoteSpeed = tonumber(UI.SpeedBox.Text) or 1
     SaveConfig()
 end
 
 local function toggleFavoriteMode()
-    favoriteEnabled = not favoriteEnabled
+    State.favoriteEnabled = not State.favoriteEnabled
 
-    if favoriteEnabled then
+    if State.favoriteEnabled then
         ApplyFavoriteButtonVisual()
         getgenv().Notify({
             Title = '7yd7 | Favorite System',
@@ -3198,7 +3241,7 @@ local function toggleFavoriteMode()
             Duration = 5
         })
 
-        if currentMode == "emote" then
+        if State.currentMode == "emote" then
             setupEmoteClickDetection()
         else 
             updateAllFavoriteIcons()
@@ -3211,7 +3254,7 @@ local function toggleFavoriteMode()
             Duration = 3
         })
         
-        if currentMode == "emote" then
+        if State.currentMode == "emote" then
             stopEmoteClickDetection()
         else
             updateAllFavoriteIcons()
@@ -3220,10 +3263,10 @@ local function toggleFavoriteMode()
 
     pcall(function()
         local frontFrame = CoreGui.RobloxGui.EmotesMenu.Children.Main.EmotesWheel.Front.EmotesButtons
-        frontFrame.Active = not favoriteEnabled
+        frontFrame.Active = not State.favoriteEnabled
         for _, child in pairs(frontFrame:GetChildren()) do
             if child:IsA("GuiObject") then
-                child.Active = not favoriteEnabled
+                child.Active = not State.favoriteEnabled
             end
         end
     end)
@@ -3233,7 +3276,7 @@ local clickCooldown = {}
 local CLICK_COOLDOWN_TIME = 0.1
 
 local function safeButtonClick(buttonName, callback)
-    if hudEditorActive then return end
+    if State.hudEditorActive then return end
     local currentTime = tick()
     if not clickCooldown[buttonName] or (currentTime - clickCooldown[buttonName]) > CLICK_COOLDOWN_TIME then
         clickCooldown[buttonName] = currentTime
@@ -3242,12 +3285,12 @@ local function safeButtonClick(buttonName, callback)
 end
 
 local function setupAnimationClickDetection()
-    if isMonitoringClicks then
+    if State.isMonitoringClicks then
         return
     end
     
-    if currentMode == "animation" then
-        isMonitoringClicks = true
+    if State.currentMode == "animation" then
+        State.isMonitoringClicks = true
         task.spawn(monitorAnimations)
     end
 end
@@ -3273,40 +3316,40 @@ end
 function connectEvents()
     disconnectAllConnections()
 
-    if _1left then
-        table.insert(guiConnections, _1left.MouseButton1Click:Connect(function()
+    if UI._1left then
+        table.insert(State.guiConnections, UI._1left.MouseButton1Click:Connect(function()
             safeButtonClick("PrevPage", previousPage)
         end))
     end
 
-    if _9right then
-        table.insert(guiConnections, _9right.MouseButton1Click:Connect(function()
+    if UI._9right then
+        table.insert(State.guiConnections, UI._9right.MouseButton1Click:Connect(function()
             safeButtonClick("NextPage", nextPage)
         end))
     end
 
-      if _2Routenumber then
-        table.insert(guiConnections, _2Routenumber.FocusLost:Connect(function(enterPressed)
-            if hudEditorActive then return end
-            local pageNum = tonumber(_2Routenumber.Text)
+    if UI._2Routenumber then
+        table.insert(State.guiConnections, UI._2Routenumber.FocusLost:Connect(function(enterPressed)
+            if State.hudEditorActive then return end
+            local pageNum = tonumber(UI._2Routenumber.Text)
             if pageNum then
                 goToPage(pageNum)
             else
-                _2Routenumber.Text = tostring(currentPage)
+                UI._2Routenumber.Text = tostring(State.currentPage)
             end
         end))
     end
 
-    if Search then
-        table.insert(guiConnections, Search.Changed:Connect(function(property)
-            if hudEditorActive then return end
+    if UI.Search then
+        table.insert(State.guiConnections, UI.Search.Changed:Connect(function(property)
+            if State.hudEditorActive then return end
             if property == "Text" then
-                if currentMode == "emote" then
-                    emoteSearchTerm = Search.Text
-                    searchEmotes(emoteSearchTerm)
+                if State.currentMode == "emote" then
+                    State.emoteSearchTerm = UI.Search.Text
+                    searchEmotes(State.emoteSearchTerm)
                 else
-                    animationSearchTerm = Search.Text
-                    searchAnimations(animationSearchTerm)
+                    State.animationSearchTerm = UI.Search.Text
+                    searchAnimations(State.animationSearchTerm)
                 end
             end
         end))
@@ -3315,14 +3358,14 @@ function connectEvents()
     local SECTOR_COUNT = 8
     local SECTOR_ANGLE = 360 / SECTOR_COUNT
 
-    table.insert(guiConnections, UserInputService.InputBegan:Connect(function(input, gameProcessed)
-        if hudEditorActive then return end
+    table.insert(State.guiConnections, UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        if State.hudEditorActive then return end
         if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then return end
         
-        if not (favoriteEnabled or currentMode == "animation") then return end
+        if not (State.favoriteEnabled or State.currentMode == "animation") then return end
 
         local exists, emotesWheel = checkEmotesMenuExists()
-        local isRecentlyVisible = (tick() - lastWheelVisibleTime < 0.15)
+        local isRecentlyVisible = (tick() - State.lastWheelVisibleTime < 0.15)
         if not (exists and (emotesWheel.Visible or isRecentlyVisible)) then return end
 
         
@@ -3350,113 +3393,99 @@ function connectEvents()
         handleSectorAction(index)
     end))
 
-    if EmoteWalkButton then
-        table.insert(guiConnections, EmoteWalkButton.MouseButton1Click:Connect(function()
+    if UI.EmoteWalkButton then
+        table.insert(State.guiConnections, UI.EmoteWalkButton.MouseButton1Click:Connect(function()
             safeButtonClick("EmoteWalk", toggleEmoteWalk)
         end))
     end
 
-    if Favorite then
-        table.insert(guiConnections, Favorite.MouseButton1Click:Connect(function()
+    if UI.Favorite then
+        table.insert(State.guiConnections, UI.Favorite.MouseButton1Click:Connect(function()
             safeButtonClick("Favorite", toggleFavoriteMode)
         end))
     end
 
-    if SpeedEmote then
-        table.insert(guiConnections, SpeedEmote.MouseButton1Click:Connect(function()
+    if UI.SpeedEmote then
+        table.insert(State.guiConnections, UI.SpeedEmote.MouseButton1Click:Connect(function()
             safeButtonClick("SpeedEmote", toggleSpeedEmote)
         end))
     end
 
-    if Reload then
-    table.insert(guiConnections, Reload.MouseButton1Click:Connect(function()
-        safeButtonClick("AutoReload", toggleAutoReload)
-    end))
-end
+    if UI.Reload then
+        table.insert(State.guiConnections, UI.Reload.MouseButton1Click:Connect(function()
+            safeButtonClick("AutoReload", toggleAutoReload)
+        end))
+    end
 
-if Changepage then
-    table.insert(guiConnections, Changepage.MouseButton1Click:Connect(function()
-        safeButtonClick("ChangePage", function()
-        stopEmoteClickDetection()
-        
-        if currentMode == "emote" then
-            currentMode = "animation"
-            
-            spawn(function()
-                fetchAllAnimations()
-                Search.Text = animationSearchTerm
-                currentPage = Config.AnimationPage or 1
-                totalPages = calculateTotalPages()
-                updatePageDisplay()
-                updateEmotes()
-                isMonitoringClicks = true
-                task.spawn(monitorAnimations)
+    if UI.Changepage then
+        table.insert(State.guiConnections, UI.Changepage.MouseButton1Click:Connect(function()
+            safeButtonClick("ChangePage", function()
+                stopEmoteClickDetection()
+                
+                if State.currentMode == "emote" then
+                    State.currentMode = "animation"
+                    
+                    spawn(function()
+                        fetchAllAnimations()
+                        UI.Search.Text = State.animationSearchTerm
+                        State.currentPage = Config.AnimationPage or 1
+                        State.totalPages = calculateTotalPages()
+                        updatePageDisplay()
+                        updateEmotes()
+                        State.isMonitoringClicks = true
+                        task.spawn(monitorAnimations)
+                    end)
+                    
+                    getgenv().Notify({
+                        Title = '7yd7 | Animation',
+                        Content = '📄 Changed to Emote > Animation Mode',
+                        Duration = 3
+                    })
+
+                else
+                    State.currentMode = "emote"
+                    UI.Search.Text = State.emoteSearchTerm
+                    State.currentPage = Config.EmotePage or 1
+                    State.totalPages = calculateTotalPages()
+                    updatePageDisplay() 
+                    updateEmotes()
+                    
+                    if State.favoriteEnabled then
+                        setupEmoteClickDetection()
+                    end
+                    
+                    getgenv().Notify({
+                        Title = '7yd7 | Emote', 
+                        Content = '📄 Changed to Animation > Emote Mode',
+                        Duration = 3
+                    })
+                end
             end)
-            
-            getgenv().Notify({
-                Title = '7yd7 | Animation',
-                Content = '📄 Changed to Emote > Animation Mode',
-                Duration = 3
-            })
+        end))
+    end
 
-        else
-            currentMode = "emote"
-            Search.Text = emoteSearchTerm
-            currentPage = Config.EmotePage or 1
-            totalPages = calculateTotalPages()
-            updatePageDisplay() 
-            updateEmotes()
-            
-            if favoriteEnabled then
-                setupEmoteClickDetection()
-            end
-            
-            getgenv().Notify({
-                Title = '7yd7 | Emote', 
-                Content = '📄 Changed to Animation > Emote Mode',
-                Duration = 3
-            })
-        end
-        end)
-    end))
-end
-
-    if SpeedBox then
-        table.insert(guiConnections, SpeedBox.FocusLost:Connect(function()
-            if hudEditorActive then return end
-            Config.EmoteSpeed = tonumber(SpeedBox.Text) or 1
+    if UI.SpeedBox then
+        table.insert(State.guiConnections, UI.SpeedBox.FocusLost:Connect(function()
+            if State.hudEditorActive then return end
+            Config.EmoteSpeed = tonumber(UI.SpeedBox.Text) or 1
             SaveConfig()
         end))
     end
 end
 
 
-local hudEditorConnections = {}
-local hudEditorStrokes = {}
-local hudEditorOverlay = nil
-local hudForceVisibleConn = nil
 
-local DEFAULT_POSITIONS = {
-    Top = UDim2.new(0.127499998, 0, -0.109999999, 0),
-    Under = UDim2.new(0.129999995, 0, 1, 0),
-    EmoteWalkButton = UDim2.new(0.889999986, 0, -0.107500002, 0),
-    Favorite = UDim2.new(0.0189999994, 0, -0.108000003, 0),
-    SpeedEmote = UDim2.new(0.888999999, 0, 0, 0),
-    SpeedBox = UDim2.new(0.0189999398, 0, -0.000499992399, 0),
-    Changepage = UDim2.new(0.019, 0, 1.021, 0),
-    Reload = UDim2.new(0.888999999, 0, 1.02100003, 0),
-}
 
 local function getMovableElements()
     local elems = {}
-    if Top then elems["Top"] = Top end
-    if Under then elems["Under"] = Under end
-    if EmoteWalkButton then elems["EmoteWalkButton"] = EmoteWalkButton end
-    if Favorite then elems["Favorite"] = Favorite end
-    if SpeedEmote then elems["SpeedEmote"] = SpeedEmote end
-    if SpeedBox then elems["SpeedBox"] = SpeedBox end
-    if Changepage then elems["Changepage"] = Changepage end
-    if Reload then elems["Reload"] = Reload end
+    if UI.Top then elems["Top"] = UI.Top end
+    if UI.Under then elems["Under"] = UI.Under end
+    if UI.EmoteWalkButton then elems["EmoteWalkButton"] = UI.EmoteWalkButton end
+    if UI.Favorite then elems["Favorite"] = UI.Favorite end
+    if UI.SpeedEmote then elems["SpeedEmote"] = UI.SpeedEmote end
+    if UI.SpeedBox then elems["SpeedBox"] = UI.SpeedBox end
+    if UI.Changepage then elems["Changepage"] = UI.Changepage end
+    if UI.Reload then elems["Reload"] = UI.Reload end
     return elems
 end
 
@@ -3472,16 +3501,16 @@ applySavedPositions = function()
 end
 
 exitHUDEditor = function()
-    if not hudEditorActive then return end
-    hudEditorActive = false
-    for _, conn in pairs(hudEditorConnections) do
+    if not State.hudEditorActive then return end
+    State.hudEditorActive = false
+    for _, conn in pairs(HUD.Connections) do
         pcall(function() conn:Disconnect() end)
     end
-    hudEditorConnections = {}
-    for _, stroke in pairs(hudEditorStrokes) do
+    HUD.Connections = {}
+    for _, stroke in pairs(HUD.Strokes) do
         pcall(function() if stroke and stroke.Parent then stroke:Destroy() end end)
     end
-    hudEditorStrokes = {}
+    HUD.Strokes = {}
     for _, el in pairs(getMovableElements()) do
         local h = el:FindFirstChild("HUDDragHandle")
         if h then h:Destroy() end
@@ -3493,34 +3522,34 @@ exitHUDEditor = function()
             end
         end
     end
-    if hudEditorOverlay then
-        for _, g in pairs(hudEditorOverlay:GetChildren()) do
+    if HUD.Overlay then
+        for _, g in pairs(HUD.Overlay:GetChildren()) do
             if g.Name == "SnapGuide" then g:Destroy() end
         end
     end
-    if hudEditorOverlay and hudEditorOverlay.Parent then hudEditorOverlay:Destroy() end
-    hudEditorOverlay = nil
-    if hudForceVisibleConn then hudForceVisibleConn:Disconnect(); hudForceVisibleConn = nil end
-    if Search then Search.TextEditable = true; Search.Active = true end
-    if SpeedBox then SpeedBox.TextEditable = true; SpeedBox.Active = true end
-    if _2Routenumber then _2Routenumber.TextEditable = true; _2Routenumber.Active = true end
+    if HUD.Overlay and HUD.Overlay.Parent then HUD.Overlay:Destroy() end
+    HUD.Overlay = nil
+    if HUD.ForceVisibleConn then HUD.ForceVisibleConn:Disconnect(); HUD.ForceVisibleConn = nil end
+    if UI.Search then UI.Search.TextEditable = true; UI.Search.Active = true end
+    if UI.SpeedBox then UI.SpeedBox.TextEditable = true; UI.SpeedBox.Active = true end
+    if UI._2Routenumber then UI._2Routenumber.TextEditable = true; UI._2Routenumber.Active = true end
     pcall(function() game:GetService("GuiService"):SetEmotesMenuOpen(false) end)
     pcall(function() game:GetService("CoreGui").RobloxGui.EmotesMenu.Children.Main.EmotesWheel.Visible = false end)
 end
 
 enterHUDEditor = function()
-    if hudEditorActive then return end
-    hudEditorActive = true
+    if State.hudEditorActive then return end
+    State.hudEditorActive = true
 
     game:GetService("GuiService"):SetEmotesMenuOpen(false)
     task.wait(0.15)
 
     local exists, emotesWheel = checkEmotesMenuExists()
-    if not exists then hudEditorActive = false; return end
+    if not exists then State.hudEditorActive = false; return end
     emotesWheel.Visible = true
 
-    hudForceVisibleConn = RunService.Heartbeat:Connect(function()
-        if not hudEditorActive then return end
+    HUD.ForceVisibleConn = RunService.Heartbeat:Connect(function()
+        if not State.hudEditorActive then return end
         pcall(function()
             local _, ew = checkEmotesMenuExists()
             if ew then ew.Visible = true end
@@ -3538,7 +3567,7 @@ enterHUDEditor = function()
     overlay.Size = UDim2.fromScale(1, 1)
     overlay.ZIndex = 6000
     overlay.Active = false
-    hudEditorOverlay = overlay
+    HUD.Overlay = overlay
 
     local bc = Instance.new("Frame")
     bc.Parent = overlay
@@ -3573,29 +3602,29 @@ enterHUDEditor = function()
     backBtn.ZIndex = 6001
     Instance.new("UICorner", backBtn).CornerRadius = UDim.new(0, 10)
 
-    table.insert(hudEditorConnections, backBtn.MouseButton1Click:Connect(function()
+    table.insert(HUD.Connections, backBtn.MouseButton1Click:Connect(function()
         exitHUDEditor()
     end))
 
-    table.insert(hudEditorConnections, resetBtn.MouseButton1Click:Connect(function()
+    table.insert(HUD.Connections, resetBtn.MouseButton1Click:Connect(function()
         Config.HUDPositions = {}
         SaveConfig()
         for name, el in pairs(getMovableElements()) do
-            if DEFAULT_POSITIONS[name] then el.Position = DEFAULT_POSITIONS[name] end
+            if HUD.DefaultPositions[name] then el.Position = HUD.DefaultPositions[name] end
         end
         getgenv().Notify({ Title = "7yd7 | HUD Editor", Content = "🔄 Positions reset to default", Duration = 3 })
     end))
 
-    if Search then Search.TextEditable = false; Search.Active = false; pcall(function() Search:ReleaseFocus() end) end
-    if SpeedBox then SpeedBox.TextEditable = false; SpeedBox.Active = false; pcall(function() SpeedBox:ReleaseFocus() end) end
-    if _2Routenumber then _2Routenumber.TextEditable = false; _2Routenumber.Active = false; pcall(function() _2Routenumber:ReleaseFocus() end) end
+    if UI.Search then UI.Search.TextEditable = false; UI.Search.Active = false; pcall(function() UI.Search:ReleaseFocus() end) end
+    if UI.SpeedBox then UI.SpeedBox.TextEditable = false; UI.SpeedBox.Active = false; pcall(function() UI.SpeedBox:ReleaseFocus() end) end
+    if UI._2Routenumber then UI._2Routenumber.TextEditable = false; UI._2Routenumber.Active = false; pcall(function() UI._2Routenumber:ReleaseFocus() end) end
 
     local SNAP_THRESHOLD = 8
     local allMovable = getMovableElements()
     local snapGuideH, snapGuideV
 
     local function createSnapGuides()
-        if not hudEditorOverlay then return end
+        if not HUD.Overlay then return end
         snapGuideH = Instance.new("Frame")
         snapGuideH.Name = "SnapGuide"
         snapGuideH.BackgroundColor3 = Color3.fromRGB(0, 170, 255)
@@ -3603,7 +3632,7 @@ enterHUDEditor = function()
         snapGuideH.Size = UDim2.new(1, 0, 0, 1)
         snapGuideH.ZIndex = 6002
         snapGuideH.Visible = false
-        snapGuideH.Parent = hudEditorOverlay
+        snapGuideH.Parent = HUD.Overlay
         snapGuideV = Instance.new("Frame")
         snapGuideV.Name = "SnapGuide"
         snapGuideV.BackgroundColor3 = Color3.fromRGB(0, 170, 255)
@@ -3611,7 +3640,7 @@ enterHUDEditor = function()
         snapGuideV.Size = UDim2.new(0, 1, 1, 0)
         snapGuideV.ZIndex = 6002
         snapGuideV.Visible = false
-        snapGuideV.Parent = hudEditorOverlay
+        snapGuideV.Parent = HUD.Overlay
     end
     createSnapGuides()
 
@@ -3662,7 +3691,7 @@ enterHUDEditor = function()
         stroke.Color = Color3.fromRGB(0, 255, 100)
         stroke.Thickness = 2
         stroke.Parent = element
-        table.insert(hudEditorStrokes, stroke)
+        table.insert(HUD.Strokes, stroke)
 
         local hasLayout = element:FindFirstChildOfClass("UIListLayout")
         local inputTarget
@@ -3690,8 +3719,8 @@ enterHUDEditor = function()
         local dragging = false
         local dragStart, startPos
 
-        table.insert(hudEditorConnections, inputTarget.InputBegan:Connect(function(input)
-            if not hudEditorActive then return end
+        table.insert(HUD.Connections, inputTarget.InputBegan:Connect(function(input)
+            if not State.hudEditorActive then return end
             if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
                 dragging = true
                 dragStart = input.Position
@@ -3700,7 +3729,7 @@ enterHUDEditor = function()
             end
         end))
 
-        table.insert(hudEditorConnections, UserInputService.InputChanged:Connect(function(input)
+        table.insert(HUD.Connections, UserInputService.InputChanged:Connect(function(input)
             if not dragging then return end
             if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
                 local delta = input.Position - dragStart
@@ -3711,13 +3740,13 @@ enterHUDEditor = function()
                 )
                 local snapped, gx, gy = snapCalc(element, rawPos, name)
                 element.Position = snapped
-                local ovP = hudEditorOverlay and hudEditorOverlay.AbsolutePosition or Vector2.new(0, 0)
+                local ovP = HUD.Overlay and HUD.Overlay.AbsolutePosition or Vector2.new(0, 0)
                 if snapGuideV then snapGuideV.Visible = (gx ~= nil); if gx then snapGuideV.Position = UDim2.fromOffset(gx - ovP.X, 0) end end
                 if snapGuideH then snapGuideH.Visible = (gy ~= nil); if gy then snapGuideH.Position = UDim2.fromOffset(0, gy - ovP.Y) end end
             end
         end))
 
-        table.insert(hudEditorConnections, UserInputService.InputEnded:Connect(function(input)
+        table.insert(HUD.Connections, UserInputService.InputEnded:Connect(function(input)
             if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
                 if dragging then
                     dragging = false
@@ -3761,38 +3790,34 @@ if player.Character then
     onCharacterAdded(player.Character)
 end
 
-player.CharacterAdded:Connect(function(character)
-    onCharacterAdded(character)
-    task.wait(0.3) 
-    spawn(function()
-        while not checkEmotesMenuExists() do
-            task.wait(0.1) 
-        end
-        task.wait(0.3) 
-        stopEmotes()
-        if createGUIElements() then
-            if #emotesData > 0 then
-                updatePageDisplay()
-                updateEmotes()
-                loadSpeedEmoteConfig()
+player.CharacterAdded:Connect(function(char)
+    character = char
+    humanoid = char:WaitForChild("Humanoid")
+    onCharacterAdded(char)
+    
+    task.spawn(function()
+        local attempts = 0
+        while attempts < 20 do
+            if checkEmotesMenuExists() then
+                task.wait(0.2)
+                stopEmotes()
+                if createGUIElements() then
+                    updatePageDisplay()
+                    updateEmotes()
+                    updateGUIColors()
+                    loadSpeedEmoteConfig()
+                end
+                break
             end
+            attempts = attempts + 1
+            task.wait(0.1)
         end
     end)
 end)
 
-player.CharacterAdded:Connect(function(newChar)
-    character = newChar
-    humanoid = newChar:WaitForChild("Humanoid")
-    emotesWalkEnabled = false
-    speedEmoteEnabled = false
-    favoriteEnabled = false
-    currentEmoteTrack = nil
-    stopEmotes()
-end)
-
 
 local heartbeatConnection = RunService.Heartbeat:Connect(function()
-    if not isGUICreated then
+    if not State.isGUICreated then
         checkAndRecreateGUI()
     else
         updateGUIColors()
@@ -3812,11 +3837,11 @@ local function safeFind(path, name)
 end
 
 RunService.Stepped:Connect(function()
-    if humanoid and currentEmoteTrack and currentEmoteTrack.IsPlaying then
+    if humanoid and State.currentEmoteTrack and State.currentEmoteTrack.IsPlaying then
         if humanoid.MoveDirection.Magnitude > 0 then
-            if speedEmoteEnabled and not emotesWalkEnabled then
-                currentEmoteTrack:Stop()
-                currentEmoteTrack = nil
+            if State.speedEmoteEnabled and not State.emotesWalkEnabled then
+                State.currentEmoteTrack:Stop()
+                State.currentEmoteTrack = nil
             end
         end
     end
@@ -3873,7 +3898,7 @@ task.spawn(function()
 end)
 
 if UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled then
-    loadstring(game:HttpGet("https://raw.githubusercontent.com/7yd7/Hub/refs/heads/Branch/GUIS/OpenEmote.lua"))()
+    SafeLoad("https://raw.githubusercontent.com/7yd7/Hub/refs/heads/Branch/GUIS/OpenEmote.lua", "Open Emote")
     getgenv().Notify({
         Title = '7yd7 | Emote Mobile',
         Content = '📱 Added emote open button for ease of use',
