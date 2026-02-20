@@ -630,12 +630,22 @@ function Components:AddToggle(container, title, description, default, callback)
         Size = UDim2.new(0, 16, 0, 16)
     }, { Lib:Create("UICorner", {CornerRadius = UDim.new(1, 0)}) })
     
-    ToggleBg.MouseButton1Click:Connect(function()
-        state = not state
+    local function updateVisuals(newState)
+        state = newState
         Lib:Tween(ToggleBg, TweenInfo.new(0.15), {BackgroundColor3 = state and Color3.fromRGB(0, 220, 130) or Color3.fromRGB(55, 58, 62)})
         Lib:Tween(Knob, TweenInfo.new(0.15), {Position = UDim2.new(state and 1 or 0, state and -19 or 3, 0.5, -8)})
+    end
+
+    ToggleBg.MouseButton1Click:Connect(function()
+        updateVisuals(not state)
         callback(state)
     end)
+    
+    return {
+        SetState = function(newState)
+            updateVisuals(newState)
+        end
+    }
 end
 
 function Components:AddDropdown(container, title, options, default, callback)
