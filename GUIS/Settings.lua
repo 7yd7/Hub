@@ -536,12 +536,13 @@ local NavContainer = Lib:Create("ScrollingFrame", {
     Parent = Header,
     BackgroundTransparency = 1,
     Position = UDim2.new(0.05, 0, 0.2, 0),
-    Size = UDim2.new(1, -55, 0, 35),
+    Size = UDim2.new(1, -65, 0, 35),
     CanvasSize = UDim2.new(0, 0, 0, 0),
     AutomaticCanvasSize = Enum.AutomaticSize.X,
-    ScrollBarThickness = 1,
+    ScrollBarThickness = 2,
     ScrollBarImageColor3 = Theme.Accent,
-    ScrollingDirection = Enum.ScrollingDirection.X
+    ScrollingDirection = Enum.ScrollingDirection.X,
+    ClipsDescendants = true
 }, {
     Lib:Create("UIListLayout", {
         FillDirection = Enum.FillDirection.Horizontal,
