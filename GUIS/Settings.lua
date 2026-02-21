@@ -578,7 +578,8 @@ function Components:AddItem(parent, title, description)
         Name = title,
         Parent = parent,
         BackgroundColor3 = Theme.Section,
-        Size = UDim2.new(0.95, 0, 0, hasDesc and 60 or 45)
+        Size = UDim2.new(0.95, 0, 0, hasDesc and 60 or 45),
+        AutomaticSize = Enum.AutomaticSize.Y
     }, {
         Lib:Create("UICorner", {CornerRadius = UDim.new(0, 10)}),
         Lib:Create("TextLabel", {
@@ -591,7 +592,8 @@ function Components:AddItem(parent, title, description)
             TextColor3 = Theme.Text,
             TextSize = 13,
             TextXAlignment = Enum.TextXAlignment.Left
-        })
+        }),
+        Lib:Create("UIPadding", {PaddingBottom = UDim.new(0, 12)})
     })
     
     if hasDesc then
@@ -600,12 +602,15 @@ function Components:AddItem(parent, title, description)
             Parent = ItemContainer,
             BackgroundTransparency = 1,
             Position = UDim2.new(0, 12, 0, 32),
-            Size = UDim2.new(0.6, 0, 0, 15),
+            Size = UDim2.new(0.6, 0, 0, 0),
+            AutomaticSize = Enum.AutomaticSize.Y,
+            TextWrapped = true,
             Font = Theme.FontRegular,
             Text = description,
             TextColor3 = Theme.TextDim,
             TextSize = 11,
-            TextXAlignment = Enum.TextXAlignment.Left
+            TextXAlignment = Enum.TextXAlignment.Left,
+            TextYAlignment = Enum.TextYAlignment.Top
         })
     end
     return ItemContainer
