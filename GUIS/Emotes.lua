@@ -540,44 +540,45 @@ do
     end
 end
 
+local TogglesUI = {}
 local GeneralTab = SettingsLib.CreateTab("General", 1)
-SettingsLib.AddToggle(GeneralTab, "Show Notifications", "Receive alerts and feedback", Config.NotifyEnabled, function(v)
+TogglesUI.NotifyEnabled = SettingsLib.AddToggle(GeneralTab, "Show Notifications", "Receive alerts and feedback", Config.NotifyEnabled, function(v)
     Config.NotifyEnabled = v
     SaveConfig()
 end)
 local ButtonsTab = SettingsLib.CreateTab("Buttons", 2)
 
-SettingsLib.AddToggle(ButtonsTab, "Search Bar", "Show/Hide the search input", Config.SearchVisible, function(v)
+TogglesUI.SearchVisible = SettingsLib.AddToggle(ButtonsTab, "Search Bar", "Show/Hide the search input", Config.SearchVisible, function(v)
     Config.SearchVisible = v
     ApplyUIVisibility()
     SaveConfig()
 end)
 
-SettingsLib.AddToggle(ButtonsTab, "Favorites Button", "Show/Hide the star button", Config.FavVisible, function(v)
+TogglesUI.FavVisible = SettingsLib.AddToggle(ButtonsTab, "Favorites Button", "Show/Hide the star button", Config.FavVisible, function(v)
     Config.FavVisible = v
     ApplyUIVisibility()
     SaveConfig()
 end)
 
-SettingsLib.AddToggle(ButtonsTab, "Mode Switcher", "Show/Hide animation mode button", Config.ModeVisible, function(v)
+TogglesUI.ModeVisible = SettingsLib.AddToggle(ButtonsTab, "Mode Switcher", "Show/Hide animation mode button", Config.ModeVisible, function(v)
     Config.ModeVisible = v
     ApplyUIVisibility()
     SaveConfig()
 end)
 
-SettingsLib.AddToggle(ButtonsTab, "Freeze Button", "Show/Hide emote freeze button", Config.FreezeVisible, function(v)
+TogglesUI.FreezeVisible = SettingsLib.AddToggle(ButtonsTab, "Freeze Button", "Show/Hide emote freeze button", Config.FreezeVisible, function(v)
     Config.FreezeVisible = v
     ApplyUIVisibility()
     SaveConfig()
 end)
 
-SettingsLib.AddToggle(ButtonsTab, "Speed Button", "Show/Hide the speed controller", Config.SpeedVisible, function(v)
+TogglesUI.SpeedVisible = SettingsLib.AddToggle(ButtonsTab, "Speed Button", "Show/Hide the speed controller", Config.SpeedVisible, function(v)
     Config.SpeedVisible = v
     ApplyUIVisibility()
     SaveConfig()
 end)
 
-SettingsLib.AddToggle(ButtonsTab, "Page Controls", "Show/Hide navigation buttons", Config.NavVisible, function(v)
+TogglesUI.NavVisible = SettingsLib.AddToggle(ButtonsTab, "Page Controls", "Show/Hide navigation buttons", Config.NavVisible, function(v)
     Config.NavVisible = v
     ApplyUIVisibility()
     SaveConfig()
@@ -784,7 +785,7 @@ local pendingSave = false
 
 local function SaveThemesImplementation(themes)
     if not isfolder("7yd7") then makefolder("7yd7") end
-    local toSave = { Themes = {}, Order = {}, Selected = currentThemeName }
+    local toSave = { Themes = {}, Order = {}, Selected = themes.Selected or currentThemeName }
     
     toSave.Order = themes.Order or {}
     
@@ -1070,6 +1071,12 @@ end
 
 local function ApplyTheme(themeData)
     if State.isApplyingTheme then return end
+    if not themeData then
+        warn("7yd7 | ApplyTheme: themeData is nil. Falling back to Default.")
+        themeData = themes and themes["Default"] or nil
+        if not themeData then return end
+    end
+    
     State.isApplyingTheme = true
     
     if themeData.Background then
@@ -1603,6 +1610,277 @@ AddAssetInput("Reload Icon", "Reload")
 AddAssetInput("Favorite (Star)", "Favorite")
 AddAssetInput("Not Favorite", "NotFavorite")
 
+local BackupTab = SettingsLib.CreateTab("Backup", 4)
+
+local BackupDesc = SettingsLib.AddItem(BackupTab, "What's included in a backup?", " ")
+BackupDesc.LayoutOrder = 1
+BackupDesc.Size = UDim2.new(0.95, 0, 0, 110)
+for _, v in pairs(BackupDesc:GetChildren()) do if v.Name == "Desc" then v:Destroy() end end
+
+local DescList = Instance.new("Frame")
+DescList.Parent = BackupDesc
+DescList.BackgroundTransparency = 1
+DescList.Position = UDim2.new(0, 12, 0, 28)
+DescList.Size = UDim2.new(1, -24, 1, -28)
+
+local LayoutDesc = Instance.new("UIListLayout")
+LayoutDesc.Parent = DescList
+LayoutDesc.Padding = UDim.new(0, 4)
+
+local function MakeDescLine(text)
+    local lbl = Instance.new("TextLabel")
+    lbl.Parent = DescList
+    lbl.BackgroundTransparency = 1
+    lbl.Size = UDim2.new(1, 0, 0, 15)
+    lbl.AutomaticSize = Enum.AutomaticSize.Y
+    lbl.TextWrapped = true
+    lbl.Font = Enum.Font.Gotham
+    lbl.Text = text
+    lbl.TextColor3 = Color3.fromRGB(150, 150, 150)
+    lbl.TextSize = 11
+    lbl.TextXAlignment = Enum.TextXAlignment.Left
+    lbl.RichText = true
+end
+
+MakeDescLine("<b>• Theme:</b> Saves custom themes")
+MakeDescLine("<b>• Settings:</b> Saves HUD layout & values")
+MakeDescLine("<b>• Favorite:</b> Saves favorite emotes/anims")
+MakeDescLine("<b>• All:</b> Includes everything above")
+
+local ExportItem = SettingsLib.AddItem(BackupTab, "Export Settings", "Save current settings to a file for sharing or later import.")
+ExportItem.LayoutOrder = 2
+
+local ExportBtnContainer = Instance.new("Frame")
+ExportBtnContainer.Parent = ExportItem
+ExportBtnContainer.BackgroundTransparency = 1
+ExportBtnContainer.Size = UDim2.new(1, -24, 0, 60)
+
+local expDesc = ExportItem:FindFirstChild("Desc")
+if expDesc then
+    expDesc.Size = UDim2.new(1, -24, 0, 0)
+    local function updateExpPos()
+        ExportBtnContainer.Position = UDim2.new(0, 12, 0, expDesc.Position.Y.Offset + expDesc.AbsoluteSize.Y + 12)
+    end
+    expDesc:GetPropertyChangedSignal("AbsoluteSize"):Connect(updateExpPos)
+    updateExpPos()
+else
+    ExportBtnContainer.Position = UDim2.new(0, 12, 0, 32)
+end
+
+local ExportLayout = Instance.new("UIGridLayout")
+ExportLayout.CellSize = UDim2.new(0.48, 0, 0, 26)
+ExportLayout.CellPadding = UDim2.new(0.04, 0, 0, 8)
+ExportLayout.SortOrder = Enum.SortOrder.LayoutOrder
+ExportLayout.Parent = ExportBtnContainer
+
+local function CreateExportBtn(text, color, order)
+    local btn = Instance.new("TextButton")
+    btn.LayoutOrder = order
+    btn.BackgroundColor3 = color
+    btn.Text = text
+    btn.Font = Enum.Font.GothamBold
+    btn.TextColor3 = Color3.new(1,1,1)
+    btn.TextSize = 11
+    btn.Parent = ExportBtnContainer
+    
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 6)
+    corner.Parent = btn
+    
+    return btn
+end
+
+local btnColors = {
+    dark = Color3.fromRGB(45, 48, 52),
+    blue = Color3.fromRGB(88, 101, 242)
+}
+
+local BtnExportAll = CreateExportBtn("Export All Settings", btnColors.dark, 1)
+local BtnExportThemes = CreateExportBtn("Export Themes", btnColors.blue, 2)
+local BtnExportSettings = CreateExportBtn("Export Settings", btnColors.blue, 3)
+local BtnExportFavorites = CreateExportBtn("Export Favorites", btnColors.blue, 4)
+
+local function GetFavoritesData()
+    local favEmotesStr = "{}"
+    local favAnimsStr = "{}"
+    if isfile and isfile(State.favoriteFileName) then
+        favEmotesStr = readfile(State.favoriteFileName)
+    end
+    if isfile and isfile(State.favoriteAnimationsFileName) then
+        favAnimsStr = readfile(State.favoriteAnimationsFileName)
+    end
+    return {
+        Emotes = HttpService:JSONDecode(favEmotesStr) or {},
+        Animations = HttpService:JSONDecode(favAnimsStr) or {}
+    }
+end
+
+BtnExportAll.MouseButton1Click:Connect(function()
+    local data = {
+        Type = "All",
+        Themes = LoadThemes(),
+        Settings = Config,
+        Favorites = GetFavoritesData()
+    }
+    setclipboard(HttpService:JSONEncode(data))
+    BtnExportAll.Text = "Copied!"
+    task.delay(1, function() BtnExportAll.Text = "Export All Settings" end)
+end)
+
+BtnExportThemes.MouseButton1Click:Connect(function()
+    local data = {
+        Type = "Themes",
+        Themes = LoadThemes()
+    }
+    setclipboard(HttpService:JSONEncode(data))
+    BtnExportThemes.Text = "Copied!"
+    task.delay(1, function() BtnExportThemes.Text = "Export Themes" end)
+end)
+
+BtnExportSettings.MouseButton1Click:Connect(function()
+    local data = {
+        Type = "Settings",
+        Settings = Config
+    }
+    setclipboard(HttpService:JSONEncode(data))
+    BtnExportSettings.Text = "Copied!"
+    task.delay(1, function() BtnExportSettings.Text = "Export Settings" end)
+end)
+
+BtnExportFavorites.MouseButton1Click:Connect(function()
+    local data = {
+        Type = "Favorites",
+        Favorites = GetFavoritesData()
+    }
+    setclipboard(HttpService:JSONEncode(data))
+    BtnExportFavorites.Text = "Copied!"
+    task.delay(1, function() BtnExportFavorites.Text = "Export Favorites" end)
+end)
+
+
+local ImportItem = SettingsLib.AddItem(BackupTab, "Import Settings", "Select a backup file to restore your configuration and overwrite current settings.")
+ImportItem.LayoutOrder = 3
+
+local ImportBtnContainer = Instance.new("Frame")
+ImportBtnContainer.Parent = ImportItem
+ImportBtnContainer.BackgroundTransparency = 1
+ImportBtnContainer.Size = UDim2.new(1, -24, 0, 60)
+
+local impDesc = ImportItem:FindFirstChild("Desc")
+if impDesc then
+    impDesc.Size = UDim2.new(1, -24, 0, 0)
+    local function updateImpPos()
+        ImportBtnContainer.Position = UDim2.new(0, 12, 0, impDesc.Position.Y.Offset + impDesc.AbsoluteSize.Y + 12)
+    end
+    impDesc:GetPropertyChangedSignal("AbsoluteSize"):Connect(updateImpPos)
+    updateImpPos()
+else
+    ImportBtnContainer.Position = UDim2.new(0, 12, 0, 32)
+end
+
+local ImportLayout = Instance.new("UIGridLayout")
+ImportLayout.CellSize = UDim2.new(0.48, 0, 0, 26)
+ImportLayout.CellPadding = UDim2.new(0.04, 0, 0, 8)
+ImportLayout.SortOrder = Enum.SortOrder.LayoutOrder
+ImportLayout.Parent = ImportBtnContainer
+
+local function CreateImportBtn(text, color, order)
+    local btn = Instance.new("TextButton")
+    btn.LayoutOrder = order
+    btn.BackgroundColor3 = color
+    btn.Text = text
+    btn.Font = Enum.Font.GothamBold
+    btn.TextColor3 = Color3.new(1,1,1)
+    btn.TextSize = 11
+    btn.Parent = ImportBtnContainer
+    
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 6)
+    corner.Parent = btn
+    
+    return btn
+end
+
+local BtnImportAll = CreateImportBtn("Import All Settings", btnColors.dark, 1)
+local BtnImportThemes = CreateImportBtn("Import Themes", btnColors.blue, 2)
+local BtnImportSettings = CreateImportBtn("Import Settings", btnColors.blue, 3)
+local BtnImportFavorites = CreateImportBtn("Import Favorites", btnColors.blue, 4)
+
+local function HandleImportPrompt(typeStr)
+    local popup, content = CreatePopup("Import " .. typeStr, UDim2.fromOffset(320, 240))
+    local box = CreateInput(content, "Paste Backup JSON here...", "", true)
+    box.Size = UDim2.new(0.9, 0, 0, 130)
+    
+    local imp = CreateButton(content, "IMPORT DATA", (State.EmoteTheme and State.EmoteTheme.Accent) or Color3.fromRGB(0, 255, 150), UDim2.new(0.05, 0, 0.8, 0), UDim2.new(0.9, 0, 0, 35))
+
+    imp.MouseButton1Click:Connect(function()
+        local s, d = pcall(function() return HttpService:JSONDecode(box.Text) end)
+        if s and type(d) == "table" and d.Type then
+            if typeStr ~= "All" and d.Type ~= "All" and typeStr ~= d.Type then
+                 getgenv().Notify({Title = "Error", Content = "Backup type mismatch!", Duration = 3})
+                 return
+            end
+            
+            if d.Themes and (typeStr == "All" or typeStr == "Themes") then
+                themes = d.Themes
+                currentThemeName = themes.Selected or Config.SelectedTheme or "Default"
+                SaveThemesImplementation(themes)
+                themeDropdown.Refresh(GetNames())
+                if themeDropdown and themeDropdown.Button then
+                    themeDropdown.Button.Text = currentThemeName .. "  ▼"
+                end
+                local themeToApply = themes[currentThemeName] or themes["Default"]
+                if themeToApply then
+                    State.isApplyingTheme = false
+                    ApplyTheme(themeToApply)
+                else
+                    warn("7yd7 | Missing Default theme during import fallback")
+                end
+            end
+            if d.Settings and (typeStr == "All" or typeStr == "Settings") then
+                for k, v in pairs(d.Settings) do Config[k] = v end
+                SaveConfig()
+                ApplyUIVisibility()
+                if applySavedPositions then applySavedPositions() end
+                if State.RefreshSettingsUI then State.RefreshSettingsUI() end
+            end
+            if d.Favorites and (typeStr == "All" or typeStr == "Favorites") then
+                if d.Favorites.Emotes then
+                     State.favoriteEmotes = d.Favorites.Emotes
+                     writefile(State.favoriteFileName, HttpService:JSONEncode(d.Favorites.Emotes))
+                     State.favoriteSetVersion = State.favoriteSetVersion + 1
+                end
+                if d.Favorites.Animations then
+                     State.favoriteAnimations = d.Favorites.Animations
+                     writefile(State.favoriteAnimationsFileName, HttpService:JSONEncode(d.Favorites.Animations))
+                     State.favoriteSetVersion = State.favoriteSetVersion + 1
+                end
+                if State.RefreshUI then State.RefreshUI() end
+            end
+            
+            getgenv().Notify({Title = "Success", Content = "Data imported successfully!", Duration = 3})
+            popup:Destroy()
+        else
+            getgenv().Notify({Title = "Error", Content = "Invalid Backup JSON Format!", Duration = 3})
+        end
+    end)
+    
+    local close = Instance.new("TextButton")
+    close.Size = UDim2.fromOffset(24, 24)
+    close.Position = UDim2.new(1, -30, 0, 5)
+    close.Text = "×"
+    close.Font = Enum.Font.GothamBold
+    close.TextSize = 20
+    close.BackgroundTransparency = 1
+    close.TextColor3 = Color3.new(1,1,1)
+    close.Parent = popup
+    close.MouseButton1Click:Connect(function() popup:Destroy() end)
+end
+
+BtnImportAll.MouseButton1Click:Connect(function() HandleImportPrompt("All") end)
+BtnImportThemes.MouseButton1Click:Connect(function() HandleImportPrompt("Themes") end)
+BtnImportSettings.MouseButton1Click:Connect(function() HandleImportPrompt("Settings") end)
+BtnImportFavorites.MouseButton1Click:Connect(function() HandleImportPrompt("Favorites") end)
 
 pcall(function()
     SafeLoad("https://raw.githubusercontent.com/7yd7/Hub/Branch/GUIS/count-emote", "Count Emote")
@@ -3490,12 +3768,13 @@ local function getMovableElements()
 end
 
 applySavedPositions = function()
-    if not Config.HUDPositions then return end
     local elems = getMovableElements()
-    for name, pos in pairs(Config.HUDPositions) do
-        local el = elems[name]
-        if el and type(pos) == "table" and #pos == 4 then
-            el.Position = UDim2.new(pos[1], pos[2], pos[3], pos[4])
+    for name, el in pairs(elems) do
+        local customPos = Config.HUDPositions and Config.HUDPositions[name]
+        if customPos and type(customPos) == "table" and #customPos == 4 then
+            el.Position = UDim2.new(customPos[1], customPos[2], customPos[3], customPos[4])
+        elseif HUD.DefaultPositions and HUD.DefaultPositions[name] then
+             el.Position = HUD.DefaultPositions[name]
         end
     end
 end
@@ -3764,6 +4043,26 @@ enterHUDEditor = function()
     end
 
     getgenv().Notify({ Title = "7yd7 | HUD Editor", Content = "✏️ Drag elements to reposition", Duration = 5 })
+end
+
+State.RefreshUI = function()
+    State.totalPages = calculateTotalPages()
+    updatePageDisplay()
+    if State.currentMode == "animation" then
+        updateAnimations()
+    else
+        updateEmotes()
+    end
+end
+
+State.RefreshSettingsUI = function()
+    if TogglesUI then
+        for key, toggle in pairs(TogglesUI) do
+            if Config[key] ~= nil and toggle.SetState then
+                toggle.SetState(Config[key])
+            end
+        end
+    end
 end
 
 local function checkAndRecreateGUI()
