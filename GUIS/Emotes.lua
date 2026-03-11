@@ -3409,10 +3409,14 @@ local function playAnimationPreview(animationData)
                         end)
                         if ok and track then
                             track.Priority = Enum.AnimationPriority.Action
-                            track:Play()
+                            track.Looped = true
+                            task.wait(0.1)
+                            if State.speedEmoteEnabled or State.emotesWalkEnabled then
+                                track:Play()
+                            end
                             State.currentEmoteTrack = track
-                            if State.emotesWalkEnabled or State.speedEmoteEnabled then
-                                local speedVal = State.speedEmoteEnabled and (tonumber(UI.SpeedBox.Text) or Config.EmoteSpeed or 1) or 1
+                            if State.speedEmoteEnabled then
+                                local speedVal = tonumber(UI.SpeedBox.Text) or Config.EmoteSpeed or 1
                                 track:AdjustSpeed(speedVal)
                             end
                             task.delay(1, function()
@@ -3979,6 +3983,7 @@ playEmote = function(humanoid, emoteId)
         if ok and track and typeof(track) == "Instance" and track:IsA("AnimationTrack") then
             track.Priority = Enum.AnimationPriority.Action
             track.Looped = true
+            task.wait(0.1)
             if State.speedEmoteEnabled or State.emotesWalkEnabled then
                 track:Play()
             end
@@ -4487,10 +4492,6 @@ function connectEvents()
             local speedValue = tonumber(UI.SpeedBox.Text) or 1
             Config.EmoteSpeed = speedValue
             SaveConfig()
-            
-            if State.speedEmoteEnabled and State.currentEmoteTrack and State.currentEmoteTrack.IsPlaying then
-                State.currentEmoteTrack:AdjustSpeed(speedValue)
-            end
         end))
     end
 end
