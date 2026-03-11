@@ -3971,9 +3971,6 @@ playEmote = function(humanoid, emoteId)
     stopEmotes()
 
     local function tryPlayEmoteById(id)
-        if humanoid.RigType ~= Enum.HumanoidRigType.R15 then
-            return false
-        end
         local animator = humanoid:FindFirstChildOfClass("Animator") or humanoid:WaitForChild("Animator")
         local animation = Instance.new("Animation")
         animation.AnimationId = "rbxassetid://" .. tostring(id)
@@ -4006,9 +4003,6 @@ playRandomEmote = function(humanoid, emoteId)
     stopCurrentEmote()
     stopEmotes()
 
-    if humanoid.RigType ~= Enum.HumanoidRigType.R15 then
-        return
-    end
     local ok, track = pcall(function()
         return humanoid:PlayEmoteAndGetAnimTrackById(emoteId)
     end)
