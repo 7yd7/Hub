@@ -3978,7 +3978,10 @@ playEmote = function(humanoid, emoteId)
         end)
         if ok and track and typeof(track) == "Instance" and track:IsA("AnimationTrack") then
             track.Priority = Enum.AnimationPriority.Action
-            track:Play()
+            track.Looped = true
+            if State.speedEmoteEnabled or State.emotesWalkEnabled then
+                track:Play()
+            end
             State.currentEmoteTrack = track
             return true
         end
@@ -3987,8 +3990,8 @@ playEmote = function(humanoid, emoteId)
 
     local success = tryPlayEmoteById(emoteId)
     if success and State.currentEmoteTrack then
-        if State.emotesWalkEnabled or State.speedEmoteEnabled then
-            local speedVal = State.speedEmoteEnabled and (tonumber(UI.SpeedBox.Text) or Config.EmoteSpeed or 1) or 1
+        if State.speedEmoteEnabled then
+            local speedVal = tonumber(UI.SpeedBox.Text) or Config.EmoteSpeed or 1
             State.currentEmoteTrack:AdjustSpeed(speedVal)
         end
     end
@@ -4006,8 +4009,8 @@ playRandomEmote = function(humanoid, emoteId)
     end)
     if ok and track and typeof(track) == "Instance" and track:IsA("AnimationTrack") then
         State.currentEmoteTrack = track
-        if State.emotesWalkEnabled or State.speedEmoteEnabled then
-            local speedVal = State.speedEmoteEnabled and (tonumber(UI.SpeedBox.Text) or Config.EmoteSpeed or 1) or 1
+        if State.speedEmoteEnabled then
+            local speedVal = tonumber(UI.SpeedBox.Text) or Config.EmoteSpeed or 1
             track:AdjustSpeed(speedVal)
         end
     end
@@ -4101,9 +4104,10 @@ local function toggleEmoteWalk()
         })
 
         UI.EmoteWalkButton.Image = State.enabledButtonImage
+        task.wait(0.1)
+        stopCurrentEmote()
         if State.currentEmoteTrack and State.currentEmoteTrack.IsPlaying then
-            local speedVal = State.speedEmoteEnabled and (tonumber(UI.SpeedBox.Text) or 1) or 1
-            State.currentEmoteTrack:AdjustSpeed(speedVal)
+            State.currentEmoteTrack:AdjustSpeed(1)
         end
     else
         getgenv().Notify({
@@ -4112,9 +4116,15 @@ local function toggleEmoteWalk()
             Duration = 5
         })
         UI.EmoteWalkButton.Image = State.defaultButtonImage
+        task.wait(0.1)
+        stopCurrentEmote()
         if State.currentEmoteTrack and State.currentEmoteTrack.IsPlaying then
-            local speedVal = State.speedEmoteEnabled and (tonumber(UI.SpeedBox.Text) or 1) or 1
-            State.currentEmoteTrack:AdjustSpeed(speedVal)
+            if State.speedEmoteEnabled then
+                local speedVal = tonumber(UI.SpeedBox.Text) or 1
+                State.currentEmoteTrack:AdjustSpeed(speedVal)
+            else
+                State.currentEmoteTrack:AdjustSpeed(1)
+            end
         end
     end
 end
@@ -4130,19 +4140,16 @@ local function toggleSpeedEmote()
             Content = "⚡ Speed Emote ON",
             Duration = 5
         })
-        if State.currentEmoteTrack and State.currentEmoteTrack.IsPlaying then
-            local speedValue = tonumber(UI.SpeedBox.Text) or 1
-            State.currentEmoteTrack:AdjustSpeed(speedValue)
-        end
+        task.wait(0.1)
+        stopCurrentEmote()
     else
         getgenv().Notify({
             Title = '7yd7 | Speed Emote',
             Content = '⚡ Speed Emote OFF',
             Duration = 5
         })
-        if State.currentEmoteTrack and State.currentEmoteTrack.IsPlaying then
-            State.currentEmoteTrack:AdjustSpeed(1)
-        end
+        task.wait(0.1)
+        stopCurrentEmote()
     end
 
     Config.EmoteSpeedEnabled = State.speedEmoteEnabled
@@ -4873,7 +4880,7 @@ end
 RunService.Stepped:Connect(function()
     if humanoid and State.currentEmoteTrack and typeof(State.currentEmoteTrack) == "Instance" and State.currentEmoteTrack:IsA("AnimationTrack") and State.currentEmoteTrack.IsPlaying then
         if humanoid.MoveDirection.Magnitude > 0 then
-            if not State.emotesWalkEnabled then
+            if State.speedEmoteEnabled and not State.emotesWalkEnabled then
                 State.currentEmoteTrack:Stop()
                 State.currentEmoteTrack = nil
             end
