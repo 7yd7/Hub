@@ -18,6 +18,12 @@ _G.EmotesGUIRunning = true
 local HttpService = game:GetService("HttpService")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
+local ContextActionService = game:GetService("ContextActionService")
+local Players = game:GetService("Players")
+local CoreGui = game:GetService("CoreGui")
+local GuiService = game:GetService("GuiService")
+local ContentProvider = game:GetService("ContentProvider")
+local StarterGui = game:GetService("StarterGui")
 local request = http_request or (syn and syn.request) or request
 
 local State = {
@@ -36,6 +42,16 @@ local State = {
     lastRadialActionTime = 0,
     lastWheelVisibleTime = 0,
     lastActionTick = 0,
+    lastRandomEmoteId = nil,
+    lastRandomAnimationId = nil,
+    lastRandomVisualSpam = 0,
+    randomSpamConn = nil,
+    animImageSpamConn = nil,
+    animImageSpamMap = nil,
+    animImageSpamTicks = nil,
+    animImageSpamToken = 0,
+    animImageRetry = 0,
+    randomSlotBlockerConn = nil,
     totalEmotesLoaded = 0,
     currentPage = 1,
     totalPages = 1,
@@ -46,7 +62,6 @@ local State = {
     currentCharacter = nil,
     emoteClickConnections = {},
     guiConnections = {},
-    currentTimer = nil,
     animationsData = {},
     originalAnimationsData = {},
     filteredAnimations = {},
@@ -63,12 +78,17 @@ local State = {
     favoriteAnimationSet = {},
     emotePageCache = { version = nil, normal = {}, favorites = {} },
     animationPageCache = { version = nil, normal = {}, favorites = {} },
+    suppressSearch = false,
+    emoteMonitorToken = 0,
+    animationMonitorToken = 0,
+    imageUpdateToken = 0,
     defaultButtonImage = "rbxassetid://71408678974152",
     enabledButtonImage = "rbxassetid://106798555684020",
     favoriteIconId = "rbxassetid://97307461910825",
     notFavoriteIconId = "rbxassetid://124025954365505",
     EmoteTheme = nil,
-    isApplyingTheme = false
+    isApplyingTheme = false,
+    targetImages = {}
 }
 
 local UI = {
@@ -105,6 +125,234 @@ local HUD = {
         Reload = UDim2.new(0.888999999, 0, 1.02100003, 0),
     }
 }
+
+local function ColorToTable(c) return {math.round(c.R*255), math.round(c.G*255), math.round(c.B*255)} end
+local function TableToColor(t)
+    if type(t) ~= "table" then
+        return Color3.fromRGB(255, 255, 255)
+    end
+    local r = tonumber(t[1]) or 255
+    local g = tonumber(t[2]) or 255
+    local b = tonumber(t[3]) or 255
+    return Color3.fromRGB(r, g, b)
+end
+
+local AnimationSystem = {
+    Cache = {},
+    currentThemeName = "Default"
+}   
+
+AnimationSystem.LooksLikeGif = function(url)
+    if not url then return false end
+    url = string.lower(tostring(url))
+    return url:find(".gif") or url:find("gif") or url:find("format=gif") or url:find("image/gif")
+end
+
+AnimationSystem.NormalizeUrl = function(url)
+    if not url or url == "" then return url end
+    local targetUrl = tostring(url)
+    
+    targetUrl = targetUrl:gsub("%?raw=true", "")
+    
+    if targetUrl:find("github.com") then
+        targetUrl = targetUrl:gsub("github.com", "raw.githubusercontent.com")
+        targetUrl = targetUrl:gsub("/blob/", "/")
+        targetUrl = targetUrl:gsub("/raw/", "/")
+    end
+    
+    if targetUrl:find(" ") and not targetUrl:find("%%20") then
+        targetUrl = targetUrl:gsub(" ", "%%20")
+    end
+    
+    if not targetUrl:find("://") then
+        local id = targetUrl:match("id=(%d+)") or targetUrl:match("^(%d+)$")
+        if id then return "rbxassetid://" .. id end
+    end
+    return targetUrl
+end
+
+AnimationSystem.ParseGifInfo = function(bytes)
+    if not bytes or #bytes < 13 then return nil end
+    if bytes:sub(1, 3) ~= "GIF" then return nil end
+    local function u16le(pos)
+        local b1 = bytes:byte(pos) or 0
+        local b2 = bytes:byte(pos + 1) or 0
+        return b1 + b2 * 256
+    end
+    local width = u16le(7)
+    local height = u16le(9)
+    local packed = bytes:byte(11) or 0
+    local gctFlag = bit32.band(packed, 0x80) ~= 0
+    local gctSize = bit32.band(packed, 0x07)
+    local offset = 13
+    if gctFlag then
+        offset = offset + (3 * (2 ^ (gctSize + 1)))
+    end
+
+    local frames = 0
+    local delays = {}
+    local pendingDelay = nil
+
+    local function skipSubBlocks(pos)
+        while pos <= #bytes do
+            local size = bytes:byte(pos) or 0
+            pos = pos + 1
+            if size == 0 then break end
+            pos = pos + size
+        end
+        return pos
+    end
+
+    while offset <= #bytes do
+        local b = bytes:byte(offset)
+        if not b then break end
+        if b == 0x3B then
+            break
+        elseif b == 0x21 then
+            local label = bytes:byte(offset + 1) or 0
+            if label == 0xF9 then
+                local delay = u16le(offset + 4)
+                pendingDelay = delay
+                offset = offset + 8
+            else
+                offset = skipSubBlocks(offset + 2)
+            end
+        elseif b == 0x2C then
+            frames = frames + 1
+            if pendingDelay then
+                table.insert(delays, pendingDelay)
+                pendingDelay = nil
+            end
+            local packedImg = bytes:byte(offset + 9) or 0
+            local lctFlag = bit32.band(packedImg, 0x80) ~= 0
+            local lctSize = bit32.band(packedImg, 0x07)
+            offset = offset + 10
+            if lctFlag then
+                offset = offset + (3 * (2 ^ (lctSize + 1)))
+            end
+            offset = offset + 1
+            offset = skipSubBlocks(offset)
+        else
+            offset = offset + 1
+        end
+    end
+
+    local totalDelay = 0
+    for _, d in ipairs(delays) do totalDelay = totalDelay + d end
+    local avgDelay = (#delays > 0) and (totalDelay / #delays) or 10
+
+    return {
+        width = width,
+        height = height,
+        frames = frames > 0 and frames or #delays,
+        totalDelayCs = totalDelay,
+        avgDelayCs = avgDelay
+    }
+end
+
+AnimationSystem.ParsePngInfo = function(bytes)
+    if not bytes or #bytes < 24 then return nil end
+    if bytes:sub(1, 8) ~= "\137PNG\r\n\26\n" then return nil end
+    local function u32be(pos)
+        local b1 = bytes:byte(pos) or 0
+        local b2 = bytes:byte(pos + 1) or 0
+        local b3 = bytes:byte(pos + 2) or 0
+        local b4 = bytes:byte(pos + 3) or 0
+        return ((b1 * 256 + b2) * 256 + b3) * 256 + b4
+    end
+    local width = u32be(17)
+    local height = u32be(21)
+    if width <= 0 or height <= 0 then return nil end
+    return { width = width, height = height }
+end
+
+AnimationSystem.StopGif = function()
+    if State.currentWheelAnimToken then
+        State.currentWheelAnimToken = State.currentWheelAnimToken + 1
+    end
+end
+
+AnimationSystem.SetImageMode = function(img, custom)
+    if not img then return end
+    if custom then
+        img.ScaleType = Enum.ScaleType.Stretch
+        img.SliceCenter = Rect.new(0, 0, 0, 0)
+        img.SliceScale = 1
+    else
+        img.ScaleType = Enum.ScaleType.Fit
+    end
+end
+
+AnimationSystem.StartGif = function(img, data)
+    AnimationSystem.StopGif()
+    if not img or not data or not data.sprite then return end
+    
+    State.currentWheelAnimToken = (State.currentWheelAnimToken or 0) + 1
+    local token = State.currentWheelAnimToken
+    
+    local frames = data.frames or 1
+    local frameW = data.frameW or 0
+    local frameH = data.frameH or 0
+    local cols = data.cols or 1
+    local delay = data.delay or 0.1
+    
+    img.Image = data.sprite
+    img.ImageRectSize = Vector2.new(frameW, frameH)
+    
+    local current = 0
+    local acc = 0
+    local connection
+    connection = RunService.Heartbeat:Connect(function(dt)
+        if token ~= State.currentWheelAnimToken then
+            connection:Disconnect()
+            return
+        end
+        acc = acc + dt
+        if acc < delay then return end
+        acc = 0
+        current = (current + 1) % frames
+        local col = current % cols
+        local row = math.floor(current / cols)
+        img.ImageRectOffset = Vector2.new(col * frameW, row * frameH)
+    end)
+end
+
+AnimationSystem.AreMetaEqual = function(a, b)
+    if not a or not b then return a == b end
+    return a.GifUrl == b.GifUrl and a.SheetUrl == b.SheetUrl and a.Enabled == b.Enabled
+end
+
+AnimationSystem.MakeKey = function(gif, sheet)
+    return tostring(gif) .. "|" .. tostring(sheet)
+end
+
+AnimationSystem.GetIconColor = function(key)
+    if themes and themes[AnimationSystem.currentThemeName] then
+        local theme = themes[AnimationSystem.currentThemeName]
+        if theme.IconColors and theme.IconColors[key] then
+            return TableToColor(theme.IconColors[key])
+        end
+        return TableToColor(theme.ImageColor or {255, 255, 255})
+    elseif State.EmoteTheme then
+        local theme = State.EmoteTheme
+        if theme.IconColors and theme.IconColors[key] then
+            return TableToColor(theme.IconColors[key])
+        end
+        return theme.ImageColor or Color3.new(1, 1, 1)
+    end
+    return Color3.fromRGB(255, 255, 255)
+end
+
+AnimationSystem.ResetRandomSlot = function(frontFrame)
+    if not frontFrame then return end
+    local slot = frontFrame:FindFirstChild("1")
+    if slot and slot:IsA("ImageLabel") then
+        slot.ImageColor3 = Color3.fromRGB(255, 255, 255)
+        slot.Image = ""
+        local idValue = slot:FindFirstChild("AnimationID")
+        if idValue then idValue:Destroy() end
+    end
+end
 
 local function SafeLoad(url, name)
     local success, content
@@ -157,15 +405,17 @@ local function GetAsset(asset)
     end
     
     if assetStr:find("http") then
-        local targetUrl = assetStr
-        if targetUrl:find("github.com") and targetUrl:find("/blob/") then
-            targetUrl = targetUrl:gsub("github.com", "raw.githubusercontent.com"):gsub("/blob/", "/")
-        end
+        local targetUrl = AnimationSystem.NormalizeUrl(assetStr)
 
         local filename = targetUrl:match("([^/]+)$") or "asset.png"
         filename = filename:match("([^%?]+)") or filename
+        
+        filename = filename:gsub("[%c%*%?%\"%<%>%|]", "_")
+        
+        if filename:lower():find("%.gif$") then
+            filename = filename:gsub("%.[gG][iI][fF]$", ".png")
+        end
         if not filename:find("%.") then filename = filename .. ".png" end
-        filename = filename:gsub("[%c%s%*%?%\"%<%>%|]", "_")
         
         local path = "7yd7/Assets/" .. filename
         
@@ -206,210 +456,20 @@ local function GetAsset(asset)
     return assetStr
 end
 
-local function NormalizeUrl(url)
-    if not url or url == "" then return url end
-    local targetUrl = tostring(url)
-    if targetUrl:find("github.com") and targetUrl:find("/blob/") then
-        targetUrl = targetUrl:gsub("github.com", "raw.githubusercontent.com"):gsub("/blob/", "/")
-    end
-    return targetUrl
-end
-
 local DEFAULT_WHEEL_BG = "rbxasset://textures/ui/Emotes/Large/SegmentedCircle.png"
+local RANDOM_SLOT_ICON = "rbxassetid://109283577128136"
+local RANDOM_SLOT_COLOR = Color3.fromRGB(188, 188, 188)
 local wheelImgState = setmetatable({}, { __mode = "k" })
 local checkEmotesMenuExists
-
-local function SetWheelImageMode(bgImg, isCustom)
-    if not bgImg then return end
-    if not wheelImgState[bgImg] then
-        wheelImgState[bgImg] = {
-            ScaleType = bgImg.ScaleType,
-            SliceCenter = bgImg.SliceCenter,
-            SliceScale = bgImg.SliceScale
-        }
-    end
-
-    if isCustom then
-        bgImg.ScaleType = Enum.ScaleType.Stretch
-        bgImg.SliceCenter = Rect.new(0, 0, 0, 0)
-        bgImg.SliceScale = 1
-    else
-        local st = wheelImgState[bgImg]
-        if st then
-            bgImg.ScaleType = st.ScaleType
-            bgImg.SliceCenter = st.SliceCenter
-            bgImg.SliceScale = st.SliceScale
-        end
-    end
-end
-
-local function ParseGifInfo(bytes)
-    if not bytes or #bytes < 13 then return nil end
-    if bytes:sub(1, 3) ~= "GIF" then return nil end
-    local function u16le(pos)
-        local b1 = bytes:byte(pos) or 0
-        local b2 = bytes:byte(pos + 1) or 0
-        return b1 + b2 * 256
-    end
-    local width = u16le(7)
-    local height = u16le(9)
-    local packed = bytes:byte(11) or 0
-    local gctFlag = bit32.band(packed, 0x80) ~= 0
-    local gctSize = bit32.band(packed, 0x07)
-    local offset = 13
-    if gctFlag then
-        offset = offset + (3 * (2 ^ (gctSize + 1)))
-    end
-
-    local frames = 0
-    local delays = {}
-    local pendingDelay = nil
-
-    local function skipSubBlocks(pos)
-        while pos <= #bytes do
-            local size = bytes:byte(pos) or 0
-            pos = pos + 1
-            if size == 0 then
-                break
-            end
-            pos = pos + size
-        end
-        return pos
-    end
-
-    while offset <= #bytes do
-        local b = bytes:byte(offset)
-        if not b then break end
-        if b == 0x3B then
-            break
-        elseif b == 0x21 then
-            local label = bytes:byte(offset + 1) or 0
-            if label == 0xF9 then
-                local delay = u16le(offset + 4)
-                pendingDelay = delay
-                offset = offset + 8
-            else
-                offset = skipSubBlocks(offset + 2)
-            end
-        elseif b == 0x2C then
-            frames = frames + 1
-            if pendingDelay then
-                table.insert(delays, pendingDelay)
-                pendingDelay = nil
-            end
-            local packedImg = bytes:byte(offset + 9) or 0
-            local lctFlag = bit32.band(packedImg, 0x80) ~= 0
-            local lctSize = bit32.band(packedImg, 0x07)
-            offset = offset + 10
-            if lctFlag then
-                offset = offset + (3 * (2 ^ (lctSize + 1)))
-            end
-            offset = offset + 1
-            offset = skipSubBlocks(offset)
-        else
-            offset = offset + 1
-        end
-    end
-
-    local totalDelay = 0
-    for _, d in ipairs(delays) do
-        totalDelay = totalDelay + d
-    end
-    local avgDelay = (#delays > 0) and (totalDelay / #delays) or 10
-
-    return {
-        width = width,
-        height = height,
-        frames = frames > 0 and frames or #delays,
-        totalDelayCs = totalDelay,
-        avgDelayCs = avgDelay
-    }
-end
-
-local function ParsePngInfo(bytes)
-    if not bytes or #bytes < 24 then return nil end
-    if bytes:sub(1, 8) ~= "\137PNG\r\n\26\n" then return nil end
-    local function u32be(pos)
-        local b1 = bytes:byte(pos) or 0
-        local b2 = bytes:byte(pos + 1) or 0
-        local b3 = bytes:byte(pos + 2) or 0
-        local b4 = bytes:byte(pos + 3) or 0
-        return ((b1 * 256 + b2) * 256 + b3) * 256 + b4
-    end
-    local width = u32be(17)
-    local height = u32be(21)
-    if width <= 0 or height <= 0 then return nil end
-    return { width = width, height = height }
-end
-
-local function LooksLikeGif(src)
-    if not src or src == "" then return false end
-    local s = tostring(src):lower()
-    return s:find("%.gif") or s:find("format=gif") or s:find("image/gif")
-end
-
-local wheelGifConnection = nil
-local function StopWheelGifAnimation()
-    if wheelGifConnection then
-        wheelGifConnection:Disconnect()
-        wheelGifConnection = nil
-    end
-end
-
-local function StartWheelGifAnimation(bgImg, data)
-    StopWheelGifAnimation()
-    if not bgImg or not data or not data.sprite then return end
-
-    local frames = data.frames or 0
-    local frameW = data.frameW or 0
-    local frameH = data.frameH or 0
-    if frames <= 0 or frameW <= 0 or frameH <= 0 then return end
-
-    local cols = data.cols or 0
-    if cols <= 0 then
-        cols = math.max(1, math.floor(1024 / frameW))
-    end
-    local delay = data.delay
-    if not delay then
-        local delayCs = (data.gifInfo and data.gifInfo.avgDelayCs) or 10
-        delay = math.max(0.02, (delayCs / 100))
-    end
-
-    bgImg.Image = data.sprite
-    bgImg.ImageRectSize = Vector2.new(frameW, frameH)
-
-    local current = 0
-    local acc = 0
-    wheelGifConnection = RunService.Heartbeat:Connect(function(dt)
-        acc = acc + dt
-        if acc < delay then return end
-        acc = 0
-        current = (current + 1) % frames
-        local x = (current % cols) * frameW
-        local y = math.floor(current / cols) * frameH
-        bgImg.ImageRectOffset = Vector2.new(x, y)
-    end)
-end
-
-local WheelAnimCache = {}
-
-local function MakeWheelAnimKey(gifUrl, sheetUrl)
-    return tostring(gifUrl or "") .. "|" .. tostring(sheetUrl or "")
-end
-
-local function AreWheelAnimMetaEqual(a, b)
-    if a == b then return true end
-    if not a or not b then return false end
-    return a.Enabled == b.Enabled
-        and a.FrameHeight == b.FrameHeight
-        and a.FrameWidth == b.FrameWidth
-        and a.FPS == b.FPS
-        and a.Frames == b.Frames
-        and a.Cols == b.Cols
-        and a.Rows == b.Rows
-        and a.GifUrl == b.GifUrl
-        and a.SheetUrl == b.SheetUrl
-end
+local playEmote
+local playRandomEmote
+local handleSectorAction
+local calculateTotalPages
+local updatePageDisplay
+local updateEmotes
+local isInFavorites
+local toggleFavorite
+local toggleFavoriteAnimation
 
 local ConfigPath = "7yd7/EmoteSettings.json"
 local Config = {
@@ -425,6 +485,8 @@ local Config = {
     SelectedTheme = "Default",
     EmotePage = 1,
     AnimationPage = 1,
+    RandomEnabled = true,
+    RandomMode = "All",
     HUDPositions = {}
 }
 
@@ -546,6 +608,39 @@ TogglesUI.NotifyEnabled = SettingsLib.AddToggle(GeneralTab, "Show Notifications"
     Config.NotifyEnabled = v
     SaveConfig()
 end)
+
+local randomModes = { "All", "Favorites" }
+local randomDropdown = SettingsLib.AddDropdown(GeneralTab, "Random Source", randomModes, Config.RandomMode or "All", function(v)
+    Config.RandomMode = v
+    SaveConfig()
+end)
+if randomDropdown and randomDropdown.Button then
+    randomDropdown.Button.Text = (Config.RandomMode or "All") .. "  ▼"
+end
+
+TogglesUI.RandomEnabled = SettingsLib.AddToggle(GeneralTab, "Random Enabled", "Enable/disable random", Config.RandomEnabled, function(v)
+    Config.RandomEnabled = v
+    if not v then
+        pcall(function()
+            local frontFrame = game:GetService("CoreGui").RobloxGui.EmotesMenu.Children.Main.EmotesWheel.Front.EmotesButtons
+            local slot1 = frontFrame and frontFrame:FindFirstChild("1")
+            local slot2 = frontFrame and frontFrame:FindFirstChild("2")
+            if slot1 and slot1:IsA("ImageLabel") and slot2 and slot2:IsA("ImageLabel") then
+                local img2 = slot2.Image
+                if img2 and img2 ~= "" then
+                    slot1.Image = img2
+                end
+            end
+        end)
+    end
+    State.totalPages = calculateTotalPages()
+    if State.currentPage > State.totalPages then
+        State.currentPage = State.totalPages
+    end
+    updatePageDisplay()
+    updateEmotes()
+    SaveConfig()
+end)
 local ButtonsTab = SettingsLib.CreateTab("Buttons", 2)
 
 TogglesUI.SearchVisible = SettingsLib.AddToggle(ButtonsTab, "Search Bar", "Show/Hide the search input", Config.SearchVisible, function(v)
@@ -624,28 +719,6 @@ local function DeepCopy(t)
         end
     end
     return copy
-end
-
-local function ColorToTable(c) return {math.round(c.R*255), math.round(c.G*255), math.round(c.B*255)} end
-local function TableToColor(t)
-    if type(t) ~= "table" then
-        return Color3.fromRGB(255, 255, 255)
-    end
-    local r = tonumber(t[1]) or 255
-    local g = tonumber(t[2]) or 255
-    local b = tonumber(t[3]) or 255
-    return Color3.fromRGB(r, g, b)
-end
-
-local function GetThemeIconColor(key)
-    local theme = State.EmoteTheme
-    if theme and theme.IconColors and theme.IconColors[key] then
-        return TableToColor(theme.IconColors[key])
-    end
-    if theme and theme.ImageColor then
-        return theme.ImageColor
-    end
-    return Color3.new(1, 1, 1)
 end
 
 local ApplyFavoriteButtonVisual
@@ -748,7 +821,7 @@ ApplyFavoriteButtonVisual = function()
         UI.Favorite.Image = image
     end
     local colorKey = isOn and "Favorite" or "NotFavorite"
-    UI.Favorite.ImageColor3 = GetThemeIconColor(colorKey)
+    UI.Favorite.ImageColor3 = AnimationSystem.GetIconColor(colorKey)
 end
 
 -- Optimizing performance: Removed RenderStepped loop
@@ -785,7 +858,7 @@ local pendingSave = false
 
 local function SaveThemesImplementation(themes)
     if not isfolder("7yd7") then makefolder("7yd7") end
-    local toSave = { Themes = {}, Order = {}, Selected = themes.Selected or currentThemeName }
+    local toSave = { Themes = {}, Order = {}, Selected = themes.Selected or AnimationSystem.currentThemeName }
     
     toSave.Order = themes.Order or {}
     
@@ -893,11 +966,15 @@ local themeDropdown
 
 local function GetNames()
     local n = {}
-    for _, name in ipairs(themes.Order) do
-        if themes[name] then table.insert(n, name) end
+    if themes.Order then
+        for _, name in ipairs(themes.Order) do
+            if name ~= "Order" and name ~= "Selected" and themes[name] then 
+                table.insert(n, name) 
+            end
+        end
     end
     for name, _ in pairs(themes) do
-        if name ~= "Order" and not table.find(n, name) then
+        if name ~= "Order" and name ~= "Selected" and not table.find(n, name) then
             table.insert(n, name)
         end
     end
@@ -934,33 +1011,33 @@ local function ApplyWheelBackgroundImage(bgImg, wheel)
         end
         gifUrl = parts[1]
         sheetUrl = parts[2]
-    elseif LooksLikeGif(bgSrc) then
+    elseif AnimationSystem.LooksLikeGif(bgSrc) then
         gifUrl = bgSrc
     end
-
-    local targetUrl = NormalizeUrl(bgSrc)
-    if gifUrl then gifUrl = NormalizeUrl(gifUrl) end
-    if sheetUrl then sheetUrl = NormalizeUrl(sheetUrl) end
-
+ 
+    local targetUrl = AnimationSystem.NormalizeUrl(bgSrc)
+    if gifUrl then gifUrl = AnimationSystem.NormalizeUrl(gifUrl) end
+    if sheetUrl then sheetUrl = AnimationSystem.NormalizeUrl(sheetUrl) end
+ 
     if gifUrl and sheetUrl and sheetUrl ~= "" then
-        local cacheKey = MakeWheelAnimKey(gifUrl, sheetUrl)
+        local cacheKey = AnimationSystem.MakeKey(gifUrl, sheetUrl)
         local meta = wheel.Animation
         if meta and meta.GifUrl == gifUrl and meta.SheetUrl == sheetUrl then
-            WheelAnimCache[cacheKey] = meta
+            AnimationSystem.Cache[cacheKey] = meta
         else
-            meta = WheelAnimCache[cacheKey]
+            meta = AnimationSystem.Cache[cacheKey]
         end
-
+ 
         if meta and meta.Enabled == false then
             local sheetAsset = GetAsset(sheetUrl)
-            StopWheelGifAnimation()
-            SetWheelImageMode(bgImg, true)
+            AnimationSystem.StopGif()
+            AnimationSystem.SetImageMode(bgImg, true)
             bgImg.Image = sheetAsset or ""
             bgImg.ImageRectSize = Vector2.new(0, 0)
             bgImg.ImageRectOffset = Vector2.new(0, 0)
             return
         end
-
+ 
         if meta and meta.Enabled == true then
             local sheetAsset = GetAsset(sheetUrl)
             if sheetAsset and sheetAsset ~= "" and (meta.FrameWidth or 0) > 0 and (meta.FrameHeight or 0) > 0 then
@@ -971,7 +1048,7 @@ local function ApplyWheelBackgroundImage(bgImg, wheel)
                 local frameH = tonumber(meta.FrameHeight) or 0
                 local fps = tonumber(meta.FPS) or 10
                 local delay = fps > 0 and (1 / fps) or 0.1
-
+ 
                 local spriteData = {
                     sprite = sheetAsset,
                     frames = frames,
@@ -981,19 +1058,19 @@ local function ApplyWheelBackgroundImage(bgImg, wheel)
                     rows = rows,
                     delay = delay
                 }
-                SetWheelImageMode(bgImg, true)
-                StartWheelGifAnimation(bgImg, spriteData)
+                AnimationSystem.SetImageMode(bgImg, true)
+                AnimationSystem.StartGif(bgImg, spriteData)
                 return
             end
         end
-
+ 
         local okGif, gifBytes = pcall(function() return game:HttpGet(gifUrl) end)
-        local gifInfo = okGif and gifBytes and ParseGifInfo(gifBytes) or nil
-
+        local gifInfo = okGif and gifBytes and AnimationSystem.ParseGifInfo(gifBytes) or nil
+ 
         local okSheet, sheetBytes = pcall(function() return game:HttpGet(sheetUrl) end)
-        local sheetInfo = okSheet and sheetBytes and ParsePngInfo(sheetBytes) or nil
+        local sheetInfo = okSheet and sheetBytes and AnimationSystem.ParsePngInfo(sheetBytes) or nil
         local sheetAsset = GetAsset(sheetUrl)
-
+ 
         if gifInfo and sheetInfo and sheetAsset and sheetAsset ~= "" then
             local frameW = gifInfo.width
             local frameH = gifInfo.height
@@ -1001,7 +1078,7 @@ local function ApplyWheelBackgroundImage(bgImg, wheel)
             local rows = math.max(1, math.floor(sheetInfo.height / frameH))
             local frames = gifInfo.frames or (cols * rows)
             local fps = (gifInfo.avgDelayCs and gifInfo.avgDelayCs > 0) and (100 / gifInfo.avgDelayCs) or 10
-
+ 
             local spriteData = {
                 sprite = sheetAsset,
                 frames = frames,
@@ -1011,9 +1088,9 @@ local function ApplyWheelBackgroundImage(bgImg, wheel)
                 rows = rows,
                 gifInfo = gifInfo
             }
-            SetWheelImageMode(bgImg, true)
-            StartWheelGifAnimation(bgImg, spriteData)
-
+            AnimationSystem.SetImageMode(bgImg, true)
+            AnimationSystem.StartGif(bgImg, spriteData)
+ 
             local newMeta = {
                 Enabled = true,
                 FrameWidth = frameW,
@@ -1025,21 +1102,21 @@ local function ApplyWheelBackgroundImage(bgImg, wheel)
                 GifUrl = gifUrl,
                 SheetUrl = sheetUrl
             }
-            if not AreWheelAnimMetaEqual(wheel.Animation, newMeta) then
+            if not AnimationSystem.AreMetaEqual(wheel.Animation, newMeta) then
                 wheel.Animation = newMeta
-                WheelAnimCache[cacheKey] = newMeta
-                if currentThemeName and currentThemeName ~= "Default" then
+                AnimationSystem.Cache[cacheKey] = newMeta
+                if AnimationSystem.currentThemeName and AnimationSystem.currentThemeName ~= "Default" then
                     SaveThemes(themes)
                 end
             end
             return
         else
-            StopWheelGifAnimation()
-            SetWheelImageMode(bgImg, true)
+            AnimationSystem.StopGif()
+            AnimationSystem.SetImageMode(bgImg, true)
             bgImg.Image = sheetAsset or ""
             bgImg.ImageRectSize = Vector2.new(0, 0)
             bgImg.ImageRectOffset = Vector2.new(0, 0)
-
+ 
             local newMeta = {
                 Enabled = false,
                 FrameWidth = 0,
@@ -1051,19 +1128,19 @@ local function ApplyWheelBackgroundImage(bgImg, wheel)
                 GifUrl = gifUrl,
                 SheetUrl = sheetUrl
             }
-            if not AreWheelAnimMetaEqual(wheel.Animation, newMeta) then
+            if not AnimationSystem.AreMetaEqual(wheel.Animation, newMeta) then
                 wheel.Animation = newMeta
-                WheelAnimCache[cacheKey] = newMeta
-                if currentThemeName and currentThemeName ~= "Default" then
+                AnimationSystem.Cache[cacheKey] = newMeta
+                if AnimationSystem.currentThemeName and AnimationSystem.currentThemeName ~= "Default" then
                     SaveThemes(themes)
                 end
             end
             return
         end
     end
-
-    StopWheelGifAnimation()
-    SetWheelImageMode(bgImg, isCustomBg)
+ 
+    AnimationSystem.StopGif()
+    AnimationSystem.SetImageMode(bgImg, isCustomBg)
     bgImg.Image = GetAsset(targetUrl)
     bgImg.ImageRectSize = Vector2.new(0, 0)
     bgImg.ImageRectOffset = Vector2.new(0, 0)
@@ -1174,6 +1251,12 @@ local function ApplyTheme(themeData)
         end
     end
     State.isApplyingTheme = false
+    for name, data in pairs(themes) do
+        if data == themeData then
+            AnimationSystem.currentThemeName = name
+            break
+        end
+    end
 end
 
 checkEmotesMenuExists = function()
@@ -2014,6 +2097,9 @@ local function disconnectAllConnections()
         end
     end
     State.guiConnections = {}
+    if ContextActionService then
+        ContextActionService:UnbindAction("7yd7_EmoteWheelHotkeys")
+    end
 end
 
 local function loadSpeedEmoteConfig()
@@ -2029,6 +2115,325 @@ local function extractAssetId(imageUrl)
     return assetId
 end
 
+local isRandomSlotEnabled
+local isRandomSlotActive
+
+local function isEmoteSearchActive()
+    return State.currentMode == "emote" and State.emoteSearchTerm and State.emoteSearchTerm ~= ""
+end
+
+local function isAnimationSearchActive()
+    return State.currentMode == "animation" and State.animationSearchTerm and State.animationSearchTerm ~= ""
+end
+
+local function isSearchActive()
+    return isEmoteSearchActive() or isAnimationSearchActive()
+end
+
+local function shouldRandomSlotBeShown()
+    if Config.RandomEnabled ~= true then return false end
+    if State.currentMode == "emote" then
+        return not isEmoteSearchActive()
+    elseif State.currentMode == "animation" then
+        return not isAnimationSearchActive()
+    end
+    return false
+end
+
+local function getFirstPageSize()
+    if shouldRandomSlotBeShown() then
+        return math.max(State.itemsPerPage - 1, 1)
+    end
+    return State.itemsPerPage
+end
+
+isRandomSlotEnabled = function()
+    return Config.RandomEnabled == true
+end
+
+isRandomSlotActive = function()
+    return State.currentPage == 1 and shouldRandomSlotBeShown()
+end
+
+local function getPageSize(pageNumber, isFirstList)
+    if isFirstList and pageNumber == 1 then
+        return getFirstPageSize()
+    end
+    return State.itemsPerPage
+end
+
+local function calcPagesForList(count, isFirstList)
+    if count <= 0 then return 0 end
+    if isFirstList then
+        local first = getFirstPageSize()
+        if count <= first then return 1 end
+        return 1 + math.ceil((count - first) / State.itemsPerPage)
+    end
+    return math.ceil(count / State.itemsPerPage)
+end
+
+local function getListSlice(list, pageNumber, isFirstList)
+    local pageSize = getPageSize(pageNumber, isFirstList)
+    local startIndex
+    if isFirstList and pageNumber == 1 then
+        startIndex = 1
+    elseif isFirstList then
+        startIndex = getFirstPageSize() + (pageNumber - 2) * State.itemsPerPage + 1
+    else
+        startIndex = (pageNumber - 1) * State.itemsPerPage + 1
+    end
+    local endIndex = math.min(startIndex + pageSize - 1, #list)
+    local items = {}
+    for i = startIndex, endIndex do
+        if list[i] then table.insert(items, list[i]) end
+    end
+    return items
+end
+
+local function getRandomSourceList()
+    if Config.RandomEnabled == false then
+        return {}
+    end
+    if State.favoriteEnabled then
+        if State.currentMode == "animation" then
+            return State.filteredAnimations
+        end
+        return State.filteredEmotes
+    end
+    if Config.RandomMode == "Favorites" then
+        if State.currentMode == "animation" then
+            return _G.filteredFavoritesAnimationsForDisplay or State.favoriteAnimations
+        end
+        return _G.filteredFavoritesForDisplay or State.favoriteEmotes
+    end
+    if State.currentMode == "animation" then
+        return State.filteredAnimations
+    end
+    return State.filteredEmotes
+end
+
+local function pickRandomItem()
+    local list = getRandomSourceList() or {}
+    if #list == 0 then return nil end
+    return list[math.random(1, #list)]
+end
+
+local function pickRandomItemForMode()
+    local list = getRandomSourceList() or {}
+    if #list == 0 then return nil end
+    if State.currentMode == "animation" then
+        local filtered = {}
+        for _, item in ipairs(list) do
+            if item.bundledItems then
+                table.insert(filtered, item)
+            end
+        end
+        if #filtered == 0 then return nil end
+        return filtered[math.random(1, #filtered)]
+    end
+    return list[math.random(1, #list)]
+end
+local function updateRandomSlotBlocker(frontFrame, enable)
+    if not frontFrame then return end
+    local slot = frontFrame:FindFirstChild("1")
+    if not slot or not slot:IsA("ImageLabel") then return end
+
+    local blocker = slot:FindFirstChild("RandomBlocker")
+    if enable then
+        if not blocker then
+            blocker = Instance.new("ImageButton")
+            blocker.Name = "RandomBlocker"
+            blocker.BackgroundTransparency = 1
+            blocker.Size = UDim2.new(1, 0, 1, 0)
+            blocker.Position = UDim2.new(0, 0, 0, 0)
+            blocker.AutoButtonColor = false
+            blocker.ZIndex = slot.ZIndex + 10
+            blocker.Parent = slot
+        else
+            blocker.ZIndex = slot.ZIndex + 10
+        end
+        blocker.Active = true
+    else
+        if blocker then blocker:Destroy() end
+        if State.randomSlotBlockerConn then
+            State.randomSlotBlockerConn:Disconnect()
+            State.randomSlotBlockerConn = nil
+        end
+    end
+end
+
+local function clearCustomHitboxes()
+    if State.randomSlotBlockerConn then
+        State.randomSlotBlockerConn:Disconnect()
+        State.randomSlotBlockerConn = nil
+    end
+    local success, frontFrame = pcall(function()
+        return game:GetService("CoreGui").RobloxGui.EmotesMenu.Children.Main.EmotesWheel.Front.EmotesButtons
+    end)
+    if not success or not frontFrame then return end
+    local slot1 = frontFrame:FindFirstChild("1")
+    if slot1 then
+        local blocker = slot1:FindFirstChild("RandomBlocker")
+        if blocker then blocker:Destroy() end
+    end
+    for _, child in pairs(frontFrame:GetChildren()) do
+        if child:IsA("ImageLabel") then
+            child.Active = false
+        end
+    end
+    frontFrame.Active = true   
+end
+
+local function applyEmotesButtonsActiveState()
+end
+
+local function setEmotesButtonsActiveForFavorites()
+    local success, frontFrame = pcall(function()
+        return game:GetService("CoreGui").RobloxGui.EmotesMenu.Children.Main.EmotesWheel.Front.EmotesButtons
+    end)
+    if not success or not frontFrame then return end
+    for _, child in pairs(frontFrame:GetChildren()) do
+        if child:IsA("ImageLabel") then
+            child.Active = true
+        end
+    end
+    frontFrame.Active = true
+end
+
+local function updateScriptPriorityOverlay()
+    local success, frontFrame = pcall(function()
+        return game:GetService("CoreGui").RobloxGui.EmotesMenu.Children.Main.EmotesWheel.Front.EmotesButtons
+    end)
+    if not success or not frontFrame then return end
+
+    local enable = (State.favoriteEnabled or State.currentMode == "animation")
+    local blocker = frontFrame:FindFirstChild("ScriptPriorityBlocker")
+    if enable then
+        if not blocker then
+            blocker = Instance.new("ImageButton")
+            blocker.Name = "ScriptPriorityBlocker"
+            blocker.BackgroundTransparency = 1
+            blocker.Size = UDim2.new(1, 0, 1, 0)
+            blocker.Position = UDim2.new(0, 0, 0, 0)
+            blocker.AutoButtonColor = false
+            blocker.ZIndex = 9999
+            blocker.Parent = frontFrame
+        end
+        blocker.Active = true
+    else
+        if blocker then blocker:Destroy() end
+    end
+end
+
+local function applyRandomSlotVisual(frontFrame)
+    if not frontFrame then return end
+    local slot = frontFrame:FindFirstChild("1")
+    if slot and slot:IsA("ImageLabel") then
+        if not isRandomSlotEnabled() then
+            AnimationSystem.ResetRandomSlot(frontFrame)
+            return
+        end
+        if slot.Image ~= RANDOM_SLOT_ICON then
+            slot.Image = RANDOM_SLOT_ICON
+        end
+        if slot.ImageColor3 ~= RANDOM_SLOT_COLOR then
+            slot.ImageColor3 = RANDOM_SLOT_COLOR
+        end
+        if State.currentMode == "emote" then
+            updateRandomSlotBlocker(frontFrame, true)
+        else
+            updateRandomSlotBlocker(frontFrame, false)
+        end
+        local idValue = slot:FindFirstChild("AnimationID")
+        if idValue then idValue:Destroy() end
+        local favoriteIcon = slot:FindFirstChild("FavoriteIcon")
+        if favoriteIcon then favoriteIcon:Destroy() end
+    end
+end
+
+local function resetRandomSlotColor(frontFrame)
+    if not frontFrame then return end
+    local slot = frontFrame:FindFirstChild("1")
+    if slot and slot:IsA("ImageLabel") then
+        if slot.ImageColor3 == RANDOM_SLOT_COLOR then
+            slot.ImageColor3 = Color3.new(1, 1, 1)
+        end
+        if slot.Image == RANDOM_SLOT_ICON then
+            slot.Image = ""
+        end
+    end
+    updateRandomSlotBlocker(frontFrame, false)
+    if State.randomSpamConn then
+        State.randomSpamConn:Disconnect()
+        State.randomSpamConn = nil
+    end
+end
+
+local function applySearchSlot1Image()
+    pcall(function()
+        local frontFrame = game:GetService("CoreGui").RobloxGui.EmotesMenu.Children.Main.EmotesWheel.Front.EmotesButtons
+        local slot1 = frontFrame and frontFrame:FindFirstChild("1")
+        local slot2 = frontFrame and frontFrame:FindFirstChild("2")
+        if slot1 and slot1:IsA("ImageLabel") and slot2 and slot2:IsA("ImageLabel") then
+            local img2 = slot2.Image
+            if img2 and img2 ~= "" then
+                slot1.Image = img2
+            end
+        end
+    end)
+end
+
+local function bumpImageUpdateToken()
+    State.imageUpdateToken = State.imageUpdateToken + 1
+end
+
+local ContentProvider = game:GetService("ContentProvider")
+local function preloadThumbnail(url)
+    if not url or url == "" then return end
+    task.spawn(function()
+        pcall(function()
+            ContentProvider:PreloadAsync({Instance.new("ImageLabel", {Image = url})})
+        end)
+    end)
+end
+
+local function enforceImages()
+    local success, frontFrame = pcall(function()
+        return game:GetService("CoreGui").RobloxGui.EmotesMenu.Children.Main.EmotesWheel.Front.EmotesButtons
+    end)
+    if not success or not frontFrame then return end
+    
+    local token = State.imageUpdateToken
+    for slotName, targetImg in pairs(State.targetImages) do
+        local slot = frontFrame:FindFirstChild(slotName)
+        if slot and slot:IsA("ImageLabel") then
+            if slot.Image ~= targetImg then
+                slot.Image = targetImg
+            end
+            if slotName == "1" and isRandomSlotActive() then
+                if slot.ImageColor3 ~= RANDOM_SLOT_COLOR then
+                    slot.ImageColor3 = RANDOM_SLOT_COLOR
+                end
+            end
+        end
+    end
+end
+
+local function spamRandomSlotVisual(frontFrame, token)
+    if not frontFrame then return end
+    State.targetImages["1"] = RANDOM_SLOT_ICON
+    enforceImages()
+end
+
+local function spamAnimationImages(frontFrame, imageMap, token)
+    if not frontFrame then return end
+    for k, v in pairs(imageMap or {}) do
+        State.targetImages[k] = v
+    end
+    enforceImages()
+end
+
+
 local function getEmoteName(assetId)
     local success, productInfo = pcall(function()
         return game:GetService("MarketplaceService"):GetProductInfo(tonumber(assetId))
@@ -2041,7 +2446,7 @@ local function getEmoteName(assetId)
     end
 end
 
-local function isInFavorites(assetId)
+isInFavorites = function(assetId)
     if State.favoriteSetBuiltVersion ~= State.favoriteSetVersion then
         State.favoriteEmoteSet = {}
         for _, favorite in pairs(State.favoriteEmotes) do
@@ -2111,7 +2516,8 @@ local function rebuildAnimationNormalCache()
     State.animationPageCache.favVersion = State.favoriteSetVersion
 end
 
-local function updateAnimationImages(currentPageAnimations)
+local function updateAnimationImages(currentPageAnimations, randomActive)
+    local token = State.imageUpdateToken
     local success, frontFrame = pcall(function()
         return game:GetService("CoreGui").RobloxGui.EmotesMenu.Children.Main.EmotesWheel.Front.EmotesButtons
     end)
@@ -2119,34 +2525,61 @@ local function updateAnimationImages(currentPageAnimations)
     if not success or not frontFrame then
         return
     end
-    
-    local buttonIndex = 1
-    for _, child in pairs(frontFrame:GetChildren()) do
-        if child:IsA("ImageLabel") then
-            if buttonIndex <= #currentPageAnimations then
-                local animationData = currentPageAnimations[buttonIndex]
-                child.Image = "rbxthumb://type=BundleThumbnail&id=" .. animationData.id .. "&w=420&h=420"
-                
-                local idValue = child:FindFirstChild("AnimationID") or Instance.new("IntValue")
-                idValue.Name = "AnimationID"
-                idValue.Value = animationData.id
-                idValue.Parent = child
 
-                child.Active = not State.favoriteEnabled
+    if randomActive then
+        applyRandomSlotVisual(frontFrame)
+        State.targetImages = {["1"] = RANDOM_SLOT_ICON}
+        spamRandomSlotVisual(frontFrame, token)
+    else
+        State.targetImages = {}
+        resetRandomSlotColor(frontFrame)
+    end
 
-                buttonIndex = buttonIndex + 1
+    local startSlot = randomActive and 2 or 1
+    local imageMap = {}
+    local newTargetImages = {}
+    if randomActive then
+        newTargetImages["1"] = RANDOM_SLOT_ICON
+    end
+
+    for i = 1, 12 do
+        if i >= startSlot then
+            local listIndex = randomActive and (i - 1) or i
+            local animationData = currentPageAnimations[listIndex]
+            if animationData then
+                local image = "rbxthumb://type=BundleThumbnail&id=" .. animationData.id .. "&w=420&h=420"
+                newTargetImages[tostring(i)] = image
+                imageMap[tostring(i)] = image
             else
-                child.Image = ""
-                local idValue = child:FindFirstChild("AnimationID")
-                if idValue then 
-                    idValue:Destroy() 
-                end
-                child.Active = true
+                newTargetImages[tostring(i)] = ""
+                imageMap[tostring(i)] = ""
             end
         end
     end
     
-    frontFrame.Active = not State.favoriteEnabled
+    State.targetImages = newTargetImages
+
+    for slotName, image in pairs(imageMap) do
+        local child = frontFrame:FindFirstChild(slotName)
+        if child and child:IsA("ImageLabel") then
+            preloadThumbnail(image)
+            child.Image = image
+            if not randomActive and child.ImageColor3 == RANDOM_SLOT_COLOR then
+                child.ImageColor3 = Color3.new(1, 1, 1)
+            end
+            
+            local listIndex = randomActive and (tonumber(slotName) - 1) or tonumber(slotName)
+            local animationData = currentPageAnimations[listIndex]
+            if animationData then
+                local idValue = child:FindFirstChild("AnimationID") or Instance.new("IntValue")
+                idValue.Name = "AnimationID"
+                idValue.Value = animationData.id
+                idValue.Parent = child
+            end
+        end
+    end
+    
+    applyEmotesButtonsActiveState()
 end
 
 
@@ -2178,8 +2611,9 @@ local function updateAllFavoriteIcons()
     end)
     
     if success and frontFrame then
+        local randomActive = isRandomSlotActive()
         for _, child in pairs(frontFrame:GetChildren()) do
-            if child:IsA("ImageLabel") and child.Image ~= "" then
+            if child:IsA("ImageLabel") and child.Image ~= "" and (not randomActive or child.Name ~= "1") then
                 local assetId
                 if State.currentMode == "animation" then
                     local idValue = child:FindFirstChild("AnimationID")
@@ -2194,10 +2628,9 @@ local function updateAllFavoriteIcons()
                     local isFavorite = isInFavorites(assetId)
                     updateFavoriteIcon(child, assetId, isFavorite)
                 end
-                child.Active = not State.favoriteEnabled
             end
         end
-        frontFrame.Active = not State.favoriteEnabled
+        applyEmotesButtonsActiveState()
     end
 end
 
@@ -2212,6 +2645,8 @@ local function updateAnimations()
         return
     end
 
+    bumpImageUpdateToken()
+
     local currentPageAnimations = {}
     local animationTable = {}
     local equippedAnimations = {}
@@ -2219,34 +2654,28 @@ local function updateAnimations()
     rebuildAnimationNormalCache()
     local favoritesToUse = _G.filteredFavoritesAnimationsForDisplay or State.favoriteAnimations
     local hasFavorites = #favoritesToUse > 0
-    local favoritePagesCount = hasFavorites and math.ceil(#favoritesToUse / State.itemsPerPage) or 0
+    local favoritePagesCount = hasFavorites and calcPagesForList(#favoritesToUse, true) or 0
     local isInFavoritesPages = State.currentPage <= favoritePagesCount
 
     if isInFavoritesPages and hasFavorites then
-        local startIndex = (State.currentPage - 1) * State.itemsPerPage + 1
-        local endIndex = math.min(startIndex + State.itemsPerPage - 1, #favoritesToUse)
-
-        for i = startIndex, endIndex do
-            if favoritesToUse[i] then
-                table.insert(currentPageAnimations, {
-                    id = tonumber(favoritesToUse[i].id),
-                    name = favoritesToUse[i].name
-                })
-            end
-        end
+        currentPageAnimations = getListSlice(favoritesToUse, State.currentPage, true)
     else
         local normalAnimations = State.animationPageCache.normal or {}
         local adjustedPage = State.currentPage - favoritePagesCount
-        local startIndex = (adjustedPage - 1) * State.itemsPerPage + 1
-        local endIndex = math.min(startIndex + State.itemsPerPage - 1, #normalAnimations)
+        local isFirstNormalList = (favoritePagesCount == 0)
+        currentPageAnimations = getListSlice(normalAnimations, adjustedPage, isFirstNormalList)
+    end
 
-        for i = startIndex, endIndex do
-            if normalAnimations[i] then
-                table.insert(currentPageAnimations, normalAnimations[i])
-            end
+    local randomActive = isRandomSlotActive()
+    if randomActive then
+        local randomFallback = currentPageAnimations[1] or (State.filteredAnimations and State.filteredAnimations[1])
+        if randomFallback then
+            animationTable["Random Animation"] = {randomFallback.id}
+            table.insert(equippedAnimations, "Random Animation")
         end
     end
 
+    State.animImageRetry = 0
     for _, animation in pairs(currentPageAnimations) do
         local animationName = animation.name
         local animationId = animation.id
@@ -2257,17 +2686,22 @@ local function updateAnimations()
     humanoidDescription:SetEmotes(animationTable)
     humanoidDescription:SetEquippedEmotes(equippedAnimations)
     
-    task.wait(0.1)
-    updateAnimationImages(currentPageAnimations)
+    updateAnimationImages(currentPageAnimations, randomActive)
+    if State.favoriteEnabled then
+        setEmotesButtonsActiveForFavorites()
+    end
 
     task.delay(0.2, function()
+        if State.favoriteEnabled then
+            setEmotesButtonsActiveForFavorites()
+        end
         if State.favoriteEnabled then
             updateAllFavoriteIcons()
         end
     end)
 end
 
-local function updateEmotes()
+updateEmotes = function()
     local character, humanoid = getCharacterAndHumanoid()
     if not character or not humanoid then
         return
@@ -2276,6 +2710,17 @@ local function updateEmotes()
     if State.currentMode == "animation" then
         updateAnimations()
         return
+    end
+    
+    bumpImageUpdateToken()
+    local token = State.imageUpdateToken
+    
+    if State.animImageSpamConn then
+        State.animImageSpamConn:Disconnect()
+        State.animImageSpamConn = nil
+        State.animImageSpamMap = nil
+        State.animImageSpamTicks = nil
+        State.animImageSpamToken = State.animImageSpamToken + 1
     end
 
     local humanoidDescription = humanoid.HumanoidDescription
@@ -2290,31 +2735,24 @@ local function updateEmotes()
     rebuildEmoteNormalCache()
     local favoritesToUse = _G.filteredFavoritesForDisplay or State.favoriteEmotes
     local hasFavorites = #favoritesToUse > 0
-    local favoritePagesCount = hasFavorites and math.ceil(#favoritesToUse / State.itemsPerPage) or 0
+    local favoritePagesCount = hasFavorites and calcPagesForList(#favoritesToUse, true) or 0
     local isInFavoritesPages = State.currentPage <= favoritePagesCount
 
     if isInFavoritesPages and hasFavorites then
-        local startIndex = (State.currentPage - 1) * State.itemsPerPage + 1
-        local endIndex = math.min(startIndex + State.itemsPerPage - 1, #favoritesToUse)
-
-        for i = startIndex, endIndex do
-            if favoritesToUse[i] then
-                table.insert(currentPageEmotes, {
-                    id = tonumber(favoritesToUse[i].id),
-                    name = favoritesToUse[i].name
-                })
-            end
-        end
+        currentPageEmotes = getListSlice(favoritesToUse, State.currentPage, true)
     else
         local normalEmotes = State.emotePageCache.normal or {}
         local adjustedPage = State.currentPage - favoritePagesCount
-        local startIndex = (adjustedPage - 1) * State.itemsPerPage + 1
-        local endIndex = math.min(startIndex + State.itemsPerPage - 1, #normalEmotes)
+        local isFirstNormalList = (favoritePagesCount == 0)
+        currentPageEmotes = getListSlice(normalEmotes, adjustedPage, isFirstNormalList)
+    end
 
-        for i = startIndex, endIndex do
-            if normalEmotes[i] then
-                table.insert(currentPageEmotes, normalEmotes[i])
-            end
+    local randomActive = isRandomSlotActive()
+    if randomActive then
+        local randomFallback = currentPageEmotes[1] or (State.filteredEmotes and State.filteredEmotes[1])
+        if randomFallback then
+            emoteTable["Random Emote"] = {randomFallback.id}
+            table.insert(equippedEmotes, "Random Emote")
         end
     end
 
@@ -2328,15 +2766,64 @@ local function updateEmotes()
     humanoidDescription:SetEmotes(emoteTable)
     humanoidDescription:SetEquippedEmotes(equippedEmotes)
     
+    local newTargetImages = {}
+    if randomActive then
+        newTargetImages["1"] = RANDOM_SLOT_ICON
+    end
+
+    local startSlot = randomActive and 2 or 1
+    for i = 1, 12 do
+        if i >= startSlot then
+            local listIndex = randomActive and (i - 1) or i
+            local emoteData = currentPageEmotes[listIndex]
+            if emoteData then
+                newTargetImages[tostring(i)] = "rbxthumb://type=Asset&id=" .. emoteData.id .. "&w=420&h=420"
+            else
+                newTargetImages[tostring(i)] = ""
+            end
+        end
+    end
+    
+    State.targetImages = newTargetImages
+
+    local success, frontFrame = pcall(function()
+        return game:GetService("CoreGui").RobloxGui.EmotesMenu.Children.Main.EmotesWheel.Front.EmotesButtons
+    end)
+    
+    if success and frontFrame then
+        for slotName, image in pairs(newTargetImages) do
+            local child = frontFrame:FindFirstChild(slotName)
+            if child and child:IsA("ImageLabel") then
+                child.Image = image
+                if slotName ~= "1" and child.ImageColor3 == RANDOM_SLOT_COLOR then
+                    child.ImageColor3 = Color3.new(1, 1, 1)
+                end
+            end
+        end
+        
+        if State.favoriteEnabled then
+            setEmotesButtonsActiveForFavorites()
+        end
+        if randomActive then
+            applyRandomSlotVisual(frontFrame)
+            spamRandomSlotVisual(frontFrame, token)
+        else
+            resetRandomSlotColor(frontFrame)
+        end
+    end
+
     task.delay(0.2, function()
+        if State.favoriteEnabled then
+            setEmotesButtonsActiveForFavorites()
+        end
         if State.favoriteEnabled then
             updateAllFavoriteIcons()
         end
     end)
 end
 
-local function calculateTotalPages()
-      if State.currentMode == "animation" then
+calculateTotalPages = function()
+    if State.currentMode == "animation" then
         local favoritesToUse = _G.filteredFavoritesAnimationsForDisplay or State.favoriteAnimations
         local hasFavorites = #favoritesToUse > 0
         rebuildAnimationNormalCache()
@@ -2344,10 +2831,10 @@ local function calculateTotalPages()
 
         local pages = 0
         if hasFavorites then
-            pages = pages + math.ceil(#favoritesToUse / State.itemsPerPage)
+            pages = pages + calcPagesForList(#favoritesToUse, true)
         end
         if normalAnimationsCount > 0 then
-            pages = pages + math.ceil(normalAnimationsCount / State.itemsPerPage)
+            pages = pages + calcPagesForList(normalAnimationsCount, not hasFavorites)
         end
         return math.max(pages, 1)
     end
@@ -2360,11 +2847,11 @@ local function calculateTotalPages()
     local pages = 0
 
     if hasFavorites then
-        pages = pages + math.ceil(#favoritesToUse / State.itemsPerPage)
+        pages = pages + calcPagesForList(#favoritesToUse, true)
     end
 
     if normalEmotesCount > 0 then
-        pages = pages + math.ceil(normalEmotesCount / State.itemsPerPage)
+        pages = pages + calcPagesForList(normalEmotesCount, not hasFavorites)
     end
 
     return math.max(pages, 1)
@@ -2656,7 +3143,7 @@ UICorner_5.Parent = UI.Changepage
     return true
 end
 
-local function updatePageDisplay()
+updatePageDisplay = function()
     if UI._4pages and UI._2Routenumber then
         UI._4pages.Text = tostring(State.totalPages)
         UI._2Routenumber.Text = tostring(State.currentPage)
@@ -2670,7 +3157,7 @@ local function updatePageDisplay()
 end
 
 
-local function toggleFavorite(emoteId, emoteName)
+toggleFavorite = function(emoteId, emoteName)
     local found = false
 
     local index = 0
@@ -2711,7 +3198,7 @@ local function toggleFavorite(emoteId, emoteName)
 end
 
 
-local function toggleFavoriteAnimation(animationData)
+toggleFavoriteAnimation = function(animationData)
     local found = false
 
 
@@ -2758,15 +3245,12 @@ local function setupEmoteClickDetection()
     if State.isMonitoringClicks then
         return
     end
-end
-   
-local function setupEmoteClickDetection()
-    if State.isMonitoringClicks then
-        return
-    end
-   
+    
+    State.emoteMonitorToken = State.emoteMonitorToken + 1
+    local token = State.emoteMonitorToken
+
     local function monitorEmotes()
-        while State.favoriteEnabled do
+        while State.favoriteEnabled and State.currentMode == "emote" and State.emoteMonitorToken == token do
             local success, frontFrame = pcall(function()
                 return game:GetService("CoreGui").RobloxGui.EmotesMenu.Children.Main.EmotesWheel.Front.EmotesButtons
             end)
@@ -2779,19 +3263,19 @@ local function setupEmoteClickDetection()
                 end
                 State.emoteClickConnections = {}
                
+                local randomActive = isRandomSlotActive()
                 for _, child in pairs(frontFrame:GetChildren()) do
-                    if child:IsA("ImageLabel") and child.Image ~= "" then
+                    if child:IsA("ImageLabel") and child.Image ~= "" and (not randomActive or child.Name ~= "1") then
                         local imageUrl = child.Image
                         local assetId = extractAssetId(imageUrl)
                         if assetId then
                             local isFavorite = isInFavorites(assetId)
                             updateFavoriteIcon(child, assetId, isFavorite)
                         end
-                        child.Active = not State.favoriteEnabled
-                    end
-                end
-                frontFrame.Active = not State.favoriteEnabled
             end
+        end
+        applyEmotesButtonsActiveState()
+    end
             
             task.wait(0.1)
         end
@@ -2891,21 +3375,130 @@ local function applyAnimation(animationData)
     end
 end
 
-local function handleSectorAction(index)
+local function playAnimationPreview(animationData)
+    local _, humanoid = getCharacterAndHumanoid()
+    if not humanoid then return false end
+    local animator = humanoid:FindFirstChild("Animator")
+    if not animator then return false end
+
+    local bundledItems = animationData and animationData.bundledItems
+    if not bundledItems then return false end
+
+    for _, assetIds in pairs(bundledItems) do
+        for _, assetId in pairs(assetIds) do
+            local success, objects = pcall(function()
+                return game:GetObjects("rbxassetid://" .. assetId)
+            end)
+            if success and objects then
+                local function findAnimation(inst)
+                    if inst:IsA("Animation") then return inst end
+                    for _, child in pairs(inst:GetChildren()) do
+                        local found = findAnimation(child)
+                        if found then return found end
+                    end
+                    return nil
+                end
+
+                for _, obj in pairs(objects) do
+                    local anim = findAnimation(obj)
+                    if anim then
+                        local animation = Instance.new("Animation")
+                        animation.AnimationId = anim.AnimationId
+                        local ok, track = pcall(function()
+                            return animator:LoadAnimation(animation)
+                        end)
+                        if ok and track then
+                            track.Priority = Enum.AnimationPriority.Action
+                            track:Play()
+                            State.currentEmoteTrack = track
+                            if State.emotesWalkEnabled or State.speedEmoteEnabled then
+                                local speedVal = State.speedEmoteEnabled and (tonumber(UI.SpeedBox.Text) or Config.EmoteSpeed or 1) or 1
+                                track:AdjustSpeed(speedVal)
+                            end
+                            task.delay(1, function()
+                                if obj then obj:Destroy() end
+                            end)
+                            return true
+                        end
+                    end
+                    task.delay(1, function()
+                        if obj then obj:Destroy() end
+                    end)
+                end
+            end
+        end
+    end
+
+    return false
+end
+
+handleSectorAction = function(index)
     if tick() - State.lastActionTick < 0.25 then return end
     State.lastActionTick = tick()
-    
-    task.wait(0.05)
+
+    local randomActive = isRandomSlotActive()
+    if index == 1 and randomActive then
+        local itemData = pickRandomItemForMode()
+        if not itemData then
+            getgenv().Notify({
+                Title = '7yd7 | Random',
+                Content = '❌ No valid random item found',
+                Duration = 3
+            })
+            return
+        end
+        State.lastRadialActionTime = tick()
+
+        if State.favoriteEnabled then
+            if State.currentMode == "animation" then
+                if not isInFavorites(itemData.id) then
+                    toggleFavoriteAnimation(itemData)
+                end
+            else
+                if not isInFavorites(itemData.id) then
+                    toggleFavorite(itemData.id, itemData.name)
+                end
+            end
+            return
+        end
+
+        if State.currentMode == "animation" then
+            if stopCurrentEmote then stopCurrentEmote() end
+            applyAnimation(itemData)
+            State.lastRandomAnimationId = itemData.id
+            if not State.favoriteEnabled then
+                pcall(function()
+                    game:GetService("GuiService"):SetEmotesMenuOpen(false)
+                end)
+                pcall(function()
+                    game:GetService("CoreGui").RobloxGui.EmotesMenu.Children.Main.EmotesWheel.Visible = false
+                end)
+            end
+        else
+            local _, hum = getCharacterAndHumanoid()
+            if hum then
+                pcall(function()
+                    game:GetService("GuiService"):SetEmotesMenuOpen(false)
+                end)
+                pcall(function()
+                    game:GetService("CoreGui").RobloxGui.EmotesMenu.Children.Main.EmotesWheel.Visible = false
+                end)
+                playRandomEmote(hum, itemData.id)
+                State.lastRandomEmoteId = itemData.id
+            end
+        end
+        return
+    end
 
     local favoritesToUse = (State.currentMode == "animation") and (_G.filteredFavoritesAnimationsForDisplay or State.favoriteAnimations) or (_G.filteredFavoritesForDisplay or State.favoriteEmotes)
     local hasFavorites = #favoritesToUse > 0
-    local favoritePagesCount = hasFavorites and math.ceil(#favoritesToUse / State.itemsPerPage) or 0
+    local favoritePagesCount = hasFavorites and calcPagesForList(#favoritesToUse, true) or 0
     local isInFavoritesPages = State.currentPage <= favoritePagesCount
 
     local function getEmoteAtIndex(idx)
         if isInFavoritesPages and hasFavorites then
-            local startIndex = (State.currentPage - 1) * State.itemsPerPage + 1
-            return favoritesToUse[startIndex + idx - 1]
+            local pageItems = getListSlice(favoritesToUse, State.currentPage, true)
+            return pageItems[idx]
         else
             local filteredList = (State.currentMode == "animation") and State.filteredAnimations or State.filteredEmotes
             local normalList = {}
@@ -2915,12 +3508,14 @@ local function handleSectorAction(index)
                 end
             end
             local adjustedPage = State.currentPage - favoritePagesCount
-            local startIndex = (adjustedPage - 1) * State.itemsPerPage + 1
-            return normalList[startIndex + idx - 1]
+            local isFirstNormalList = (favoritePagesCount == 0)
+            local pageItems = getListSlice(normalList, adjustedPage, isFirstNormalList)
+            return pageItems[idx]
         end
     end
 
-    local itemData = getEmoteAtIndex(index)
+    local slotOffset = randomActive and 1 or 0
+    local itemData = getEmoteAtIndex(index - slotOffset)
     if not itemData then return end
 
     State.lastRadialActionTime = tick()
@@ -2935,19 +3530,49 @@ local function handleSectorAction(index)
     else
         if State.currentMode == "animation" then
             applyAnimation(itemData)
+            pcall(function()
+                game:GetService("GuiService"):SetEmotesMenuOpen(false)
+            end)
+            pcall(function()
+                game:GetService("CoreGui").RobloxGui.EmotesMenu.Children.Main.EmotesWheel.Visible = false
+            end)
         else
             local _, hum = getCharacterAndHumanoid()
             if hum then
-                playEmote(hum, itemData.id)
+                if playEmote then
+                    playEmote(hum, itemData.id)
+                end
             end
         end
     end
 
 end
 
+local function clearAnimationSlotImages()
+    local success, frontFrame = pcall(function()
+        return game:GetService("CoreGui").RobloxGui.EmotesMenu.Children.Main.EmotesWheel.Front.EmotesButtons
+    end)
+    if not success or not frontFrame then
+        return
+    end
 
-local function monitorAnimations()
-    while State.currentMode == "animation" do
+    for i = 1, State.itemsPerPage do
+        local child = frontFrame:FindFirstChild(tostring(i))
+        if child and child:IsA("ImageLabel") then
+            local idValue = child:FindFirstChild("AnimationID")
+            if idValue then
+                idValue:Destroy()
+            end
+            if child.Image and child.Image:find("rbxthumb://type=BundleThumbnail") then
+                child.Image = ""
+            end
+        end
+    end
+end
+
+
+local function monitorAnimations(token)
+    while State.currentMode == "animation" and State.animationMonitorToken == token do
         local success, frontFrame = pcall(function()
             return game:GetService("CoreGui").RobloxGui.EmotesMenu.Children.Main.EmotesWheel.Front.EmotesButtons
         end)
@@ -2962,20 +3587,13 @@ local function monitorAnimations()
             
             local favoritesToUse = _G.filteredFavoritesAnimationsForDisplay or State.favoriteAnimations
             local hasFavorites = #favoritesToUse > 0
-            local favoritePagesCount = hasFavorites and math.ceil(#favoritesToUse / State.itemsPerPage) or 0
+            local favoritePagesCount = hasFavorites and calcPagesForList(#favoritesToUse, true) or 0
             local isInFavoritesPages = State.currentPage <= favoritePagesCount
             
             local currentPageAnimations = {}
             
             if isInFavoritesPages and hasFavorites then
-                local startIndex = (State.currentPage - 1) * State.itemsPerPage + 1
-                local endIndex = math.min(startIndex + State.itemsPerPage - 1, #favoritesToUse)
-                
-                for i = startIndex, endIndex do
-                    if favoritesToUse[i] then
-                        table.insert(currentPageAnimations, favoritesToUse[i])
-                    end
-                end
+                currentPageAnimations = getListSlice(favoritesToUse, State.currentPage, true)
             else
                 local normalAnimations = {}
                 for _, animation in pairs(State.filteredAnimations) do
@@ -2985,19 +3603,14 @@ local function monitorAnimations()
                 end
                 
                 local adjustedPage = State.currentPage - favoritePagesCount
-                local startIndex = (adjustedPage - 1) * State.itemsPerPage + 1
-                local endIndex = math.min(startIndex + State.itemsPerPage - 1, #normalAnimations)
-                
-                for i = startIndex, endIndex do
-                    if normalAnimations[i] then
-                        table.insert(currentPageAnimations, normalAnimations[i])
-                    end
-                end
+                local isFirstNormalList = (favoritePagesCount == 0)
+                currentPageAnimations = getListSlice(normalAnimations, adjustedPage, isFirstNormalList)
             end
             
+            local randomActive = isRandomSlotActive()
             local buttonIndex = 1
             for _, child in pairs(frontFrame:GetChildren()) do
-                if child:IsA("ImageLabel") then
+                if child:IsA("ImageLabel") and (not randomActive or child.Name ~= "1") then
                     if buttonIndex <= #currentPageAnimations then
                         local animationData = currentPageAnimations[buttonIndex]
                         
@@ -3028,6 +3641,8 @@ end
 
 local function stopEmoteClickDetection()
     State.isMonitoringClicks = false
+    State.emoteMonitorToken = State.emoteMonitorToken + 1
+    State.animationMonitorToken = State.animationMonitorToken + 1
     
     for _, connection in pairs(State.emoteClickConnections) do
         if connection then
@@ -3054,6 +3669,7 @@ local function stopEmoteClickDetection()
                 end
             end
         end
+        applyEmotesButtonsActiveState()
     end
 end
 
@@ -3226,6 +3842,7 @@ local function searchEmotes(searchTerm)
                 end
             end
         end
+        applySearchSlot1Image()
     end
 
     State.totalPages = calculateTotalPages()
@@ -3294,6 +3911,7 @@ local function searchAnimations(searchTerm)
                 end
             end
         end
+        applySearchSlot1Image()
     end
 
     State.totalPages = calculateTotalPages()
@@ -3303,6 +3921,7 @@ local function searchAnimations(searchTerm)
 end
 
 local function goToPage(pageNumber)
+    bumpImageUpdateToken()
     if pageNumber < 1 then
         State.currentPage = 1
     elseif pageNumber > State.totalPages then
@@ -3315,6 +3934,7 @@ local function goToPage(pageNumber)
 end
 
 local function previousPage()
+    bumpImageUpdateToken()
     if State.currentPage <= 1 then
         State.currentPage = State.totalPages
     else
@@ -3325,6 +3945,7 @@ local function previousPage()
 end
 
 local function nextPage()
+    bumpImageUpdateToken()
     if State.currentPage >= State.totalPages then
         State.currentPage = 1
     else
@@ -3341,29 +3962,53 @@ local function stopCurrentEmote()
     end
 end
 
-local function playEmote(humanoid, emoteId)
+playEmote = function(humanoid, emoteId)
     stopCurrentEmote()
     stopEmotes()
 
-    local animation = Instance.new("Animation")
-    animation.AnimationId = "rbxassetid://" .. emoteId
+    local function tryPlayEmoteById(id)
+        if humanoid.RigType ~= Enum.HumanoidRigType.R15 then
+            return false
+        end
+        local animator = humanoid:FindFirstChildOfClass("Animator") or humanoid:WaitForChild("Animator")
+        local animation = Instance.new("Animation")
+        animation.AnimationId = "rbxassetid://" .. tostring(id)
+        local ok, track = pcall(function()
+            return animator:LoadAnimation(animation)
+        end)
+        if ok and track and typeof(track) == "Instance" and track:IsA("AnimationTrack") then
+            track.Priority = Enum.AnimationPriority.Action
+            track:Play()
+            State.currentEmoteTrack = track
+            return true
+        end
+        return false
+    end
 
-    local success, animTrack = pcall(function()
-        return humanoid.Animator:LoadAnimation(animation)
+    local success = tryPlayEmoteById(emoteId)
+    if success and State.currentEmoteTrack then
+        if State.emotesWalkEnabled or State.speedEmoteEnabled then
+            local speedVal = State.speedEmoteEnabled and (tonumber(UI.SpeedBox.Text) or Config.EmoteSpeed or 1) or 1
+            State.currentEmoteTrack:AdjustSpeed(speedVal)
+        end
+    end
+end
+
+playRandomEmote = function(humanoid, emoteId)
+    stopCurrentEmote()
+    stopEmotes()
+
+    if humanoid.RigType ~= Enum.HumanoidRigType.R15 then
+        return
+    end
+    local ok, track = pcall(function()
+        return humanoid:PlayEmoteAndGetAnimTrackById(emoteId)
     end)
-
-    if success and animTrack then
-        State.currentEmoteTrack = animTrack
-        State.currentEmoteTrack.Priority = Enum.AnimationPriority.Action
-        State.currentEmoteTrack.Looped = true
-        task.wait(0.1)
-        if State.speedEmoteEnabled or State.emotesWalkEnabled then
-            State.currentEmoteTrack:Play()
-
-            if State.speedEmoteEnabled then
-                local speedValue = tonumber(UI.SpeedBox.Text) or 1
-                State.currentEmoteTrack:AdjustSpeed(speedValue)
-            end
+    if ok and track and typeof(track) == "Instance" and track:IsA("AnimationTrack") then
+        State.currentEmoteTrack = track
+        if State.emotesWalkEnabled or State.speedEmoteEnabled then
+            local speedVal = State.speedEmoteEnabled and (tonumber(UI.SpeedBox.Text) or Config.EmoteSpeed or 1) or 1
+            track:AdjustSpeed(speedVal)
         end
     end
 end
@@ -3401,10 +4046,10 @@ end
 
                 playEmote(humanoid, playedEmoteId)
 
-                if currentEmoteTrack then
-                    currentEmoteTrack.Ended:Connect(function()
-                        if currentEmoteTrack == animationTrack then
-                            currentEmoteTrack = nil
+                if State.currentEmoteTrack then
+                    State.currentEmoteTrack.Ended:Connect(function()
+                        if State.currentEmoteTrack == animationTrack then
+                            State.currentEmoteTrack = nil
                         end
                     end)
                 end
@@ -3422,10 +4067,10 @@ end
 
                 playEmote(humanoid, playedEmoteId)
 
-                if currentEmoteTrack then
-                    currentEmoteTrack.Ended:Connect(function()
-                        if currentEmoteTrack == animationTrack then
-                            currentEmoteTrack = nil
+                if State.currentEmoteTrack then
+                    State.currentEmoteTrack.Ended:Connect(function()
+                        if State.currentEmoteTrack == animationTrack then
+                            State.currentEmoteTrack = nil
                         end
                     end)
                 end
@@ -3456,10 +4101,9 @@ local function toggleEmoteWalk()
         })
 
         UI.EmoteWalkButton.Image = State.enabledButtonImage
-        task.wait(0.1)
-        stopCurrentEmote()
         if State.currentEmoteTrack and State.currentEmoteTrack.IsPlaying then
-            State.currentEmoteTrack:AdjustSpeed(1)
+            local speedVal = State.speedEmoteEnabled and (tonumber(UI.SpeedBox.Text) or 1) or 1
+            State.currentEmoteTrack:AdjustSpeed(speedVal)
         end
     else
         getgenv().Notify({
@@ -3468,18 +4112,13 @@ local function toggleEmoteWalk()
             Duration = 5
         })
         UI.EmoteWalkButton.Image = State.defaultButtonImage
-        task.wait(0.1)
-        stopCurrentEmote()
-
-        if State.currentEmoteTrack and State.currentEmoteTrack.IsPlaying and State.speedEmoteEnabled then
-            local speedValue = tonumber(UI.SpeedBox.Text) or 1
-            State.currentEmoteTrack:AdjustSpeed(speedValue)
-        elseif State.currentEmoteTrack and State.currentEmoteTrack.IsPlaying then
-            State.currentEmoteTrack:AdjustSpeed(1)
+        if State.currentEmoteTrack and State.currentEmoteTrack.IsPlaying then
+            local speedVal = State.speedEmoteEnabled and (tonumber(UI.SpeedBox.Text) or 1) or 1
+            State.currentEmoteTrack:AdjustSpeed(speedVal)
         end
     end
 end
-print(Players.LocalPlayer.Name)
+
 local function toggleSpeedEmote()
     State.speedEmoteEnabled = not State.speedEmoteEnabled
 
@@ -3491,16 +4130,19 @@ local function toggleSpeedEmote()
             Content = "⚡ Speed Emote ON",
             Duration = 5
         })
-        task.wait(0.1)
-        stopCurrentEmote()
+        if State.currentEmoteTrack and State.currentEmoteTrack.IsPlaying then
+            local speedValue = tonumber(UI.SpeedBox.Text) or 1
+            State.currentEmoteTrack:AdjustSpeed(speedValue)
+        end
     else
         getgenv().Notify({
             Title = '7yd7 | Speed Emote',
             Content = '⚡ Speed Emote OFF',
             Duration = 5
         })
-        task.wait(0.1)
-        stopCurrentEmote()
+        if State.currentEmoteTrack and State.currentEmoteTrack.IsPlaying then
+            State.currentEmoteTrack:AdjustSpeed(1)
+        end
     end
 
     Config.EmoteSpeedEnabled = State.speedEmoteEnabled
@@ -3518,6 +4160,9 @@ local function toggleFavoriteMode()
             Content = "🔒 Favorite ON",
             Duration = 5
         })
+
+        updateScriptPriorityOverlay()
+        setEmotesButtonsActiveForFavorites()
 
         if State.currentMode == "emote" then
             setupEmoteClickDetection()
@@ -3537,16 +4182,13 @@ local function toggleFavoriteMode()
         else
             updateAllFavoriteIcons()
         end
+        clearCustomHitboxes()
+        updateScriptPriorityOverlay()
     end
 
     pcall(function()
         local frontFrame = CoreGui.RobloxGui.EmotesMenu.Children.Main.EmotesWheel.Front.EmotesButtons
-        frontFrame.Active = not State.favoriteEnabled
-        for _, child in pairs(frontFrame:GetChildren()) do
-            if child:IsA("GuiObject") then
-                child.Active = not State.favoriteEnabled
-            end
-        end
+        applyEmotesButtonsActiveState()
     end)
 end
 
@@ -3568,8 +4210,12 @@ local function setupAnimationClickDetection()
     end
     
     if State.currentMode == "animation" then
+        State.animationMonitorToken = State.animationMonitorToken + 1
+        local token = State.animationMonitorToken
         State.isMonitoringClicks = true
-        task.spawn(monitorAnimations)
+        task.spawn(function()
+            monitorAnimations(token)
+        end)
     end
 end
 
@@ -3622,6 +4268,9 @@ function connectEvents()
         table.insert(State.guiConnections, UI.Search.Changed:Connect(function(property)
             if State.hudEditorActive then return end
             if property == "Text" then
+                if State.suppressSearch then
+                    return
+                end
                 if State.currentMode == "emote" then
                     State.emoteSearchTerm = UI.Search.Text
                     searchEmotes(State.emoteSearchTerm)
@@ -3640,8 +4289,6 @@ function connectEvents()
         if State.hudEditorActive then return end
         if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then return end
         
-        if not (State.favoriteEnabled or State.currentMode == "animation") then return end
-
         local exists, emotesWheel = checkEmotesMenuExists()
         local isRecentlyVisible = (tick() - State.lastWheelVisibleTime < 0.15)
         if not (exists and (emotesWheel.Visible or isRecentlyVisible)) then return end
@@ -3661,15 +4308,80 @@ function connectEvents()
         local dy = actualPos.Y - center.Y
 
         local distance = math.sqrt(dx*dx + dy*dy)
-        local dynamicDeadzone = absSize.X * 0.1 
+        local radius = math.min(absSize.X, absSize.Y) * 0.5
+        if distance > radius then return end
+        local dynamicDeadzone = radius * 0.2
         if distance < dynamicDeadzone then return end
 
         local angle = math.deg(math.atan2(dy, dx))
         local correctedAngle = (angle + 90 + (SECTOR_ANGLE / 2)) % 360
         local index = math.floor(correctedAngle / SECTOR_ANGLE) + 1
-        
+        if not (State.favoriteEnabled or State.currentMode == "animation" or (index == 1 and isRandomSlotActive())) then return end
+
         handleSectorAction(index)
     end))
+
+    local function bindWheelHotkeys()
+        if not ContextActionService then return end
+
+        local keyToIndex = {
+            [Enum.KeyCode.One] = 1, [Enum.KeyCode.Two] = 2, [Enum.KeyCode.Three] = 3, [Enum.KeyCode.Four] = 4,
+            [Enum.KeyCode.Five] = 5, [Enum.KeyCode.Six] = 6, [Enum.KeyCode.Seven] = 7, [Enum.KeyCode.Eight] = 8,
+            [Enum.KeyCode.KeypadOne] = 1, [Enum.KeyCode.KeypadTwo] = 2, [Enum.KeyCode.KeypadThree] = 3, [Enum.KeyCode.KeypadFour] = 4,
+            [Enum.KeyCode.KeypadFive] = 5, [Enum.KeyCode.KeypadSix] = 6, [Enum.KeyCode.KeypadSeven] = 7, [Enum.KeyCode.KeypadEight] = 8
+        }
+
+        local function onHotkey(actionName, inputState, inputObject)
+            if inputState ~= Enum.UserInputState.Begin then return Enum.ContextActionResult.Pass end
+            if State.hudEditorActive then return Enum.ContextActionResult.Pass end
+            if UserInputService:GetFocusedTextBox() then return Enum.ContextActionResult.Pass end
+
+            local index = keyToIndex[inputObject.KeyCode]
+            if not index then return Enum.ContextActionResult.Pass end
+            if not (State.favoriteEnabled or State.currentMode == "animation" or (index == 1 and isRandomSlotActive())) then
+                return Enum.ContextActionResult.Pass
+            end
+
+            local exists, emotesWheel = checkEmotesMenuExists()
+            local isRecentlyVisible = (tick() - State.lastWheelVisibleTime < 0.15)
+            if not (exists and (emotesWheel.Visible or isRecentlyVisible)) then return Enum.ContextActionResult.Pass end
+
+            local success, frontFrame = pcall(function()
+                return game:GetService("CoreGui").RobloxGui.EmotesMenu.Children.Main.EmotesWheel.Front.EmotesButtons
+            end)
+            if success and frontFrame then
+                local target = frontFrame:FindFirstChild(tostring(index))
+                if target and target:IsA("ImageLabel") and target.Image ~= "" then
+                    handleSectorAction(index)
+                    if State.currentMode == "animation" and not State.favoriteEnabled then
+                        pcall(function()
+                            game:GetService("GuiService"):SetEmotesMenuOpen(false)
+                        end)
+                        pcall(function()
+                            game:GetService("CoreGui").RobloxGui.EmotesMenu.Children.Main.EmotesWheel.Visible = false
+                        end)
+                    end
+                    return Enum.ContextActionResult.Sink
+                end
+            end
+
+            return Enum.ContextActionResult.Pass
+        end
+
+        ContextActionService:UnbindAction("7yd7_EmoteWheelHotkeys")
+        ContextActionService:BindActionAtPriority(
+            "7yd7_EmoteWheelHotkeys",
+            onHotkey,
+            false,
+            (Enum.ContextActionPriority.High.Value + 50),
+            Enum.KeyCode.One, Enum.KeyCode.Two, Enum.KeyCode.Three, Enum.KeyCode.Four,
+            Enum.KeyCode.Five, Enum.KeyCode.Six, Enum.KeyCode.Seven, Enum.KeyCode.Eight,
+            Enum.KeyCode.KeypadOne, Enum.KeyCode.KeypadTwo, Enum.KeyCode.KeypadThree, Enum.KeyCode.KeypadFour,
+            Enum.KeyCode.KeypadFive, Enum.KeyCode.KeypadSix, Enum.KeyCode.KeypadSeven, Enum.KeyCode.KeypadEight
+        )
+    end
+
+    bindWheelHotkeys()
 
     if UI.EmoteWalkButton then
         table.insert(State.guiConnections, UI.EmoteWalkButton.MouseButton1Click:Connect(function()
@@ -3699,19 +4411,33 @@ function connectEvents()
         table.insert(State.guiConnections, UI.Changepage.MouseButton1Click:Connect(function()
             safeButtonClick("ChangePage", function()
                 stopEmoteClickDetection()
+                if State.animImageSpamConn then
+                    State.animImageSpamConn:Disconnect()
+                    State.animImageSpamConn = nil
+                    State.animImageSpamMap = nil
+                    State.animImageSpamTicks = nil
+                    State.animImageSpamToken = State.animImageSpamToken + 1
+                end
                 
                 if State.currentMode == "emote" then
                     State.currentMode = "animation"
                     
                     spawn(function()
                         fetchAllAnimations()
+                        State.suppressSearch = true
                         UI.Search.Text = State.animationSearchTerm
+                        State.suppressSearch = false
                         State.currentPage = Config.AnimationPage or 1
                         State.totalPages = calculateTotalPages()
                         updatePageDisplay()
-                        updateEmotes()
+                        updateEmotes() 
+                        updateScriptPriorityOverlay()
+                        State.animationMonitorToken = State.animationMonitorToken + 1
+                        local token = State.animationMonitorToken
                         State.isMonitoringClicks = true
-                        task.spawn(monitorAnimations)
+                        task.spawn(function()
+                            monitorAnimations(token)
+                        end)
                     end)
                     
                     getgenv().Notify({
@@ -3722,11 +4448,15 @@ function connectEvents()
 
                 else
                     State.currentMode = "emote"
+                    clearCustomHitboxes()
+                    State.suppressSearch = true
                     UI.Search.Text = State.emoteSearchTerm
+                    State.suppressSearch = false
                     State.currentPage = Config.EmotePage or 1
                     State.totalPages = calculateTotalPages()
                     updatePageDisplay() 
                     updateEmotes()
+                    updateScriptPriorityOverlay()
                     
                     if State.favoriteEnabled then
                         setupEmoteClickDetection()
@@ -3742,11 +4472,18 @@ function connectEvents()
         end))
     end
 
+
+
     if UI.SpeedBox then
         table.insert(State.guiConnections, UI.SpeedBox.FocusLost:Connect(function()
             if State.hudEditorActive then return end
-            Config.EmoteSpeed = tonumber(UI.SpeedBox.Text) or 1
+            local speedValue = tonumber(UI.SpeedBox.Text) or 1
+            Config.EmoteSpeed = speedValue
             SaveConfig()
+            
+            if State.speedEmoteEnabled and State.currentEmoteTrack and State.currentEmoteTrack.IsPlaying then
+                State.currentEmoteTrack:AdjustSpeed(speedValue)
+            end
         end))
     end
 end
@@ -3765,6 +4502,123 @@ local function getMovableElements()
     if UI.Changepage then elems["Changepage"] = UI.Changepage end
     if UI.Reload then elems["Reload"] = UI.Reload end
     return elems
+end
+
+local function calculateSnap(element, newPos, currentName, allMovable)
+    local SNAP_THRESHOLD = 8
+    local parent = element.Parent
+    if not parent then return newPos, nil, nil end
+    local ps = parent.AbsoluteSize
+    local pp = parent.AbsolutePosition
+    local absX = pp.X + newPos.X.Scale * ps.X + newPos.X.Offset
+    local absY = pp.Y + newPos.Y.Scale * ps.Y + newPos.Y.Offset
+    local absW = element.AbsoluteSize.X
+    local absH = element.AbsoluteSize.Y
+    local sX, sY = absX, absY
+    local didX, didY = false, false
+    local guideX, guideY
+    for oName, oEl in pairs(allMovable) do
+        if oName ~= currentName then
+            local oX = oEl.AbsolutePosition.X
+            local oY = oEl.AbsolutePosition.Y
+            local oW = oEl.AbsoluteSize.X
+            local oH = oEl.AbsoluteSize.Y
+            if not didX then
+                if math.abs(absX - oX) < SNAP_THRESHOLD then sX = oX; didX = true; guideX = oX end
+                if math.abs(absX - (oX + oW)) < SNAP_THRESHOLD then sX = oX + oW; didX = true; guideX = oX + oW end
+                if math.abs((absX + absW) - oX) < SNAP_THRESHOLD then sX = oX - absW; didX = true; guideX = oX end
+                if math.abs((absX + absW) - (oX + oW)) < SNAP_THRESHOLD then sX = oX + oW - absW; didX = true; guideX = oX + oW end
+                if math.abs((absX + absW/2) - (oX + oW/2)) < SNAP_THRESHOLD then sX = oX + oW/2 - absW/2; didX = true; guideX = oX + oW/2 end
+            end
+            if not didY then
+                if math.abs(absY - oY) < SNAP_THRESHOLD then sY = oY; didY = true; guideY = oY end
+                if math.abs(absY - (oY + oH)) < SNAP_THRESHOLD then sY = oY + oH; didY = true; guideY = oY + oH end
+                if math.abs((absY + absH) - oY) < SNAP_THRESHOLD then sY = oY - absH; didY = true; guideY = oY end
+                if math.abs((absY + absH) - (oY + oH)) < SNAP_THRESHOLD then sY = oY + oH - absH; didY = true; guideY = oY + oH end
+                if math.abs((absY + absH/2) - (oY + oH/2)) < SNAP_THRESHOLD then sY = oY + oH/2 - absH/2; didY = true; guideY = oY + oH/2 end
+            end
+        end
+    end
+    local fsx = (sX - pp.X) / ps.X
+    local fsy = (sY - pp.Y) / ps.Y
+    return UDim2.new(fsx, newPos.X.Offset, fsy, newPos.Y.Offset), guideX, guideY
+end
+
+local function setupElementDragging(name, element, allMovable, snapGuideV, snapGuideH)
+    element.Visible = true
+    local stroke = Instance.new("UIStroke")
+    stroke.Name = "HUDEditorStroke"
+    stroke.Color = Color3.fromRGB(0, 255, 100)
+    stroke.Thickness = 2
+    stroke.Parent = element
+    table.insert(HUD.Strokes, stroke)
+
+    local hasLayout = element:FindFirstChildOfClass("UIListLayout")
+    local inputTarget
+    if hasLayout then
+        for _, child in pairs(element:GetChildren()) do
+            if child:IsA("GuiButton") or child:IsA("TextBox") then
+                child.Active = false
+            end
+        end
+        element.Active = true
+        inputTarget = element
+    else
+        local dh = Instance.new("TextButton")
+        dh.Name = "HUDDragHandle"
+        dh.Parent = element
+        dh.BackgroundTransparency = 1
+        dh.Text = ""
+        dh.Size = UDim2.fromScale(1, 1)
+        dh.ZIndex = 9999
+        dh.Active = true
+        inputTarget = dh
+    end
+
+    local dragging = false
+    local dragStart, startPos
+    table.insert(HUD.Connections, inputTarget.InputBegan:Connect(function(input)
+        if not State.hudEditorActive then return end
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = input.Position
+            startPos = element.Position
+            stroke.Color = Color3.fromRGB(255, 255, 255)
+        end
+    end))
+
+    table.insert(HUD.Connections, UserInputService.InputChanged:Connect(function(input)
+        if not dragging then return end
+        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+            local delta = input.Position - dragStart
+            local ps = element.Parent and element.Parent.AbsoluteSize or Vector2.new(1, 1)
+            local rawPos = UDim2.new(
+                startPos.X.Scale + delta.X / ps.X, startPos.X.Offset,
+                startPos.Y.Scale + delta.Y / ps.Y, startPos.Y.Offset
+            )
+            local snapped, gx, gy = calculateSnap(element, rawPos, name, allMovable)
+            element.Position = snapped
+            local ovP = HUD.Overlay and HUD.Overlay.AbsolutePosition or Vector2.new(0, 0)
+            if snapGuideV then snapGuideV.Visible = (gx ~= nil); if gx then snapGuideV.Position = UDim2.fromOffset(gx - ovP.X, 0) end end
+            if snapGuideH then snapGuideH.Visible = (gy ~= nil); if gy then snapGuideH.Position = UDim2.fromOffset(0, gy - ovP.Y) end end
+        end
+    end))
+
+    table.insert(HUD.Connections, UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            if dragging then
+                dragging = false
+                stroke.Color = Color3.fromRGB(0, 255, 100)
+                if snapGuideV then snapGuideV.Visible = false end
+                if snapGuideH then snapGuideH.Visible = false end
+                Config.HUDPositions[name] = {
+                    element.Position.X.Scale, element.Position.X.Offset,
+                    element.Position.Y.Scale, element.Position.Y.Offset
+                }
+                SaveConfig()
+            end
+        end
+    end))
 end
 
 applySavedPositions = function()
@@ -3820,7 +4674,7 @@ enterHUDEditor = function()
     if State.hudEditorActive then return end
     State.hudEditorActive = true
 
-    game:GetService("GuiService"):SetEmotesMenuOpen(false)
+    GuiService:SetEmotesMenuOpen(false)
     task.wait(0.15)
 
     local exists, emotesWheel = checkEmotesMenuExists()
@@ -3898,148 +4752,27 @@ enterHUDEditor = function()
     if UI.SpeedBox then UI.SpeedBox.TextEditable = false; UI.SpeedBox.Active = false; pcall(function() UI.SpeedBox:ReleaseFocus() end) end
     if UI._2Routenumber then UI._2Routenumber.TextEditable = false; UI._2Routenumber.Active = false; pcall(function() UI._2Routenumber:ReleaseFocus() end) end
 
-    local SNAP_THRESHOLD = 8
     local allMovable = getMovableElements()
-    local snapGuideH, snapGuideV
+    local snapGuideH = Instance.new("Frame")
+    snapGuideH.Name = "SnapGuide"
+    snapGuideH.BackgroundColor3 = Color3.fromRGB(0, 170, 255)
+    snapGuideH.BorderSizePixel = 0
+    snapGuideH.Size = UDim2.new(1, 0, 0, 1)
+    snapGuideH.ZIndex = 6002
+    snapGuideH.Visible = false
+    snapGuideH.Parent = overlay
 
-    local function createSnapGuides()
-        if not HUD.Overlay then return end
-        snapGuideH = Instance.new("Frame")
-        snapGuideH.Name = "SnapGuide"
-        snapGuideH.BackgroundColor3 = Color3.fromRGB(0, 170, 255)
-        snapGuideH.BorderSizePixel = 0
-        snapGuideH.Size = UDim2.new(1, 0, 0, 1)
-        snapGuideH.ZIndex = 6002
-        snapGuideH.Visible = false
-        snapGuideH.Parent = HUD.Overlay
-        snapGuideV = Instance.new("Frame")
-        snapGuideV.Name = "SnapGuide"
-        snapGuideV.BackgroundColor3 = Color3.fromRGB(0, 170, 255)
-        snapGuideV.BorderSizePixel = 0
-        snapGuideV.Size = UDim2.new(0, 1, 1, 0)
-        snapGuideV.ZIndex = 6002
-        snapGuideV.Visible = false
-        snapGuideV.Parent = HUD.Overlay
-    end
-    createSnapGuides()
-
-    local function snapCalc(element, newPos, currentName)
-        local parent = element.Parent
-        if not parent then return newPos, nil, nil end
-        local ps = parent.AbsoluteSize
-        local pp = parent.AbsolutePosition
-        local absX = pp.X + newPos.X.Scale * ps.X + newPos.X.Offset
-        local absY = pp.Y + newPos.Y.Scale * ps.Y + newPos.Y.Offset
-        local absW = element.AbsoluteSize.X
-        local absH = element.AbsoluteSize.Y
-        local sX, sY = absX, absY
-        local didX, didY = false, false
-        local guideX, guideY
-        for oName, oEl in pairs(allMovable) do
-            if oName ~= currentName then
-                local oX = oEl.AbsolutePosition.X
-                local oY = oEl.AbsolutePosition.Y
-                local oW = oEl.AbsoluteSize.X
-                local oH = oEl.AbsoluteSize.Y
-                if not didX then
-                    if math.abs(absX - oX) < SNAP_THRESHOLD then sX = oX; didX = true; guideX = oX end
-                    if math.abs(absX - (oX + oW)) < SNAP_THRESHOLD then sX = oX + oW; didX = true; guideX = oX + oW end
-                    if math.abs((absX + absW) - oX) < SNAP_THRESHOLD then sX = oX - absW; didX = true; guideX = oX end
-                    if math.abs((absX + absW) - (oX + oW)) < SNAP_THRESHOLD then sX = oX + oW - absW; didX = true; guideX = oX + oW end
-                    if math.abs((absX + absW/2) - (oX + oW/2)) < SNAP_THRESHOLD then sX = oX + oW/2 - absW/2; didX = true; guideX = oX + oW/2 end
-                end
-                if not didY then
-                    if math.abs(absY - oY) < SNAP_THRESHOLD then sY = oY; didY = true; guideY = oY end
-                    if math.abs(absY - (oY + oH)) < SNAP_THRESHOLD then sY = oY + oH; didY = true; guideY = oY + oH end
-                    if math.abs((absY + absH) - oY) < SNAP_THRESHOLD then sY = oY - absH; didY = true; guideY = oY end
-                    if math.abs((absY + absH) - (oY + oH)) < SNAP_THRESHOLD then sY = oY + oH - absH; didY = true; guideY = oY + oH end
-                    if math.abs((absY + absH/2) - (oY + oH/2)) < SNAP_THRESHOLD then sY = oY + oH/2 - absH/2; didY = true; guideY = oY + oH/2 end
-                end
-            end
-        end
-        local fsx = (sX - pp.X) / ps.X
-        local fsy = (sY - pp.Y) / ps.Y
-        return UDim2.new(fsx, newPos.X.Offset, fsy, newPos.Y.Offset), guideX, guideY
-    end
+    local snapGuideV = Instance.new("Frame")
+    snapGuideV.Name = "SnapGuide"
+    snapGuideV.BackgroundColor3 = Color3.fromRGB(0, 170, 255)
+    snapGuideV.BorderSizePixel = 0
+    snapGuideV.Size = UDim2.new(0, 1, 1, 0)
+    snapGuideV.ZIndex = 6002
+    snapGuideV.Visible = false
+    snapGuideV.Parent = overlay
 
     for name, element in pairs(allMovable) do
-        element.Visible = true
-
-        local stroke = Instance.new("UIStroke")
-        stroke.Name = "HUDEditorStroke"
-        stroke.Color = Color3.fromRGB(0, 255, 100)
-        stroke.Thickness = 2
-        stroke.Parent = element
-        table.insert(HUD.Strokes, stroke)
-
-        local hasLayout = element:FindFirstChildOfClass("UIListLayout")
-        local inputTarget
-
-        if hasLayout then
-            for _, child in pairs(element:GetChildren()) do
-                if child:IsA("GuiButton") or child:IsA("TextBox") then
-                    child.Active = false
-                end
-            end
-            element.Active = true
-            inputTarget = element
-        else
-            local dh = Instance.new("TextButton")
-            dh.Name = "HUDDragHandle"
-            dh.Parent = element
-            dh.BackgroundTransparency = 1
-            dh.Text = ""
-            dh.Size = UDim2.fromScale(1, 1)
-            dh.ZIndex = 9999
-            dh.Active = true
-            inputTarget = dh
-        end
-
-        local dragging = false
-        local dragStart, startPos
-
-        table.insert(HUD.Connections, inputTarget.InputBegan:Connect(function(input)
-            if not State.hudEditorActive then return end
-            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-                dragging = true
-                dragStart = input.Position
-                startPos = element.Position
-                stroke.Color = Color3.fromRGB(255, 255, 255)
-            end
-        end))
-
-        table.insert(HUD.Connections, UserInputService.InputChanged:Connect(function(input)
-            if not dragging then return end
-            if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-                local delta = input.Position - dragStart
-                local ps = element.Parent and element.Parent.AbsoluteSize or Vector2.new(1, 1)
-                local rawPos = UDim2.new(
-                    startPos.X.Scale + delta.X / ps.X, startPos.X.Offset,
-                    startPos.Y.Scale + delta.Y / ps.Y, startPos.Y.Offset
-                )
-                local snapped, gx, gy = snapCalc(element, rawPos, name)
-                element.Position = snapped
-                local ovP = HUD.Overlay and HUD.Overlay.AbsolutePosition or Vector2.new(0, 0)
-                if snapGuideV then snapGuideV.Visible = (gx ~= nil); if gx then snapGuideV.Position = UDim2.fromOffset(gx - ovP.X, 0) end end
-                if snapGuideH then snapGuideH.Visible = (gy ~= nil); if gy then snapGuideH.Position = UDim2.fromOffset(0, gy - ovP.Y) end end
-            end
-        end))
-
-        table.insert(HUD.Connections, UserInputService.InputEnded:Connect(function(input)
-            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-                if dragging then
-                    dragging = false
-                    stroke.Color = Color3.fromRGB(0, 255, 100)
-                    if snapGuideV then snapGuideV.Visible = false end
-                    if snapGuideH then snapGuideH.Visible = false end
-                    Config.HUDPositions[name] = {
-                        element.Position.X.Scale, element.Position.X.Offset,
-                        element.Position.Y.Scale, element.Position.Y.Offset
-                    }
-                    SaveConfig()
-                end
-            end
-        end))
+        setupElementDragging(name, element, allMovable, snapGuideV, snapGuideH)
     end
 
     getgenv().Notify({ Title = "7yd7 | HUD Editor", Content = "✏️ Drag elements to reposition", Duration = 5 })
@@ -4120,6 +4853,7 @@ local heartbeatConnection = RunService.Heartbeat:Connect(function()
         checkAndRecreateGUI()
     else
         updateGUIColors()
+        enforceImages()
     end
 end)
 
@@ -4135,10 +4869,11 @@ local function safeFind(path, name)
     return nil
 end
 
+
 RunService.Stepped:Connect(function()
-    if humanoid and State.currentEmoteTrack and State.currentEmoteTrack.IsPlaying then
+    if humanoid and State.currentEmoteTrack and typeof(State.currentEmoteTrack) == "Instance" and State.currentEmoteTrack:IsA("AnimationTrack") and State.currentEmoteTrack.IsPlaying then
         if humanoid.MoveDirection.Magnitude > 0 then
-            if State.speedEmoteEnabled and not State.emotesWalkEnabled then
+            if not State.emotesWalkEnabled then
                 State.currentEmoteTrack:Stop()
                 State.currentEmoteTrack = nil
             end
@@ -4147,25 +4882,16 @@ RunService.Stepped:Connect(function()
 end)
 
 spawn(function()
-    while not checkEmotesMenuExists() do
-        wait(0.1)
-    end
-    if createGUIElements() then
-        loadFavorites()
-        loadFavoritesAnimations()
-        fetchAllEmotes()
-        loadSpeedEmoteConfig()
-    end
+    loadFavorites()
+    loadFavoritesAnimations()
+    fetchAllEmotes()
+    loadSpeedEmoteConfig()
 end)
- local StarterGui = game:GetService("StarterGui")
 
  StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Chat, true)
 task.spawn(function()
-    local StarterGui = game:GetService("StarterGui")
-    local CoreGui = game:GetService("CoreGui")
-
     while true do
-        local robloxGui = CoreGui:FindFirstChild("RobloxGui")
+        local robloxGui = game:GetService("CoreGui"):FindFirstChild("RobloxGui")
         local emotesMenu = robloxGui and robloxGui:FindFirstChild("EmotesMenu")
 
         if not emotesMenu then
@@ -4183,11 +4909,8 @@ task.spawn(function()
                         loadSpeedEmoteConfig()
                     end
 
-                    if updateGUIColors then
                         updateGUIColors()
                         updatePageDisplay()
-                        loadFavorites()
-                    end
                 end
             end
         end
