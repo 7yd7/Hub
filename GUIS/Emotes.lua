@@ -3970,31 +3970,25 @@ playEmote = function(humanoid, emoteId)
     stopCurrentEmote()
     stopEmotes()
 
-    local function tryPlayEmoteById(id)
-        local animator = humanoid:FindFirstChildOfClass("Animator") or humanoid:WaitForChild("Animator")
-        local animation = Instance.new("Animation")
-        animation.AnimationId = "rbxassetid://" .. tostring(id)
-        local ok, track = pcall(function()
-            return animator:LoadAnimation(animation)
-        end)
-        if ok and track and typeof(track) == "Instance" and track:IsA("AnimationTrack") then
-            track.Priority = Enum.AnimationPriority.Action
-            track.Looped = true
-            task.wait(0.1)
-            if State.speedEmoteEnabled or State.emotesWalkEnabled then
-                track:Play()
-            end
-            State.currentEmoteTrack = track
-            return true
-        end
-        return false
-    end
+    local animation = Instance.new("Animation")
+    animation.AnimationId = "rbxassetid://" .. emoteId
 
-    local success = tryPlayEmoteById(emoteId)
-    if success and State.currentEmoteTrack then
-        if State.speedEmoteEnabled then
-            local speedVal = tonumber(UI.SpeedBox.Text) or Config.EmoteSpeed or 1
-            State.currentEmoteTrack:AdjustSpeed(speedVal)
+    local success, animTrack = pcall(function()
+        return humanoid.Animator:LoadAnimation(animation)
+    end)
+
+    if success and animTrack then
+        State.currentEmoteTrack = animTrack
+        State.currentEmoteTrack.Priority = Enum.AnimationPriority.Action
+        State.currentEmoteTrack.Looped = true
+        task.wait(0.1)
+        if State.speedEmoteEnabled or State.emotesWalkEnabled then
+            State.currentEmoteTrack:Play()
+
+            if State.speedEmoteEnabled then
+                local speedValue = tonumber(UI.SpeedBox.Text) or 1
+                State.currentEmoteTrack:AdjustSpeed(speedValue)
+            end
         end
     end
 end
@@ -4048,10 +4042,10 @@ end
 
                 playEmote(humanoid, playedEmoteId)
 
-                if State.currentEmoteTrack then
-                    State.currentEmoteTrack.Ended:Connect(function()
-                        if State.currentEmoteTrack == animationTrack then
-                            State.currentEmoteTrack = nil
+                if currentEmoteTrack then
+                    currentEmoteTrack.Ended:Connect(function()
+                        if currentEmoteTrack == animationTrack then
+                            currentEmoteTrack = nil
                         end
                     end)
                 end
@@ -4069,10 +4063,10 @@ end
 
                 playEmote(humanoid, playedEmoteId)
 
-                if State.currentEmoteTrack then
-                    State.currentEmoteTrack.Ended:Connect(function()
-                        if State.currentEmoteTrack == animationTrack then
-                            State.currentEmoteTrack = nil
+                if currentEmoteTrack then
+                    currentEmoteTrack.Ended:Connect(function()
+                        if currentEmoteTrack == animationTrack then
+                            currentEmoteTrack = nil
                         end
                     end)
                 end
@@ -4117,13 +4111,12 @@ local function toggleEmoteWalk()
         UI.EmoteWalkButton.Image = State.defaultButtonImage
         task.wait(0.1)
         stopCurrentEmote()
-        if State.currentEmoteTrack and State.currentEmoteTrack.IsPlaying then
-            if State.speedEmoteEnabled then
-                local speedVal = tonumber(UI.SpeedBox.Text) or 1
-                State.currentEmoteTrack:AdjustSpeed(speedVal)
-            else
-                State.currentEmoteTrack:AdjustSpeed(1)
-            end
+
+        if State.currentEmoteTrack and State.currentEmoteTrack.IsPlaying and State.speedEmoteEnabled then
+            local speedValue = tonumber(UI.SpeedBox.Text) or 1
+            State.currentEmoteTrack:AdjustSpeed(speedValue)
+        elseif State.currentEmoteTrack and State.currentEmoteTrack.IsPlaying then
+            State.currentEmoteTrack:AdjustSpeed(1)
         end
     end
 end
