@@ -487,6 +487,7 @@ local Config = {
     AnimationPage = 1,
     RandomEnabled = true,
     RandomMode = "All",
+    AuthenticFirstPage = false,
     HUDPositions = {}
 }
 
@@ -609,6 +610,17 @@ TogglesUI.NotifyEnabled = SettingsLib.AddToggle(GeneralTab, "Show Notifications"
     SaveConfig()
 end)
 
+TogglesUI.AuthenticFirstPage = SettingsLib.AddToggle(GeneralTab, "Authentic Emotes Page", "Show owned emotes on page 1", Config.AuthenticFirstPage, function(v)
+    Config.AuthenticFirstPage = v
+    State.totalPages = calculateTotalPages()
+    if State.currentPage > State.totalPages then
+        State.currentPage = State.totalPages
+    end
+    updatePageDisplay()
+    updateEmotes()
+    SaveConfig()
+end)
+
 local randomModes = { "All", "Favorites" }
 local randomDropdown = SettingsLib.AddDropdown(GeneralTab, "Random Source", randomModes, Config.RandomMode or "All", function(v)
     Config.RandomMode = v
@@ -641,6 +653,7 @@ TogglesUI.RandomEnabled = SettingsLib.AddToggle(GeneralTab, "Random Enabled", "E
     updateEmotes()
     SaveConfig()
 end)
+
 local ButtonsTab = SettingsLib.CreateTab("Buttons", 2)
 
 TogglesUI.SearchVisible = SettingsLib.AddToggle(ButtonsTab, "Search Bar", "Show/Hide the search input", Config.SearchVisible, function(v)
@@ -680,7 +693,8 @@ TogglesUI.NavVisible = SettingsLib.AddToggle(ButtonsTab, "Page Controls", "Show/
 end)
 
 local cachedOverlay = nil
-local hudEditorItem = SettingsLib.AddItem(GeneralTab, "HUD Editor", "Reposition buttons & UI elements")
+local hudEditorItem = SettingsLib.AddItem(ButtonsTab, "HUD Editor", "Reposition buttons & UI elements")
+hudEditorItem.LayoutOrder = -10
 local hudEditorBtn = SettingsLib:Create("TextButton", {
     Parent = hudEditorItem,
     BackgroundColor3 = Color3.fromRGB(0, 255, 150),
@@ -1979,6 +1993,37 @@ local Players = game:GetService("Players")
 local player = Players.LocalPlayer
 local character = player.Character or player.CharacterAdded:Wait()
 local humanoid = character:WaitForChild("Humanoid")
+
+getgenv().OwnedAuthenticEmotes = getgenv().OwnedAuthenticEmotes or {}
+local function gatherAuthenticEmotes(char)
+    if not char then return end
+    local hum = char:WaitForChild("Humanoid", 5)
+    if not hum then return end
+    local desc = hum:WaitForChild("HumanoidDescription", 5)
+    if not desc then return end
+    local allEmotes = desc:GetEmotes()
+    local owned = {}
+    
+    for _, e in ipairs(desc:GetEquippedEmotes()) do
+        local id = allEmotes[e.Name] and allEmotes[e.Name][1]
+        if id then
+            local idNum = tonumber((tostring(id):gsub("rbxassetid://", "")))
+            if idNum then
+                table.insert(owned, {
+                    name = e.Name,
+                    id = idNum
+                })
+            end
+        end
+    end
+    if #owned > 0 then
+        getgenv().OwnedAuthenticEmotes = owned
+    end
+end
+
+task.spawn(function() gatherAuthenticEmotes(character) end)
+player.CharacterAdded:Connect(gatherAuthenticEmotes)
+
 local UserInputService = game:GetService("UserInputService")
 local CoreGui = game:GetService("CoreGui")
 
@@ -2152,7 +2197,14 @@ isRandomSlotEnabled = function()
 end
 
 isRandomSlotActive = function()
-    return State.currentPage == 1 and shouldRandomSlotBeShown()
+    local firstNonAuthenticPage = 1
+    if Config.AuthenticFirstPage and State.currentMode == "emote" then
+        local authenticEmotes = getgenv().OwnedAuthenticEmotes or {}
+        if #authenticEmotes > 0 then
+            firstNonAuthenticPage = 2
+        end
+    end
+    return State.currentPage == firstNonAuthenticPage and shouldRandomSlotBeShown()
 end
 
 local function getPageSize(pageNumber, isFirstList)
@@ -2318,6 +2370,43 @@ local function updateScriptPriorityOverlay()
             blocker.AutoButtonColor = false
             blocker.ZIndex = 9999
             blocker.Parent = frontFrame
+            
+            blocker.InputBegan:Connect(function(input)
+                if State.hudEditorActive then return end
+                if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then return end
+                
+                local okWheel, emotesWheel = pcall(function()
+                    return game:GetService("CoreGui").RobloxGui.EmotesMenu.Children.Main.EmotesWheel
+                end)
+                if not (okWheel and emotesWheel) then return end
+                if not emotesWheel.Visible then return end
+
+                local actualPos = Vector2.new(input.Position.X, input.Position.Y)
+                local absPos = emotesWheel.AbsolutePosition
+                local absSize = emotesWheel.AbsoluteSize
+
+                local inXBounds = (actualPos.X >= absPos.X) and (actualPos.X <= absPos.X + absSize.X)
+                local inYBounds = (actualPos.Y >= absPos.Y) and (actualPos.Y <= absPos.Y + absSize.Y)
+                if not (inXBounds and inYBounds) then return end
+
+                local center = absPos + (absSize / 2)
+                local dx = actualPos.X - center.X
+                local dy = actualPos.Y - center.Y
+
+                local distance = math.sqrt(dx*dx + dy*dy)
+                local radius = math.min(absSize.X, absSize.Y) * 0.5
+                if distance > radius then return end
+                local dynamicDeadzone = radius * 0.2
+                if distance < dynamicDeadzone then return end
+
+                local sectorAngle = 360 / 8
+                local angle = math.deg(math.atan2(dy, dx))
+                local correctedAngle = (angle + 90 + (sectorAngle / 2)) % 360
+                local index = math.floor(correctedAngle / sectorAngle) + 1
+                if not (State.favoriteEnabled or State.currentMode == "animation" or (index == 1 and isRandomSlotActive())) then return end
+
+                handleSectorAction(index)
+            end)
         end
         blocker.Active = true
     else
@@ -2732,23 +2821,39 @@ updateEmotes = function()
     local emoteTable = {}
     local equippedEmotes = {}
 
+    local authenticEmotes = getgenv().OwnedAuthenticEmotes or {}
+    local hasAuthentic = Config.AuthenticFirstPage and (#authenticEmotes > 0)
+    local isAuthenticPage = hasAuthentic and (State.currentPage == 1)
+    local authenticPagesCount = hasAuthentic and 1 or 0
+
     rebuildEmoteNormalCache()
     local favoritesToUse = _G.filteredFavoritesForDisplay or State.favoriteEmotes
     local hasFavorites = #favoritesToUse > 0
     local favoritePagesCount = hasFavorites and calcPagesForList(#favoritesToUse, true) or 0
-    local isInFavoritesPages = State.currentPage <= favoritePagesCount
+    local isInFavoritesPages = State.currentPage <= (favoritePagesCount + authenticPagesCount) and not isAuthenticPage
 
-    if isInFavoritesPages and hasFavorites then
-        currentPageEmotes = getListSlice(favoritesToUse, State.currentPage, true)
+    if isAuthenticPage then
+        currentPageEmotes = {}
+        for i = 1, math.min(#authenticEmotes, 8) do
+            table.insert(currentPageEmotes, authenticEmotes[i])
+        end
+    elseif isInFavoritesPages and hasFavorites then
+        local adjustedPage = State.currentPage - authenticPagesCount
+        currentPageEmotes = getListSlice(favoritesToUse, adjustedPage, true)
     else
         local normalEmotes = State.emotePageCache.normal or {}
-        local adjustedPage = State.currentPage - favoritePagesCount
+        local adjustedPage = State.currentPage - favoritePagesCount - authenticPagesCount
         local isFirstNormalList = (favoritePagesCount == 0)
         currentPageEmotes = getListSlice(normalEmotes, adjustedPage, isFirstNormalList)
     end
 
     local randomActive = isRandomSlotActive()
     if randomActive then
+        local trimmed = {}
+        for i = 1, math.min(#currentPageEmotes, 7) do
+            table.insert(trimmed, currentPageEmotes[i])
+        end
+        currentPageEmotes = trimmed
         local randomFallback = currentPageEmotes[1] or (State.filteredEmotes and State.filteredEmotes[1])
         if randomFallback then
             emoteTable["Random Emote"] = {randomFallback.id}
@@ -2845,6 +2950,10 @@ calculateTotalPages = function()
     local normalEmotesCount = #(State.emotePageCache.normal or {})
 
     local pages = 0
+
+    if Config.AuthenticFirstPage and getgenv().OwnedAuthenticEmotes and #getgenv().OwnedAuthenticEmotes > 0 then
+        pages = pages + 1
+    end
 
     if hasFavorites then
         pages = pages + calcPagesForList(#favoritesToUse, true)
@@ -3494,14 +3603,26 @@ handleSectorAction = function(index)
         return
     end
 
+    local authenticEmotes = getgenv().OwnedAuthenticEmotes or {}
+    local hasAuthentic = Config.AuthenticFirstPage and (#authenticEmotes > 0) and (State.currentMode == "emote")
+    local isAuthenticPage = hasAuthentic and (State.currentPage == 1)
+    local authenticPagesCount = hasAuthentic and 1 or 0
+
     local favoritesToUse = (State.currentMode == "animation") and (_G.filteredFavoritesAnimationsForDisplay or State.favoriteAnimations) or (_G.filteredFavoritesForDisplay or State.favoriteEmotes)
     local hasFavorites = #favoritesToUse > 0
     local favoritePagesCount = hasFavorites and calcPagesForList(#favoritesToUse, true) or 0
-    local isInFavoritesPages = State.currentPage <= favoritePagesCount
+    local isInFavoritesPages = State.currentPage <= (favoritePagesCount + authenticPagesCount) and not isAuthenticPage
 
     local function getEmoteAtIndex(idx)
-        if isInFavoritesPages and hasFavorites then
-            local pageItems = getListSlice(favoritesToUse, State.currentPage, true)
+        if State.currentMode == "emote" and isAuthenticPage then
+            local limitedAuthentic = {}
+            for i = 1, math.min(#authenticEmotes, 8) do
+                table.insert(limitedAuthentic, authenticEmotes[i])
+            end
+            return limitedAuthentic[idx]
+        elseif isInFavoritesPages and hasFavorites then
+            local adjustedPage = State.currentPage - authenticPagesCount
+            local pageItems = getListSlice(favoritesToUse, adjustedPage, true)
             return pageItems[idx]
         else
             local filteredList = (State.currentMode == "animation") and State.filteredAnimations or State.filteredEmotes
@@ -3511,7 +3632,7 @@ handleSectorAction = function(index)
                     table.insert(normalList, item)
                 end
             end
-            local adjustedPage = State.currentPage - favoritePagesCount
+            local adjustedPage = State.currentPage - favoritePagesCount - authenticPagesCount
             local isFirstNormalList = (favoritePagesCount == 0)
             local pageItems = getListSlice(normalList, adjustedPage, isFirstNormalList)
             return pageItems[idx]
@@ -4283,6 +4404,14 @@ function connectEvents()
 
     local SECTOR_COUNT = 8
     local SECTOR_ANGLE = 360 / SECTOR_COUNT
+    
+    local function isAuthenticPageActive()
+        if not (Config.AuthenticFirstPage and State.currentMode == "emote" and State.currentPage == 1) then
+            return false
+        end
+        local authenticEmotes = getgenv().OwnedAuthenticEmotes or {}
+        return #authenticEmotes > 0
+    end
 
     table.insert(State.guiConnections, UserInputService.InputBegan:Connect(function(input, gameProcessed)
         if State.hudEditorActive then return end
@@ -4315,7 +4444,7 @@ function connectEvents()
         local angle = math.deg(math.atan2(dy, dx))
         local correctedAngle = (angle + 90 + (SECTOR_ANGLE / 2)) % 360
         local index = math.floor(correctedAngle / SECTOR_ANGLE) + 1
-        if not (State.favoriteEnabled or State.currentMode == "animation" or (index == 1 and isRandomSlotActive())) then return end
+        if not (State.favoriteEnabled or State.currentMode == "animation" or isAuthenticPageActive() or (index == 1 and isRandomSlotActive())) then return end
 
         handleSectorAction(index)
     end))
@@ -4337,7 +4466,7 @@ function connectEvents()
 
             local index = keyToIndex[inputObject.KeyCode]
             if not index then return Enum.ContextActionResult.Pass end
-            if not (State.favoriteEnabled or State.currentMode == "animation" or (index == 1 and isRandomSlotActive())) then
+            if not (State.favoriteEnabled or State.currentMode == "animation" or isAuthenticPageActive() or (index == 1 and isRandomSlotActive())) then
                 return Enum.ContextActionResult.Pass
             end
 
@@ -4421,8 +4550,7 @@ function connectEvents()
                 if State.currentMode == "emote" then
                     State.currentMode = "animation"
                     
-                    spawn(function()
-                        fetchAllAnimations()
+                    local function applyAnimationModeUI()
                         State.suppressSearch = true
                         UI.Search.Text = State.animationSearchTerm
                         State.suppressSearch = false
@@ -4437,6 +4565,17 @@ function connectEvents()
                         task.spawn(function()
                             monitorAnimations(token)
                         end)
+                    end
+
+                    applyAnimationModeUI()
+                    
+                    local beforeVersion = State.animationCacheVersion
+                    task.spawn(function()
+                        fetchAllAnimations()
+                        if State.currentMode ~= "animation" then return end
+                        if State.animationCacheVersion ~= beforeVersion then
+                            applyAnimationModeUI()
+                        end
                     end)
                     
                     getgenv().Notify({
