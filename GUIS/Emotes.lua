@@ -2743,16 +2743,21 @@ local function updateAnimations()
     rebuildAnimationNormalCache()
     local favoritesToUse = _G.filteredFavoritesAnimationsForDisplay or State.favoriteAnimations
     local hasFavorites = #favoritesToUse > 0
-    local favoritePagesCount = hasFavorites and calcPagesForList(#favoritesToUse, false) or 0
+    local favoritePagesCount = hasFavorites and calcPagesForList(#favoritesToUse, true) or 0
     local isInFavoritesPages = State.currentPage <= favoritePagesCount
 
     if isInFavoritesPages and hasFavorites then
-        currentPageAnimations = getListSlice(favoritesToUse, State.currentPage, false)
+        local items = getListSlice(favoritesToUse, State.currentPage, true)
+        for _, v in ipairs(items) do
+            table.insert(currentPageAnimations, { id = tonumber(v.id), name = v.name })
+        end
     else
         local normalAnimations = State.animationPageCache.normal or {}
         local adjustedPage = State.currentPage - favoritePagesCount
-        local isFirstNormalList = (favoritePagesCount == 0)
-        currentPageAnimations = getListSlice(normalAnimations, adjustedPage, isFirstNormalList)
+        local items = getListSlice(normalAnimations, adjustedPage, not hasFavorites)
+        for _, v in ipairs(items) do
+            table.insert(currentPageAnimations, v)
+        end
     end
 
     local randomActive = isRandomSlotActive()
@@ -2829,31 +2834,30 @@ updateEmotes = function()
     rebuildEmoteNormalCache()
     local favoritesToUse = _G.filteredFavoritesForDisplay or State.favoriteEmotes
     local hasFavorites = #favoritesToUse > 0
-    local favoritePagesCount = hasFavorites and calcPagesForList(#favoritesToUse, false) or 0
+    local favoritePagesCount = hasFavorites and calcPagesForList(#favoritesToUse, true) or 0
     local isInFavoritesPages = State.currentPage <= (favoritePagesCount + authenticPagesCount) and not isAuthenticPage
 
     if isAuthenticPage then
-        currentPageEmotes = {}
-        for i = 1, math.min(#authenticEmotes, 8) do
+        for i = 1, math.min(#authenticEmotes, State.itemsPerPage) do
             table.insert(currentPageEmotes, authenticEmotes[i])
         end
     elseif isInFavoritesPages and hasFavorites then
         local adjustedPage = State.currentPage - authenticPagesCount
-        currentPageEmotes = getListSlice(favoritesToUse, adjustedPage, false)
+        local items = getListSlice(favoritesToUse, adjustedPage, true)
+        for _, v in ipairs(items) do
+            table.insert(currentPageEmotes, { id = tonumber(v.id), name = v.name })
+        end
     else
         local normalEmotes = State.emotePageCache.normal or {}
         local adjustedPage = State.currentPage - favoritePagesCount - authenticPagesCount
-        local isFirstNormalList = (favoritePagesCount == 0)
-        currentPageEmotes = getListSlice(normalEmotes, adjustedPage, isFirstNormalList)
+        local items = getListSlice(normalEmotes, adjustedPage, not hasFavorites)
+        for _, v in ipairs(items) do
+            table.insert(currentPageEmotes, v)
+        end
     end
 
     local randomActive = isRandomSlotActive()
     if randomActive then
-        local trimmed = {}
-        for i = 1, math.min(#currentPageEmotes, 7) do
-            table.insert(trimmed, currentPageEmotes[i])
-        end
-        currentPageEmotes = trimmed
         local randomFallback = currentPageEmotes[1] or (State.filteredEmotes and State.filteredEmotes[1])
         if randomFallback then
             emoteTable["Random Emote"] = {randomFallback.id}
@@ -2936,14 +2940,14 @@ calculateTotalPages = function()
 
         local pages = 0
         if hasFavorites then
-            pages = pages + calcPagesForList(#favoritesToUse, false)
+            pages = pages + calcPagesForList(#favoritesToUse, true)
         end
         if normalAnimationsCount > 0 then
             pages = pages + calcPagesForList(normalAnimationsCount, not hasFavorites)
         end
         return math.max(pages, 1)
     end
-    
+
     local favoritesToUse = _G.filteredFavoritesForDisplay or State.favoriteEmotes
     local hasFavorites = #favoritesToUse > 0
     rebuildEmoteNormalCache()
@@ -2956,7 +2960,7 @@ calculateTotalPages = function()
     end
 
     if hasFavorites then
-        pages = pages + calcPagesForList(#favoritesToUse, false)
+        pages = pages + calcPagesForList(#favoritesToUse, true)
     end
 
     if normalEmotesCount > 0 then
