@@ -2743,11 +2743,11 @@ local function updateAnimations()
     rebuildAnimationNormalCache()
     local favoritesToUse = _G.filteredFavoritesAnimationsForDisplay or State.favoriteAnimations
     local hasFavorites = #favoritesToUse > 0
-    local favoritePagesCount = hasFavorites and calcPagesForList(#favoritesToUse, true) or 0
+    local favoritePagesCount = hasFavorites and calcPagesForList(#favoritesToUse, false) or 0
     local isInFavoritesPages = State.currentPage <= favoritePagesCount
 
     if isInFavoritesPages and hasFavorites then
-        currentPageAnimations = getListSlice(favoritesToUse, State.currentPage, true)
+        currentPageAnimations = getListSlice(favoritesToUse, State.currentPage, false)
     else
         local normalAnimations = State.animationPageCache.normal or {}
         local adjustedPage = State.currentPage - favoritePagesCount
@@ -2829,7 +2829,7 @@ updateEmotes = function()
     rebuildEmoteNormalCache()
     local favoritesToUse = _G.filteredFavoritesForDisplay or State.favoriteEmotes
     local hasFavorites = #favoritesToUse > 0
-    local favoritePagesCount = hasFavorites and calcPagesForList(#favoritesToUse, true) or 0
+    local favoritePagesCount = hasFavorites and calcPagesForList(#favoritesToUse, false) or 0
     local isInFavoritesPages = State.currentPage <= (favoritePagesCount + authenticPagesCount) and not isAuthenticPage
 
     if isAuthenticPage then
@@ -2839,7 +2839,7 @@ updateEmotes = function()
         end
     elseif isInFavoritesPages and hasFavorites then
         local adjustedPage = State.currentPage - authenticPagesCount
-        currentPageEmotes = getListSlice(favoritesToUse, adjustedPage, true)
+        currentPageEmotes = getListSlice(favoritesToUse, adjustedPage, false)
     else
         local normalEmotes = State.emotePageCache.normal or {}
         local adjustedPage = State.currentPage - favoritePagesCount - authenticPagesCount
@@ -2936,7 +2936,7 @@ calculateTotalPages = function()
 
         local pages = 0
         if hasFavorites then
-            pages = pages + calcPagesForList(#favoritesToUse, true)
+            pages = pages + calcPagesForList(#favoritesToUse, false)
         end
         if normalAnimationsCount > 0 then
             pages = pages + calcPagesForList(normalAnimationsCount, not hasFavorites)
@@ -2956,7 +2956,7 @@ calculateTotalPages = function()
     end
 
     if hasFavorites then
-        pages = pages + calcPagesForList(#favoritesToUse, true)
+        pages = pages + calcPagesForList(#favoritesToUse, false)
     end
 
     if normalEmotesCount > 0 then
