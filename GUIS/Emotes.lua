@@ -2196,24 +2196,6 @@ isRandomSlotEnabled = function()
     return Config.RandomEnabled == true
 end
 
-isRandomSlotActive = function()
-    local firstNonAuthenticPage = 1
-    if Config.AuthenticFirstPage and State.currentMode == "emote" then
-        local authenticEmotes = getgenv().OwnedAuthenticEmotes or {}
-        if #authenticEmotes > 0 then
-            firstNonAuthenticPage = 2
-        end
-    end
-    return State.currentPage == firstNonAuthenticPage and shouldRandomSlotBeShown()
-end
-
-local function getPageSize(pageNumber, isFirstList)
-    if isFirstList and pageNumber == 1 then
-        return getFirstPageSize()
-    end
-    return State.itemsPerPage
-end
-
 local function calcPagesForList(count, isFirstList)
     if count <= 0 then return 0 end
     if isFirstList then
@@ -2222,6 +2204,62 @@ local function calcPagesForList(count, isFirstList)
         return 1 + math.ceil((count - first) / State.itemsPerPage)
     end
     return math.ceil(count / State.itemsPerPage)
+end
+
+local function getCategoryStats()
+    local stats = {}
+    local randomCaptured = false
+    local shouldShowRandom = shouldRandomSlotBeShown()
+
+    local authenticEmotes = (Config.AuthenticFirstPage and State.currentMode == "emote") and (getgenv().OwnedAuthenticEmotes or {}) or {}
+    if #authenticEmotes > 0 then
+        local pages = calcPagesForList(#authenticEmotes, false)
+        table.insert(stats, { name = "Authentic", list = authenticEmotes, pages = pages, hasRandom = false })
+    end
+
+    local favoritesToUse = (State.currentMode == "animation") and (_G.filteredFavoritesAnimationsForDisplay or State.favoriteAnimations) or (_G.filteredFavoritesForDisplay or State.favoriteEmotes)
+    if #favoritesToUse > 0 then
+        local hasRandom = not randomCaptured and shouldShowRandom
+        if hasRandom then randomCaptured = true end
+        local pages = calcPagesForList(#favoritesToUse, hasRandom)
+        table.insert(stats, { name = "Favorites", list = favoritesToUse, pages = pages, hasRandom = hasRandom })
+    end
+
+    local normalList = {}
+    if State.currentMode == "animation" then
+        normalList = State.animationPageCache.normal or {}
+    else
+        normalList = State.emotePageCache.normal or {}
+    end
+
+    if #normalList > 0 then
+        local hasRandom = not randomCaptured and shouldShowRandom
+        if hasRandom then randomCaptured = true end
+        local pages = calcPagesForList(#normalList, hasRandom)
+        table.insert(stats, { name = "Normal", list = normalList, pages = pages, hasRandom = hasRandom })
+    end
+
+    return stats
+end
+
+isRandomSlotActive = function()
+    if not shouldRandomSlotBeShown() then return false end
+    local categories = getCategoryStats()
+    local totalPages = 0
+    for _, cat in ipairs(categories) do
+        if cat.hasRandom then
+            return State.currentPage == totalPages + 1
+        end
+        totalPages = totalPages + cat.pages
+    end
+    return false
+end
+
+local function getPageSize(pageNumber, isFirstList)
+    if isFirstList and pageNumber == 1 then
+        return getFirstPageSize()
+    end
+    return State.itemsPerPage
 end
 
 local function getListSlice(list, pageNumber, isFirstList)
@@ -2735,29 +2773,24 @@ local function updateAnimations()
     end
 
     bumpImageUpdateToken()
+    rebuildAnimationNormalCache()
 
     local currentPageAnimations = {}
     local animationTable = {}
     local equippedAnimations = {}
 
-    rebuildAnimationNormalCache()
-    local favoritesToUse = _G.filteredFavoritesAnimationsForDisplay or State.favoriteAnimations
-    local hasFavorites = #favoritesToUse > 0
-    local favoritePagesCount = hasFavorites and calcPagesForList(#favoritesToUse, true) or 0
-    local isInFavoritesPages = State.currentPage <= favoritePagesCount
-
-    if isInFavoritesPages and hasFavorites then
-        local items = getListSlice(favoritesToUse, State.currentPage, true)
-        for _, v in ipairs(items) do
-            table.insert(currentPageAnimations, { id = tonumber(v.id), name = v.name })
+    local categories = getCategoryStats()
+    local accumulatedPages = 0
+    local currentCat = nil
+    
+    for _, cat in ipairs(categories) do
+        if State.currentPage <= accumulatedPages + cat.pages then
+            local adjustedPage = State.currentPage - accumulatedPages
+            currentPageAnimations = getListSlice(cat.list, adjustedPage, cat.hasRandom)
+            currentCat = cat
+            break
         end
-    else
-        local normalAnimations = State.animationPageCache.normal or {}
-        local adjustedPage = State.currentPage - favoritePagesCount
-        local items = getListSlice(normalAnimations, adjustedPage, not hasFavorites)
-        for _, v in ipairs(items) do
-            table.insert(currentPageAnimations, v)
-        end
+        accumulatedPages = accumulatedPages + cat.pages
     end
 
     local randomActive = isRandomSlotActive()
@@ -2826,34 +2859,19 @@ updateEmotes = function()
     local emoteTable = {}
     local equippedEmotes = {}
 
-    local authenticEmotes = getgenv().OwnedAuthenticEmotes or {}
-    local hasAuthentic = Config.AuthenticFirstPage and (#authenticEmotes > 0)
-    local isAuthenticPage = hasAuthentic and (State.currentPage == 1)
-    local authenticPagesCount = hasAuthentic and 1 or 0
-
     rebuildEmoteNormalCache()
-    local favoritesToUse = _G.filteredFavoritesForDisplay or State.favoriteEmotes
-    local hasFavorites = #favoritesToUse > 0
-    local favoritePagesCount = hasFavorites and calcPagesForList(#favoritesToUse, true) or 0
-    local isInFavoritesPages = State.currentPage <= (favoritePagesCount + authenticPagesCount) and not isAuthenticPage
-
-    if isAuthenticPage then
-        for i = 1, math.min(#authenticEmotes, State.itemsPerPage) do
-            table.insert(currentPageEmotes, authenticEmotes[i])
+    local categories = getCategoryStats()
+    local accumulatedPages = 0
+    local currentCat = nil
+    
+    for _, cat in ipairs(categories) do
+        if State.currentPage <= accumulatedPages + cat.pages then
+            local adjustedPage = State.currentPage - accumulatedPages
+            currentPageEmotes = getListSlice(cat.list, adjustedPage, cat.hasRandom)
+            currentCat = cat
+            break
         end
-    elseif isInFavoritesPages and hasFavorites then
-        local adjustedPage = State.currentPage - authenticPagesCount
-        local items = getListSlice(favoritesToUse, adjustedPage, true)
-        for _, v in ipairs(items) do
-            table.insert(currentPageEmotes, { id = tonumber(v.id), name = v.name })
-        end
-    else
-        local normalEmotes = State.emotePageCache.normal or {}
-        local adjustedPage = State.currentPage - favoritePagesCount - authenticPagesCount
-        local items = getListSlice(normalEmotes, adjustedPage, not hasFavorites)
-        for _, v in ipairs(items) do
-            table.insert(currentPageEmotes, v)
-        end
+        accumulatedPages = accumulatedPages + cat.pages
     end
 
     local randomActive = isRandomSlotActive()
@@ -2932,42 +2950,15 @@ updateEmotes = function()
 end
 
 calculateTotalPages = function()
-    if State.currentMode == "animation" then
-        local favoritesToUse = _G.filteredFavoritesAnimationsForDisplay or State.favoriteAnimations
-        local hasFavorites = #favoritesToUse > 0
-        rebuildAnimationNormalCache()
-        local normalAnimationsCount = #(State.animationPageCache.normal or {})
-
-        local pages = 0
-        if hasFavorites then
-            pages = pages + calcPagesForList(#favoritesToUse, true)
-        end
-        if normalAnimationsCount > 0 then
-            pages = pages + calcPagesForList(normalAnimationsCount, not hasFavorites)
-        end
-        return math.max(pages, 1)
-    end
-
-    local favoritesToUse = _G.filteredFavoritesForDisplay or State.favoriteEmotes
-    local hasFavorites = #favoritesToUse > 0
     rebuildEmoteNormalCache()
-    local normalEmotesCount = #(State.emotePageCache.normal or {})
+    rebuildAnimationNormalCache()
 
-    local pages = 0
-
-    if Config.AuthenticFirstPage and getgenv().OwnedAuthenticEmotes and #getgenv().OwnedAuthenticEmotes > 0 then
-        pages = pages + 1
+    local categories = getCategoryStats()
+    local total = 0
+    for _, cat in ipairs(categories) do
+        total = total + cat.pages
     end
-
-    if hasFavorites then
-        pages = pages + calcPagesForList(#favoritesToUse, true)
-    end
-
-    if normalEmotesCount > 0 then
-        pages = pages + calcPagesForList(normalEmotesCount, not hasFavorites)
-    end
-
-    return math.max(pages, 1)
+    return math.max(total, 1)
 end
 
 local function isGivenAnimation(animationHolder, animationId)
@@ -4154,6 +4145,7 @@ end
     animator.AnimationPlayed:Connect(function(animationTrack)
         if isDancing(character, animationTrack) then
             local playedEmoteId = urlToId(animationTrack.Animation.AnimationId)
+            if playedEmoteId == "" or playedEmoteId == "0" then return end
 
             if State.emotesWalkEnabled then
                 if State.currentEmoteTrack then
@@ -4410,11 +4402,12 @@ function connectEvents()
     local SECTOR_ANGLE = 360 / SECTOR_COUNT
     
     local function isAuthenticPageActive()
-        if not (Config.AuthenticFirstPage and State.currentMode == "emote" and State.currentPage == 1) then
+        if not (Config.AuthenticFirstPage and State.currentMode == "emote") then
             return false
         end
         local authenticEmotes = getgenv().OwnedAuthenticEmotes or {}
-        return #authenticEmotes > 0
+        local authenticPagesCount = calcPagesForList(#authenticEmotes, false)
+        return #authenticEmotes > 0 and State.currentPage <= authenticPagesCount
     end
 
     table.insert(State.guiConnections, UserInputService.InputBegan:Connect(function(input, gameProcessed)
@@ -4470,7 +4463,12 @@ function connectEvents()
 
             local index = keyToIndex[inputObject.KeyCode]
             if not index then return Enum.ContextActionResult.Pass end
-            if not (State.favoriteEnabled or State.currentMode == "animation" or isAuthenticPageActive() or (index == 1 and isRandomSlotActive())) then
+            
+            if isAuthenticPageActive() then
+                return Enum.ContextActionResult.Pass
+            end
+
+            if not (State.favoriteEnabled or State.currentMode == "animation" or (index == 1 and isRandomSlotActive())) then
                 return Enum.ContextActionResult.Pass
             end
 
@@ -4939,7 +4937,7 @@ end
 local function checkAndRecreateGUI()
     local exists, emotesWheel = checkEmotesMenuExists()
     if not exists then
-        isGUICreated = false
+        State.isGUICreated = false
         return
     end
 
@@ -4947,7 +4945,7 @@ local function checkAndRecreateGUI()
         not emotesWheel:FindFirstChild("EmoteWalkButton") or not emotesWheel:FindFirstChild("Favorite") or
         not emotesWheel:FindFirstChild("SpeedEmote") or not emotesWheel:FindFirstChild("SpeedBox") or
         not emotesWheel:FindFirstChild("Changepage") or not emotesWheel:FindFirstChild("Reload") then
-        isGUICreated = false
+        State.isGUICreated = false
         if createGUIElements() then
             updatePageDisplay()
             updateEmotes()
@@ -4970,7 +4968,6 @@ player.CharacterAdded:Connect(function(char)
         while attempts < 20 do
             if checkEmotesMenuExists() then
                 task.wait(0.2)
-                stopEmotes()
                 if createGUIElements() then
                     updatePageDisplay()
                     updateEmotes()
