@@ -88,8 +88,71 @@ local State = {
     notFavoriteIconId = "rbxassetid://124025954365505",
     EmoteTheme = nil,
     isApplyingTheme = false,
-    targetImages = {}
+    targetImages = {},
+    AnimationCachePath = "7yd7/AnimationCache.json",
+    AnimationCache = {}
 }
+
+local function loadAnimationCache()
+    if isfile and isfile(State.AnimationCachePath) then
+        local success, decoded = pcall(function()
+            return HttpService:JSONDecode(readfile(State.AnimationCachePath))
+        end)
+        if success and type(decoded) == "table" then
+            State.AnimationCache = decoded
+        end
+    end
+end
+
+local function saveAnimationCache()
+    if writefile then
+        pcall(function()
+            if not isfolder("7yd7") then makefolder("7yd7") end
+            writefile(State.AnimationCachePath, HttpService:JSONEncode(State.AnimationCache))
+        end)
+    end
+end
+
+local function resolveAnimationMappings(bundledItems)
+    local mappings = {}
+    for _, assetIds in pairs(bundledItems) do
+        for _, assetId in pairs(assetIds) do
+            local success, objects = pcall(function()
+                return game:GetObjects("rbxassetid://" .. assetId)
+            end)
+            if success and objects then
+                local function searchTree(parent, parentPath)
+                    for _, child in pairs(parent:GetChildren()) do
+                        if child:IsA("Animation") then
+                            local animationPath = parentPath .. "." .. child.Name
+                            local pathParts = animationPath:split(".")
+                            if #pathParts >= 2 then
+                                table.insert(mappings, {
+                                    category = pathParts[#pathParts - 1],
+                                    name = pathParts[#pathParts],
+                                    animationId = child.AnimationId
+                                })
+                            end
+                        elseif #child:GetChildren() > 0 then
+                            searchTree(child, parentPath .. "." .. child.Name)
+                        end
+                    end
+                end
+                for _, obj in pairs(objects) do
+                    searchTree(obj, obj.Name)
+                    obj.Parent = workspace
+                    task.delay(1, function()
+                        if obj then obj:Destroy() end
+                    end)
+                end
+            end
+        end
+    end
+    return mappings
+end
+
+loadAnimationCache()
+
 
 local UI = {
     Under = nil, 
@@ -488,7 +551,9 @@ local Config = {
     RandomEnabled = true,
     RandomMode = "All",
     AuthenticFirstPage = false,
-    HUDPositions = {}
+    HUDPositions = {},
+    AutoReloadEnabled = false,
+    LastPlayedAnimationData = nil
 }
 
 local function applySavedPositions() end 
@@ -523,6 +588,8 @@ local function LoadConfig()
             for k, v in pairs(decoded) do Config[k] = v end
         end
     end
+    getgenv().autoReloadEnabled = Config.AutoReloadEnabled or false
+    getgenv().lastPlayedAnimation = Config.LastPlayedAnimationData
 end
 LoadConfig()
 
@@ -3410,6 +3477,8 @@ local function applyAnimation(animationData)
     local bundledItems = animationData.bundledItems
 
     getgenv().lastPlayedAnimation = animationData
+    Config.LastPlayedAnimationData = animationData
+    task.spawn(SaveConfig)
     
     if not bundledItems then
         getgenv().Notify({
@@ -3424,58 +3493,42 @@ local function applyAnimation(animationData)
         track:Stop()
     end
     
-    for key, assetIds in pairs(bundledItems) do
-        for _, assetId in pairs(assetIds) do
-            spawn(function()
-                local success, objects = pcall(function()
-                    return game:GetObjects("rbxassetid://" .. assetId)
-                end)
-                
-                if success and objects then
-                    local function searchForAnimations(parent, parentPath)
-                        for _, child in pairs(parent:GetChildren()) do
-                            if child:IsA("Animation") then
-                                local animationPath = parentPath .. "." .. child.Name
-                                local pathParts = animationPath:split(".")
-                                
-                                if #pathParts >= 2 then
-                                    local animateCategory = pathParts[#pathParts - 1]
-                                    local animationName = pathParts[#pathParts]
-                                    
-                                    if animate:FindFirstChild(animateCategory) then
-                                        local categoryFolder = animate[animateCategory]
-                                        if categoryFolder:FindFirstChild(animationName) then
-                                            categoryFolder[animationName].AnimationId = child.AnimationId
-                                            
-                                            task.wait(0.1)
-                                            local animation = Instance.new("Animation")
-                                            animation.AnimationId = child.AnimationId
-                                            
-                                            local animTrack = humanoid.Animator:LoadAnimation(animation)
-                                            animTrack.Priority = Enum.AnimationPriority.Action
-                                            animTrack:Play()
-                                            
-                                            task.wait(0.1)
-                                            animTrack:Stop()
-                                        end
-                                    end
-                                end
-                            elseif #child:GetChildren() > 0 then
-                                searchForAnimations(child, parentPath .. "." .. child.Name)
-                            end
-                        end
-                    end
-                    
-                    for _, obj in pairs(objects) do
-                        searchForAnimations(obj, obj.Name)
-                        obj.Parent = workspace
-                        task.delay(1, function()
-                            if obj then obj:Destroy() end
-                        end)
-                    end
-                end
-            end)
+    local cacheKey = tostring(bundleId)
+    local mappings = State.AnimationCache[cacheKey]
+    
+    if not mappings then
+        mappings = resolveAnimationMappings(bundledItems)
+        if #mappings > 0 then
+            State.AnimationCache[cacheKey] = mappings
+            task.spawn(saveAnimationCache)
         end
+    end
+    
+    if #mappings == 0 then return end
+    
+    local sorted = {}
+    for _, m in pairs(mappings) do
+        if m.category:lower() == "idle" then
+            table.insert(sorted, 1, m)
+        else
+            table.insert(sorted, m)
+        end
+    end
+    
+    for _, m in pairs(sorted) do
+        local categoryFolder = animate:FindFirstChild(m.category)
+        if categoryFolder then
+            for _, animObj in ipairs(categoryFolder:GetChildren()) do
+                if animObj:IsA("Animation") then
+                    animObj.AnimationId = m.animationId
+                end
+            end
+        end
+    end
+    
+    if humanoid.MoveDirection.Magnitude == 0 then
+        animate.Disabled = true
+        animate.Disabled = false
     end
 end
 
@@ -3487,54 +3540,39 @@ local function playAnimationPreview(animationData)
 
     local bundledItems = animationData and animationData.bundledItems
     if not bundledItems then return false end
-
-    for _, assetIds in pairs(bundledItems) do
-        for _, assetId in pairs(assetIds) do
-            local success, objects = pcall(function()
-                return game:GetObjects("rbxassetid://" .. assetId)
-            end)
-            if success and objects then
-                local function findAnimation(inst)
-                    if inst:IsA("Animation") then return inst end
-                    for _, child in pairs(inst:GetChildren()) do
-                        local found = findAnimation(child)
-                        if found then return found end
-                    end
-                    return nil
-                end
-
-                for _, obj in pairs(objects) do
-                    local anim = findAnimation(obj)
-                    if anim then
-                        local animation = Instance.new("Animation")
-                        animation.AnimationId = anim.AnimationId
-                        local ok, track = pcall(function()
-                            return animator:LoadAnimation(animation)
-                        end)
-                        if ok and track then
-                            track.Priority = Enum.AnimationPriority.Action
-                            track.Looped = true
-                            task.wait(0.1)
-                            if State.speedEmoteEnabled or State.emotesWalkEnabled then
-                                track:Play()
-                            end
-                            State.currentEmoteTrack = track
-                            if State.speedEmoteEnabled then
-                                local speedVal = tonumber(UI.SpeedBox.Text) or Config.EmoteSpeed or 1
-                                track:AdjustSpeed(speedVal)
-                            end
-                            task.delay(1, function()
-                                if obj then obj:Destroy() end
-                            end)
-                            return true
-                        end
-                    end
-                    task.delay(1, function()
-                        if obj then obj:Destroy() end
-                    end)
-                end
-            end
+    
+    local bundleId = animationData.id
+    local cacheKey = tostring(bundleId)
+    local mappings = State.AnimationCache[cacheKey]
+    
+    if not mappings then
+        mappings = resolveAnimationMappings(bundledItems)
+        if #mappings > 0 then
+            State.AnimationCache[cacheKey] = mappings
+            task.spawn(saveAnimationCache)
         end
+    end
+    
+    if #mappings == 0 then return false end
+    
+    local m = mappings[1]
+    local animation = Instance.new("Animation")
+    animation.AnimationId = m.animationId
+    local ok, track = pcall(function()
+        return animator:LoadAnimation(animation)
+    end)
+    if ok and track then
+        track.Priority = Enum.AnimationPriority.Action
+        track.Looped = true
+        if State.speedEmoteEnabled or State.emotesWalkEnabled then
+            track:Play()
+        end
+        State.currentEmoteTrack = track
+        if State.speedEmoteEnabled then
+            local speedVal = tonumber(UI.SpeedBox.Text) or Config.EmoteSpeed or 1
+            track:AdjustSpeed(speedVal)
+        end
+        return true
     end
 
     return false
@@ -4132,15 +4170,52 @@ local function onCharacterAdded(character)
     local humanoid = character:WaitForChild("Humanoid")
     local animator = humanoid:WaitForChild("Animator")
 
- if getgenv().autoReloadEnabled and getgenv().lastPlayedAnimation then
-    task.wait(.3)
-    applyAnimation(getgenv().lastPlayedAnimation)
-    getgenv().Notify({
-        Title = '7yd7 | Auto Reload Animation',
-        Content = '🔄 The last animation was automatically \n reapplied',
-        Duration = 3
-    })
-end
+    if getgenv().autoReloadEnabled and getgenv().lastPlayedAnimation then
+        task.spawn(function()
+            local player = game.Players.LocalPlayer
+            if not player:HasAppearanceLoaded() then
+                player.CharacterAppearanceLoaded:Wait()
+            end
+            local animate = character:WaitForChild("Animate")
+            character:WaitForChild("HumanoidRootPart")
+            applyAnimation(getgenv().lastPlayedAnimation)
+            getgenv().Notify({
+                Title = '7yd7 | Auto Reload Animation',
+                Content = '🔄 The last animation was automatically \n reapplied',
+                Duration = 3
+            })
+            
+            local lastAnim = getgenv().lastPlayedAnimation
+            local cacheKey = tostring(lastAnim.id)
+            local changed = false
+            for i = 1, 7 do
+                task.wait(0.01)
+                if not character or not character.Parent or not humanoid then break end
+                local mappings = State.AnimationCache[cacheKey]
+                if mappings and animate and animate.Parent then
+                    for _, m in pairs(mappings) do
+                        local categoryFolder = animate:FindFirstChild(m.category)
+                        if categoryFolder then
+                            for _, animObj in ipairs(categoryFolder:GetChildren()) do
+                                if animObj:IsA("Animation") then
+                                    if animObj.AnimationId ~= m.animationId then
+                                        animObj.AnimationId = m.animationId
+                                        changed = true
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+            --[[
+            if changed and humanoid.MoveDirection.Magnitude == 0 then
+                animate.Disabled = true
+                animate.Disabled = false
+            end
+            --]]
+        end)
+    end
 
     animator.AnimationPlayed:Connect(function(animationTrack)
         if isDancing(character, animationTrack) then
@@ -4337,6 +4412,8 @@ end
 
 local function toggleAutoReload()
     getgenv().autoReloadEnabled = not getgenv().autoReloadEnabled
+    Config.AutoReloadEnabled = getgenv().autoReloadEnabled
+    task.spawn(SaveConfig)
     
     if getgenv().autoReloadEnabled then
         getgenv().Notify({
