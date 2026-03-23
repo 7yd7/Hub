@@ -41,8 +41,11 @@ UIScale.Parent = SettingsUI
 
 local function UpdateUIScale()
     local ViewportSize = workspace.CurrentCamera.ViewportSize
-    local Scale = math.min(ViewportSize.X / 1000, ViewportSize.Y / 800)
-    UIScale.Scale = math.clamp(Scale, 0.6, 1.1)
+    local rawScale = math.min(ViewportSize.X / 1000, ViewportSize.Y / 800)
+    if ViewportSize.Y < 500 then
+        rawScale = rawScale * 1.2
+    end
+    UIScale.Scale = math.clamp(rawScale, 0.55, 1.25)
 end
 
 UpdateUIScale()
@@ -499,8 +502,9 @@ local MainFrame = Lib:Create("Frame", {
     Parent = SettingsUI,
     BackgroundColor3 = Theme.Background,
     BorderSizePixel = 0,
-    Position = UDim2.new(0.5, -160, 0.5, -210),
-    Size = UDim2.new(0, 320, 0, 420)
+    AnchorPoint = Vector2.new(0.5, 0.5),
+    Position = UDim2.fromScale(0.5, 0.5),
+    Size = UDim2.fromOffset(320, 420)
 }, {
     Lib:Create("UICorner", {CornerRadius = Theme.CornerRadius})
 })
@@ -519,7 +523,7 @@ MainFrame.InputBegan:Connect(function(input)
 end)
 UserInputService.InputChanged:Connect(function(input)
     if (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) and Dragging then
-        local Delta = input.Position - DragStart
+        local Delta = (input.Position - DragStart) / UIScale.Scale
         MainFrame.Position = UDim2.new(StartPos.X.Scale, StartPos.X.Offset + Delta.X, StartPos.Y.Scale, StartPos.Y.Offset + Delta.Y)
     end
 end)
@@ -539,7 +543,7 @@ local NavContainer = Lib:Create("ScrollingFrame", {
     Size = UDim2.new(1, -65, 0, 35),
     CanvasSize = UDim2.new(0, 0, 0, 0),
     AutomaticCanvasSize = Enum.AutomaticSize.X,
-    ScrollBarThickness = 2,
+    ScrollBarThickness = 4,
     ScrollBarImageColor3 = Theme.Accent,
     ScrollingDirection = Enum.ScrollingDirection.X,
     ClipsDescendants = true
@@ -687,7 +691,7 @@ function Components:AddDropdown(container, title, options, default, callback)
         Position = UDim2.fromOffset(0, 28),
         Size = UDim2.new(1, 0, 1, -28),
         CanvasSize = UDim2.new(0, 0, 0, 0),
-        ScrollBarThickness = 1,
+        ScrollBarThickness = 3,
         AutomaticCanvasSize = Enum.AutomaticSize.Y
     }, { Lib:Create("UIListLayout", {Padding = UDim.new(0, 1)}) })
 
@@ -909,6 +913,7 @@ function Components:AddFolder(container, title)
         BackgroundTransparency = 1,
         LayoutOrder = 1,
         Size = UDim2.new(1, 0, 0, 0),
+        AutomaticSize = Enum.AutomaticSize.Y,
         Visible = false,
         ClipsDescendants = true
     }, { Lib:Create("UIListLayout", {Padding = UDim.new(0, 10), HorizontalAlignment = Enum.HorizontalAlignment.Center, SortOrder = Enum.SortOrder.LayoutOrder}) })
@@ -917,11 +922,6 @@ function Components:AddFolder(container, title)
         IsOpen = not IsOpen
         FolderBtn.Text = (IsOpen and "  ▼  " or "  ▶  ") .. title
         Content.Visible = IsOpen
-        Content.Size = IsOpen and UDim2.new(1, 0, 0, Content.UIListLayout.AbsoluteContentSize.Y + 5) or UDim2.new(1, 0, 0, 0)
-    end)
-    
-    Content.UIListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-        if IsOpen then Content.Size = UDim2.new(1, 0, 0, Content.UIListLayout.AbsoluteContentSize.Y + 5) end
     end)
     
     return Content
@@ -972,7 +972,9 @@ local function CreateTab(name, order)
         Position = UDim2.new(0, 10, 0, 60),
         Size = UDim2.new(1, -20, 1, -70),
         CanvasSize = UDim2.new(0, 0, 0, 0),
-        ScrollBarThickness = 2,
+        ScrollBarThickness = 4,
+        ScrollBarImageTransparency = 0.2,
+        ScrollingDirection = Enum.ScrollingDirection.Y,
         Visible = order == 1,
         AutomaticCanvasSize = Enum.AutomaticSize.Y
     }, { Lib:Create("UIListLayout", {Padding = UDim.new(0, 10), HorizontalAlignment = Enum.HorizontalAlignment.Center, SortOrder = Enum.SortOrder.LayoutOrder}) })
