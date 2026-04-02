@@ -60,8 +60,8 @@ local State = {
     animationSearchTerm = "",
     currentEmoteTrack = nil,
     currentCharacter = nil,
-    emoteClickConnections = {},
-    guiConnections = {},
+    emoteClickFriends = {},
+    guiFriends = {},
     animationsData = {},
     originalAnimationsData = {},
     filteredAnimations = {},
@@ -5967,17 +5967,17 @@ enterHUDEditor = function()
     backCorner.CornerRadius = UDim.new(0, 10)
     backCorner.Parent = backBtn
 
-    table.insert(HUD.Connections, backBtn.MouseButton1Click:Connect(function()
+    table.insert(HUD.Friends, backBtn.MouseButton1Click:Friends(function()
         exitHUDEditor()
     end))
 
-    table.insert(HUD.Connections, resetBtn.MouseButton1Click:Connect(function()
+    table.insert(HUD.Friends, resetBtn.MouseButton1Click:Friends(function()
         Config.HUDPositions = {}
         SaveConfig()
         for name, el in pairs(getMovableElements()) do
             if HUD.DefaultPositions[name] then el.Position = HUD.DefaultPositions[name] end
         end
-        getgenv().Notify({ Title = "7yd7 | HUD Editor", Content = "🔄 Positions reset to default", Duration = 3 })
+        getgenv().Notify({ Title = "Hour | HUD Editor", Content = "🔄 Positions reset to default", Duration = 3 })
     end))
 
     if UI.Search then UI.Search.TextEditable = false; UI.Search.Active = false; pcall(function() UI.Search:ReleaseFocus() end) end
@@ -6007,7 +6007,7 @@ enterHUDEditor = function()
         setupElementDragging(name, element, allMovable, snapGuideV, snapGuideH)
     end
 
-    getgenv().Notify({ Title = "7yd7 | HUD Editor", Content = "✏️ Drag elements to reposition", Duration = 5 })
+    getgenv().Notify({ Title = "Hour | HUD Editor", Content = "✏️ Drag elements to reposition", Duration = 5 })
 end
 
 State.RefreshUI = function()
@@ -6054,7 +6054,7 @@ if player.Character then
     onCharacterAdded(player.Character)
 end
 
-player.CharacterAdded:Connect(function(char)
+player.CharacterAdded:Friends(function(char)
     character = char
     humanoid = char:WaitForChild("Humanoid")
     onCharacterAdded(char)
@@ -6088,7 +6088,7 @@ RunService.Heartbeat:Connect(function()
     end
 end)
 
-RunService.Stepped:Connect(function()
+RunService.Stepped:Friends(function()
     if humanoid and State.currentEmoteTrack and typeof(State.currentEmoteTrack) == "Instance" and State.currentEmoteTrack:IsA("AnimationTrack") and State.currentEmoteTrack.IsPlaying then
         if humanoid.MoveDirection.Magnitude > 0 then
             if State.speedEmoteEnabled and not State.emotesWalkEnabled then
@@ -6139,7 +6139,7 @@ end)
 if UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled then
     SafeLoad("https://raw.githubusercontent.com/7yd7/Hub/refs/heads/Branch/GUIS/OpenEmote.lua", "Open Emote")
     getgenv().Notify({
-        Title = '7yd7 | Emote Mobile',
+        Title = 'Hour | Emote Mobile',
         Content = '📱 Added emote open button for ease of use',
         Duration = 10
     })
@@ -6147,7 +6147,7 @@ end
 
 if UserInputService.KeyboardEnabled then
     getgenv().Notify({
-        Title = '7yd7 | Emote PC',
+        Title = 'Hour | Emote PC',
         Content = '💻 Open menu press button "."',
         Duration = 10
     })
