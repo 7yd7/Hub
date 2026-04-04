@@ -101,6 +101,61 @@ local State = {
     customAnimationEditingName = nil
 }
 
+Config = {
+    NotifyEnabled = true,
+    SearchVisible = true,
+    FavVisible = true,
+    ModeVisible = true,
+    FreezeVisible = true,
+    SpeedVisible = true,
+    NavVisible = true,
+    EmoteSpeed = 1,
+    EmoteSpeedEnabled = false,
+    SelectedTheme = "Default",
+    EmotePage = 1,
+    AnimationPage = 1,
+    RandomEnabled = true,
+    RandomMode = "All",
+    AuthenticFirstPage = false,
+    HUDPositions = {},
+    HUDSizes = {},
+    HUDProperties = {},
+    CustomFrames = {},
+    AutoReloadEnabled = false,
+    LastPlayedAnimationData = nil
+}
+
+HUD = {
+    Connections = {},
+    IsUnlocked = false,
+    DefaultPositions = {},
+    DefaultSizes = {},
+    DefaultTexts = {},
+    DefaultPlaceholders = {},
+    Layouts = {},
+    LayoutsRemoved = {},
+    SelectionGui = nil,
+    SelectedElement = nil,
+    ResizeHandles = {},
+    ResizeConnections = {},
+    FriendlyNames = {
+        ["Under.1left"] = "PrevPage",
+        ["Under.9right"] = "NextPage",
+        ["Under.4pages"] = "TotalPages",
+        ["Under.3TextLabel"] = "Divider",
+        ["Under.2Route-number"] = "CurrentPage",
+        ["Top.Search"] = "Search",
+        ["EmoteWalkButton"] = "Freeze",
+        ["Favorite"] = "Favorite",
+        ["SpeedEmote"] = "SpeedEmote",
+        ["SpeedBox"] = "SpeedBox",
+        ["Changepage"] = "ChangePage",
+        ["Reload"] = "AutoReload",
+        ["Top"] = "Top",
+        ["Under"] = "Under"
+    }
+}
+
 function loadAnimationCache()
     if isfile and isfile(State.AnimationCachePath) then
         local success, decoded = pcall(function()
@@ -176,10 +231,13 @@ function buildCustomSetMappings(setName)
     return mappings
 end
 
+
+
 loadAnimationCache()
 
 
 local UI = {
+    CustomFrames = {},
     Under = nil, 
     _1left = nil, 
     _9right = nil, 
@@ -197,11 +255,26 @@ local UI = {
     Background = nil
 }
 
-local HUD = {
+local HUD = { 
     Connections = {},
     Strokes = {},
+    ResizeHandles = {},
+    ResizeConnections = {},
+    UndoStack = {},
+    SelectedElement = nil,
     Overlay = nil,
+    IsUnlocked = false,
     ForceVisibleConn = nil,
+    Layouts = {},
+    LayoutsRemoved = {},
+    FriendlyNames = {
+        ["Under.1left"] = "Left Arrow",
+        ["Under.9right"] = "Right Arrow",
+        ["Under.4pages"] = "Total Pages",
+        ["Under.3TextLabel"] = "Separator Label",
+        ["Under.2Route-number"] = "Page Number Box",
+        ["Top.Search"] = "Search/ID Box",
+    },
     DefaultPositions = {
         Top = UDim2.new(0.127499998, 0, -0.109999999, 0),
         Under = UDim2.new(0.129999995, 0, 1, 0),
@@ -211,8 +284,94 @@ local HUD = {
         SpeedBox = UDim2.new(0.0189999398, 0, -0.000499992399, 0),
         Changepage = UDim2.new(0.019, 0, 1.021, 0),
         Reload = UDim2.new(0.888999999, 0, 1.02100003, 0),
+        ["Left Arrow"] = UDim2.new(0, 0, 0.028, 0),
+        ["Right Arrow"] = UDim2.new(0.169, 0, 0.028, 0),
+        ["Total Pages"] = UDim2.new(0.339, 0, 0.094, 0), 
+        ["Separator Label"] = UDim2.new(0.498, 0, 0.028, 0),
+        ["Page Number Box"] = UDim2.new(0.837, 0, 0.094, 0),
+        ["Search/ID Box"] = UDim2.new(0.01, 0, 0.092, 0),
+    },
+    DefaultSizes = {
+        Top = UDim2.new(0.737500012, 0, 0.0949999914, 0),
+        Under = UDim2.new(0.737500012, 0, 0.132499993, 0),
+        EmoteWalkButton = UDim2.new(0.0874999985, 0, 0.0874999985, 0),
+        Favorite = UDim2.new(0.0874999985, 0, 0.0874999985, 0),
+        SpeedEmote = UDim2.new(0.0874999985, 0, 0.0874999985, 0),
+        SpeedBox = UDim2.new(0.0874999985, 0, 0.0874999985, 0),
+        Changepage = UDim2.new(0.087, 0, 0.087, 0),
+        Reload = UDim2.new(0.0869999975, 0, 0.0869999975, 0),
+        ["Left Arrow"] = UDim2.new(0.169491529, 0, 0.94339627, 0),
+        ["Right Arrow"] = UDim2.new(0.169491529, 0, 0.94339627, 0),
+        ["Total Pages"] = UDim2.new(0.159322038, 0, 0.811320841, 0),
+        ["Separator Label"] = UDim2.new(0.338983059, 0, 0.94339627, 0),
+        ["Page Number Box"] = UDim2.new(0.159322038, 0, 0.811320841, 0),
+        ["Search/ID Box"] = UDim2.new(0.864406765, 0, 0.81578958, 0),
+    },
+    DefaultTexts = {
+        ["Left Arrow"] = "",
+        ["Right Arrow"] = "",
+        ["Total Pages"] = "1",
+        ["Separator Label"] = " ------ ",
+        ["Page Number Box"] = "1",
+        ["Search/ID Box"] = "",
+        ["SpeedBox"] = "1",
+    },
+    DefaultPlaceholders = {
+        ["Search/ID Box"] = "Search/ID",
     }
 }
+
+function getAllHUDObjects()
+    local elems = {}
+    if UI.Top then elems["Top"] = UI.Top end
+    if UI.Under then elems["Under"] = UI.Under end
+    if UI.EmoteWalkButton then elems["EmoteWalkButton"] = UI.EmoteWalkButton end
+    if UI.Favorite then elems["Favorite"] = UI.Favorite end
+    if UI.SpeedEmote then elems["SpeedEmote"] = UI.SpeedEmote end
+    if UI.SpeedBox then elems["SpeedBox"] = UI.SpeedBox end
+    if UI.Changepage then elems["Changepage"] = UI.Changepage end
+    if UI.Reload then elems["Reload"] = UI.Reload end
+    if UI.CustomFrames then
+        for n, f in pairs(UI.CustomFrames) do
+            elems[n] = f
+        end
+    end
+
+    if UI.Top then
+        for _, child in pairs(UI.Top:GetChildren()) do
+            if child:IsA("GuiObject") and not child:IsA("UIListLayout") and not child:IsA("UICorner") then
+                local internalName = "Top." .. child.Name
+                elems[HUD.FriendlyNames[internalName] or internalName] = child
+            end
+        end
+    end
+    if UI.Under then
+        for _, child in pairs(UI.Under:GetChildren()) do
+            if child:IsA("GuiObject") and not child:IsA("UIListLayout") and not child:IsA("UICorner") then
+                local internalName = "Under." .. child.Name
+                elems[HUD.FriendlyNames[internalName] or internalName] = child
+            end
+        end
+    end
+    return elems
+end
+
+function getMovableElements()
+    local all = getAllHUDObjects()
+    local movable = {}
+    
+    for name, el in pairs(all) do
+        local isChild = false
+        for _, friendly in pairs(HUD.FriendlyNames) do 
+            if name == friendly then isChild = true; break end 
+        end
+        
+        if not isChild or HUD.IsUnlocked then
+            movable[name] = el
+        end
+    end
+    return movable
+end
 
 function ColorToTable(c) return {math.round(c.R*255), math.round(c.G*255), math.round(c.B*255)} end
 function TableToColor(t)
@@ -223,6 +382,10 @@ function TableToColor(t)
     local g = tonumber(t[2]) or 255
     local b = tonumber(t[3]) or 255
     return Color3.fromRGB(r, g, b)
+end
+
+local function isThemeDefaultRGB(r, g, b)
+    return r == 28 and g == 30 and b == 32
 end
 
 local AnimationSystem = {
@@ -565,29 +728,54 @@ local findCustomAnimationDataByName
 local applyAnimation
 
 local ConfigPath = "7yd7/EmoteSettings.json"
-local Config = {
-    NotifyEnabled = true,
-    SearchVisible = true,
-    FavVisible = true,
-    ModeVisible = true,
-    FreezeVisible = true,
-    SpeedVisible = true,
-    NavVisible = true,
-    EmoteSpeed = 1,
-    EmoteSpeedEnabled = false,
-    SelectedTheme = "Default",
-    EmotePage = 1,
-    AnimationPage = 1,
-    RandomEnabled = true,
-    RandomMode = "All",
-    AuthenticFirstPage = false,
-    HUDPositions = {},
-    AutoReloadEnabled = false,
-    LastPlayedAnimationData = nil
-}
+
+function updateHUDLayouts()
+    if not Config then return end
+    local function toggleLayout(parent, unlocked)
+        if not parent then return end
+        local key = parent.Name
+        local l = parent:FindFirstChildOfClass("UIListLayout") or HUD.Layouts[key]
+        
+        if l then
+            HUD.Layouts[key] = l
+            
+            local hasCustomP = false
+            for _, child in pairs(parent:GetChildren()) do
+                if child:IsA("GuiObject") then
+                    local internalName = key .. "." .. child.Name
+                    local friendly = HUD.FriendlyNames[internalName] or internalName
+                    if Config.HUDPositions and Config.HUDPositions[friendly] then
+                        hasCustomP = true
+                        break
+                    end
+                end
+            end
+
+            if HUD.IsUnlocked then
+                l.Parent = nil
+            elseif hasCustomP or (HUD.LayoutsRemoved and HUD.LayoutsRemoved[key]) then
+                l.Parent = nil 
+            else
+                l.Parent = parent
+            end
+        end
+    end
+    
+    toggleLayout(UI.Top, HUD.IsUnlocked)
+    toggleLayout(UI.Under, HUD.IsUnlocked)
+end
 
 function applySavedPositions() end 
 local enterHUDEditor, exitHUDEditor
+
+local function updateSpeedBoxVisibility()
+    if not UI.SpeedBox then return end
+    if State.hudEditorActive then
+        UI.SpeedBox.Visible = Config.SpeedVisible
+    else
+        UI.SpeedBox.Visible = (Config.SpeedVisible and State.speedEmoteEnabled)
+    end
+end
 
 function ApplyUIVisibility()
     pcall(function()
@@ -596,12 +784,14 @@ function ApplyUIVisibility()
         if UI.Changepage then UI.Changepage.Visible = Config.ModeVisible end
         if UI.EmoteWalkButton then UI.EmoteWalkButton.Visible = Config.FreezeVisible end
         if UI.SpeedEmote then UI.SpeedEmote.Visible = Config.SpeedVisible end
-        if UI.SpeedBox then 
-            UI.SpeedBox.Visible = (Config.SpeedVisible and State.speedEmoteEnabled) 
-        end
+        updateSpeedBoxVisibility()
         if UI.Under then UI.Under.Visible = Config.NavVisible end
         if UI.Reload then 
-            UI.Reload.Visible = (State.currentMode == "animation" and Config.NavVisible) 
+            if State.hudEditorActive then
+                UI.Reload.Visible = true
+            else
+                UI.Reload.Visible = (State.currentMode == "animation" and Config.NavVisible) 
+            end
         end
     end)
 end
@@ -882,6 +1072,10 @@ function updateGUIColors()
         UI._2Routenumber.TextTransparency = bgTransparency
     end
 
+    if UI.Under then
+        UI.Under.BackgroundTransparency = 1
+    end
+
     if UI.Top then
         UI.Top.BackgroundColor3 = bgColor
         UI.Top.BackgroundTransparency = bgTransparency
@@ -890,6 +1084,13 @@ function updateGUIColors()
     if UI.EmoteWalkButton then
         UI.EmoteWalkButton.BackgroundColor3 = bgColor
         UI.EmoteWalkButton.BackgroundTransparency = bgTransparency
+    end
+
+    if UI.CustomFrames then
+        for _, frame in pairs(UI.CustomFrames) do
+            frame.BackgroundColor3 = bgColor
+            frame.BackgroundTransparency = bgTransparency
+        end
     end
 
     if UI.SpeedEmote then
@@ -920,6 +1121,43 @@ function updateGUIColors()
     if ApplyFavoriteButtonVisual then
         ApplyFavoriteButtonVisual()
     end
+
+    local function applyHUDProperties()
+        if not Config.HUDProperties then return end
+        local allMovable = getAllHUDObjects()
+        for name, uiExt in pairs(allMovable) do
+            local props = Config.HUDProperties[name]
+            if props then
+                if props.ZIndex ~= nil then pcall(function() uiExt.ZIndex = props.ZIndex end) end
+                if props.BgTrans ~= nil then pcall(function() uiExt.BackgroundTransparency = props.BgTrans end) end
+                if props.ImgTrans ~= nil and (uiExt:IsA("ImageLabel") or uiExt:IsA("ImageButton")) then pcall(function() uiExt.ImageTransparency = props.ImgTrans end) end
+                if props.BgColor and type(props.BgColor) == "table" then
+                    local r, g, b = props.BgColor[1], props.BgColor[2], props.BgColor[3]
+                    if r and g and b and not isThemeDefaultRGB(r, g, b) then
+                        pcall(function() uiExt.BackgroundColor3 = Color3.fromRGB(r, g, b) end)
+                    end
+                end
+                if props.ImgColor and type(props.ImgColor) == "table" and (uiExt:IsA("ImageLabel") or uiExt:IsA("ImageButton")) then
+                    local r, g, b = props.ImgColor[1], props.ImgColor[2], props.ImgColor[3]
+                    if r and g and b and not isThemeDefaultRGB(r, g, b) then
+                        pcall(function() uiExt.ImageColor3 = Color3.fromRGB(r, g, b) end)
+                    end
+                end
+                if props.TxtColor and type(props.TxtColor) == "table" and (uiExt:IsA("TextLabel") or uiExt:IsA("TextBox")) then
+                    local r, g, b = props.TxtColor[1], props.TxtColor[2], props.TxtColor[3]
+                    if r and g and b and not isThemeDefaultRGB(r, g, b) then
+                        pcall(function() uiExt.TextColor3 = Color3.fromRGB(r, g, b) end)
+                    end
+                end
+                if props.Radius and uiExt:FindFirstChildWhichIsA("UICorner") then
+                    local s1, o1 = props.Radius:match("{%s*([%d%.%-]+)%s*,%s*([%d%.%-]+)%s*}")
+                    if s1 then pcall(function() uiExt:FindFirstChildWhichIsA("UICorner").CornerRadius = UDim.new(tonumber(s1), tonumber(o1)) end) end
+                end
+            end
+        end
+    end
+    
+    applyHUDProperties()
     ApplyUIVisibility()
     applySettingsToggleStyle()
 end
@@ -1480,10 +1718,17 @@ end
 
 task.spawn(function()
     local attempts = 0
-    while attempts < 15 do
-        local exists = checkEmotesMenuExists()
-        if exists then
+    while attempts < 30 do
+        local exists, emotesWheel = checkEmotesMenuExists()
+        if exists and emotesWheel then
             ApplyTheme(themes[currentThemeName])
+            
+            emotesWheel:GetPropertyChangedSignal("Visible"):Connect(function()
+                if emotesWheel.Visible then
+                    task.wait(0.05)
+                    ApplyTheme(themes[currentThemeName])
+                end
+            end)
             break
         end
         attempts = attempts + 1
@@ -2987,7 +3232,7 @@ function loadSpeedEmoteConfig()
     State.speedEmoteEnabled = Config.EmoteSpeedEnabled
     if UI.SpeedBox then
         UI.SpeedBox.Text = tostring(Config.EmoteSpeed)
-        UI.SpeedBox.Visible = (State.speedEmoteEnabled and Config.SpeedVisible)
+        updateSpeedBoxVisibility()
     end
 end
 
@@ -3870,6 +4115,13 @@ function createGUIElements()
         return false
     end
 
+    if UI.CustomFrames then
+        for _, frame in pairs(UI.CustomFrames) do
+            if frame and frame.Parent then frame:Destroy() end
+        end
+    end
+    UI.CustomFrames = {}
+
     if emotesWheel:FindFirstChild("Under") then
         emotesWheel.Under:Destroy()
     end
@@ -4112,6 +4364,47 @@ UICorner_5.Parent = UI.Changepage
     UICorner_6.CornerRadius = UDim.new(0, 10)
     UICorner_6.Parent = UI.Reload
 
+    local function spawnCustomFrame(name, zIndex)
+        local cf = Instance.new("Frame")
+        cf.Name = name
+        cf.Parent = emotesWheel
+        cf.BackgroundColor3 = Color3.fromRGB(0,0,0)
+        cf.BackgroundTransparency = 0.4
+        cf.ZIndex = zIndex or 3
+        cf.BorderSizePixel = 0
+        cf.Active = true
+        
+        local corner = Instance.new("UICorner")
+        corner.CornerRadius = UDim.new(0, 10)
+        corner.Parent = cf
+
+        if not UI.CustomFrames then UI.CustomFrames = {} end
+        UI.CustomFrames[name] = cf
+
+        return cf
+    end
+
+    local function recordDefaults()
+        local allMovable = getMovableElements()
+        for name, el in pairs(allMovable) do
+             HUD.DefaultPositions[name] = el.Position
+             HUD.DefaultSizes[name] = el.Size
+             if el:IsA("TextLabel") or el:IsA("TextBox") then
+                 HUD.DefaultTexts[name] = el.Text
+                 if el:IsA("TextBox") then
+                     HUD.DefaultPlaceholders[name] = el.PlaceholderText
+                 end
+             end
+        end
+    end
+    
+    if Config.CustomFrames then
+        for name, data in pairs(Config.CustomFrames) do
+            spawnCustomFrame(name, data.ZIndex or 3)
+        end
+    end
+    
+    recordDefaults()
     loadSpeedEmoteConfig()
 
     connectEvents()
@@ -4124,6 +4417,7 @@ UICorner_5.Parent = UI.Changepage
     ApplyUIVisibility()
     
     if applySavedPositions then applySavedPositions() end
+    if updateHUDLayouts then updateHUDLayouts() end
     
     return true
 end
@@ -5319,8 +5613,7 @@ end
 
 function toggleSpeedEmote()
     State.speedEmoteEnabled = not State.speedEmoteEnabled
-
-    UI.SpeedBox.Visible = State.speedEmoteEnabled
+    updateSpeedBoxVisibility()
 
     if State.speedEmoteEnabled then
         getgenv().Notify({
@@ -5715,18 +6008,7 @@ end
 
 
 
-function getMovableElements()
-    local elems = {}
-    if UI.Top then elems["Top"] = UI.Top end
-    if UI.Under then elems["Under"] = UI.Under end
-    if UI.EmoteWalkButton then elems["EmoteWalkButton"] = UI.EmoteWalkButton end
-    if UI.Favorite then elems["Favorite"] = UI.Favorite end
-    if UI.SpeedEmote then elems["SpeedEmote"] = UI.SpeedEmote end
-    if UI.SpeedBox then elems["SpeedBox"] = UI.SpeedBox end
-    if UI.Changepage then elems["Changepage"] = UI.Changepage end
-    if UI.Reload then elems["Reload"] = UI.Reload end
-    return elems
-end
+
 
 function calculateSnap(element, newPos, currentName, allMovable)
     local SNAP_THRESHOLD = 8
@@ -5768,6 +6050,352 @@ function calculateSnap(element, newPos, currentName, allMovable)
     return UDim2.new(fsx, newPos.X.Offset, fsy, newPos.Y.Offset), guideX, guideY
 end
 
+local function hudColorToRGB(c)
+    return {math.floor(c.R * 255 + 0.5), math.floor(c.G * 255 + 0.5), math.floor(c.B * 255 + 0.5)}
+end
+
+local function copyProps(name)
+    local src = Config.HUDProperties and Config.HUDProperties[name]
+    if not src then return {} end
+    local out = {}
+    for k, v in pairs(src) do
+        if type(v) == "table" then
+            local t = {}
+            for i, sv in pairs(v) do
+                t[i] = sv
+            end
+            out[k] = t
+        else
+            out[k] = v
+        end
+    end
+    return out
+end
+
+local function captureHUDState(n, el)
+    if not n or not el then return nil end
+    local cR = el:FindFirstChildWhichIsA("UICorner")
+    local s = {
+        name = n,
+        pos = el.Position,
+        size = el.Size,
+        z = el.ZIndex,
+        bgTrans = el.BackgroundTransparency,
+        bgColor = el.BackgroundColor3,
+        radius = cR and cR.CornerRadius or nil
+    }
+    if el:IsA("ImageLabel") or el:IsA("ImageButton") then
+        s.imgTrans = el.ImageTransparency
+        s.imgColor = el.ImageColor3
+    end
+    if el:IsA("TextLabel") or el:IsA("TextBox") then
+        s.text = el.Text
+        s.textTrans = el.TextTransparency
+        s.textColor = el.TextColor3
+        if el:IsA("TextBox") then
+            s.placeholder = el.PlaceholderText
+        end
+    end
+    s.props = copyProps(n)
+    return s
+end
+
+local function pushUndo(state)
+    if not state then return end
+    if not HUD.UndoStack then HUD.UndoStack = {} end
+    table.insert(HUD.UndoStack, state)
+    if #HUD.UndoStack > 50 then
+        table.remove(HUD.UndoStack, 1)
+    end
+end
+
+local function sameUDim2(a, b)
+    return a.X.Scale == b.X.Scale and a.X.Offset == b.X.Offset and a.Y.Scale == b.Y.Scale and a.Y.Offset == b.Y.Offset
+end
+
+local function sameUDim(a, b)
+    return a.Scale == b.Scale and a.Offset == b.Offset
+end
+
+local function sameColor(a, b)
+    return math.abs(a.R - b.R) < 0.001 and math.abs(a.G - b.G) < 0.001 and math.abs(a.B - b.B) < 0.001
+end
+
+local function applyHUDState(state)
+    if not state or not state.name then return end
+    local all = getAllHUDObjects()
+    local el = all[state.name]
+    if not el then return end
+
+    if state.pos then
+        el.Position = state.pos
+        if not Config.HUDPositions then Config.HUDPositions = {} end
+        Config.HUDPositions[state.name] = {state.pos.X.Scale, state.pos.X.Offset, state.pos.Y.Scale, state.pos.Y.Offset}
+    end
+    if state.size then
+        el.Size = state.size
+        if not Config.HUDSizes then Config.HUDSizes = {} end
+        Config.HUDSizes[state.name] = {state.size.X.Scale, state.size.X.Offset, state.size.Y.Scale, state.size.Y.Offset}
+    end
+    if state.z ~= nil then el.ZIndex = state.z end
+    if state.props and state.props.BgTrans ~= nil then el.BackgroundTransparency = state.bgTrans end
+    if state.props and state.props.BgColor then el.BackgroundColor3 = state.bgColor end
+    if el:IsA("ImageLabel") or el:IsA("ImageButton") then
+        if state.props and state.props.ImgTrans ~= nil then el.ImageTransparency = state.imgTrans end
+        if state.props and state.props.ImgColor then el.ImageColor3 = state.imgColor end
+    end
+    if el:IsA("TextLabel") or el:IsA("TextBox") then
+        if state.props and state.props.Text ~= nil then el.Text = state.text end
+        if state.props and state.props.TextTransparency ~= nil then el.TextTransparency = state.textTrans end
+        if state.props and state.props.TxtColor then el.TextColor3 = state.textColor end
+        if el:IsA("TextBox") and state.placeholder ~= nil then
+            el.PlaceholderText = state.placeholder
+        end
+    end
+    if state.radius then
+        local cR = el:FindFirstChildWhichIsA("UICorner")
+        if cR then cR.CornerRadius = state.radius end
+    end
+
+    if not Config.HUDProperties then Config.HUDProperties = {} end
+    Config.HUDProperties[state.name] = state.props or {}
+    SaveConfig()
+    pcall(function() updateGUIColors() end)
+end
+
+local function undoLastHUD()
+    if not State.hudEditorActive then return end
+    if not HUD.UndoStack or #HUD.UndoStack == 0 then return end
+    local state = table.remove(HUD.UndoStack)
+    applyHUDState(state)
+end
+
+local function normalizeUDim2(u, ps)
+    if not u or not ps or ps.X <= 0 or ps.Y <= 0 then
+        return nil
+    end
+    local sx = u.X.Scale + (u.X.Offset / ps.X)
+    local sy = u.Y.Scale + (u.Y.Offset / ps.Y)
+    return sx, 0, sy, 0
+end
+
+local function tableToUDim2(v)
+    if type(v) ~= "table" or #v ~= 4 then return nil end
+    return UDim2.new(v[1], v[2], v[3], v[4])
+end
+
+local function normalizeHUDScale()
+    local elems = getAllHUDObjects()
+    for name, el in pairs(elems) do
+        local parent = el and el.Parent
+        if parent then
+            local hasLayout = parent:FindFirstChildOfClass("UIListLayout")
+            if hasLayout and not HUD.IsUnlocked then
+                return
+            end
+            local ps = parent.AbsoluteSize
+            if Config.HUDPositions and Config.HUDPositions[name] then
+                local v = Config.HUDPositions[name]
+                if type(v) == "table" and #v == 4 then
+                    local sx, ox, sy, oy = v[1], v[2], v[3], v[4]
+                    if ox ~= 0 or oy ~= 0 then
+                        local nsx, nox, nsy, noy = normalizeUDim2(UDim2.new(sx, ox, sy, oy), ps)
+                        if nsx then
+                            Config.HUDPositions[name] = {nsx, nox, nsy, noy}
+                            el.Position = UDim2.new(nsx, nox, nsy, noy)
+                        end
+                    end
+                end
+            end
+            if Config.HUDSizes and Config.HUDSizes[name] then
+                local v = Config.HUDSizes[name]
+                if type(v) == "table" and #v == 4 then
+                    local def = HUD.DefaultSizes and HUD.DefaultSizes[name]
+                    local isDefault = def and sameUDim2(def, tableToUDim2(v) or UDim2.new(0,0,0,0))
+                    if isDefault then
+                        return
+                    end
+                    local sx, ox, sy, oy = v[1], v[2], v[3], v[4]
+                    if ox ~= 0 or oy ~= 0 then
+                        local nsx, nox, nsy, noy = normalizeUDim2(UDim2.new(sx, ox, sy, oy), ps)
+                        if nsx then
+                            Config.HUDSizes[name] = {nsx, nox, nsy, noy}
+                            el.Size = UDim2.new(nsx, nox, nsy, noy)
+                        end
+                    end
+                end
+            end
+        end
+    end
+    SaveConfig()
+end
+
+local function normalizeHUDScaleForElement(name, el, normalizePos, normalizeSize)
+    if not name or not el or not el.Parent then return end
+    if normalizePos == nil then normalizePos = true end
+    if normalizeSize == nil then normalizeSize = true end
+    local parent = el.Parent
+    local hasLayout = parent:FindFirstChildOfClass("UIListLayout")
+    if hasLayout and not HUD.IsUnlocked then return end
+    local ps = parent.AbsoluteSize
+    if ps.X <= 0 or ps.Y <= 0 then return end
+
+    if normalizePos then
+        local nsx, nox, nsy, noy = normalizeUDim2(el.Position, ps)
+        if nsx then
+            el.Position = UDim2.new(nsx, nox, nsy, noy)
+            if not Config.HUDPositions then Config.HUDPositions = {} end
+            Config.HUDPositions[name] = {nsx, nox, nsy, noy}
+        end
+    end
+
+    if normalizeSize then
+        local nsx, nox, nsy, noy = normalizeUDim2(el.Size, ps)
+        if nsx then
+            el.Size = UDim2.new(nsx, nox, nsy, noy)
+            if not Config.HUDSizes then Config.HUDSizes = {} end
+            Config.HUDSizes[name] = {nsx, nox, nsy, noy}
+        end
+    end
+
+    SaveConfig()
+end
+
+function selectHUDElement(name, element)
+    if HUD.SelectedElement == element then return end
+    HUD.SelectedElement = element
+    HUD.LastTouchedElement = element
+    HUD.LastTouchedName = name
+
+    local parent = element.Parent
+    if UI and parent and (parent == UI.Top or parent == UI.Under) then
+        local key = parent.Name
+        local l = parent:FindFirstChildOfClass("UIListLayout") or (HUD.Layouts and HUD.Layouts[key])
+        if l then
+            HUD.Layouts[key] = l
+            HUD.LayoutsRemoved[key] = true
+            l.Parent = nil
+        end
+    end
+
+    for _, h in pairs(HUD.ResizeHandles) do pcall(function() h:Destroy() end) end
+    HUD.ResizeHandles = {}
+    for _, c in pairs(HUD.ResizeConnections) do pcall(function() c:Disconnect() end) end
+    HUD.ResizeConnections = {}
+
+    local selectionGui = HUD.SelectionGui
+    local wrapper = Instance.new("Frame")
+    wrapper.Name = "SelectionWrapper"
+    wrapper.BackgroundTransparency = 1
+    wrapper.ZIndex = 1
+    wrapper.Parent = selectionGui
+
+    table.insert(HUD.ResizeHandles, wrapper)
+    table.insert(HUD.ResizeConnections, RunService.RenderStepped:Connect(function()
+        if HUD.SelectedElement == element and element.Parent then
+            wrapper.Size = UDim2.fromOffset(element.AbsoluteSize.X, element.AbsoluteSize.Y)
+            wrapper.Position = UDim2.fromOffset(element.AbsolutePosition.X, element.AbsolutePosition.Y)
+        end
+    end))
+
+    local handlePositions = {
+        TopLeft = {UDim2.new(0,0,0,0), Vector2.new(-1, -1)},
+        Top = {UDim2.new(0.5,0,0,0), Vector2.new(0, -1)},
+        TopRight = {UDim2.new(1,0,0,0), Vector2.new(1, -1)},
+        Left = {UDim2.new(0,0,0.5,0), Vector2.new(-1, 0)},
+        Right = {UDim2.new(1,0,0.5,0), Vector2.new(1, 0)},
+        BottomLeft = {UDim2.new(0,0,1,0), Vector2.new(-1, 1)},
+        Bottom = {UDim2.new(0.5,0,1,0), Vector2.new(0, 1)},
+        BottomRight = {UDim2.new(1,0,1,0), Vector2.new(1, 1)}
+    }
+
+    for dir, data in pairs(handlePositions) do
+        local h = Instance.new("Frame")
+        h.Name = "Resize_"..dir
+        h.Size = UDim2.new(0, 8, 0, 8)
+        h.AnchorPoint = Vector2.new(0.5, 0.5)
+        h.Position = data[1]
+        h.BackgroundColor3 = Color3.fromRGB(0, 255, 100)
+        h.BorderColor3 = Color3.fromRGB(0, 0, 0)
+        h.ZIndex = 11000
+        h.Parent = wrapper
+
+        local btn = Instance.new("TextButton")
+        btn.Size = UDim2.new(1, 4, 1, 4)
+        btn.Position = UDim2.new(0.5, 0, 0.5, 0)
+        btn.AnchorPoint = Vector2.new(0.5, 0.5)
+        btn.BackgroundTransparency = 1
+        btn.Text = ""
+        btn.ZIndex = 11001
+        btn.Parent = h
+
+        local resizing = false
+        local dragStart
+        local startAbsSize
+        local startAbsPos
+        local resizeUndo
+
+        table.insert(HUD.ResizeConnections, btn.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                resizing = true
+                resizeUndo = captureHUDState(name, element)
+                dragStart = input.Position
+                startAbsSize = element.AbsoluteSize
+                startAbsPos = element.AbsolutePosition
+            end
+        end))
+
+        table.insert(HUD.ResizeConnections, UserInputService.InputChanged:Connect(function(input)
+            if not resizing then return end
+            if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+                local delta = input.Position - dragStart
+                local pSize = element.Parent and element.Parent.AbsoluteSize or Vector2.new(1, 1)
+                
+                local dirVec = data[2]
+                local newW = startAbsSize.X + (dirVec.X == 1 and delta.X or (dirVec.X == -1 and -delta.X or 0))
+                local newH = startAbsSize.Y + (dirVec.Y == 1 and delta.Y or (dirVec.Y == -1 and -delta.Y or 0))
+                local newX = startAbsPos.X + (dirVec.X == -1 and delta.X or 0)
+                local newY = startAbsPos.Y + (dirVec.Y == -1 and delta.Y or 0)
+
+                if newW < 20 then
+                    if dirVec.X == -1 then newX = newX - (20 - newW) end
+                    newW = 20
+                end
+                if newH < 20 then
+                    if dirVec.Y == -1 then newY = newY - (20 - newH) end
+                    newH = 20
+                end
+
+                local parentPos = element.Parent and element.Parent.AbsolutePosition or Vector2.new(0,0)
+                local relX = (newX - parentPos.X) / pSize.X
+                local relY = (newY - parentPos.Y) / pSize.Y
+
+                element.Size = UDim2.new(newW / pSize.X, 0, newH / pSize.Y, 0)
+                element.Position = UDim2.new(relX, 0, relY, 0)
+            end
+        end))
+
+        table.insert(HUD.ResizeConnections, UserInputService.InputEnded:Connect(function(input)
+             if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                 if resizing then
+                     resizing = false
+                     if resizeUndo and (not sameUDim2(resizeUndo.pos, element.Position) or not sameUDim2(resizeUndo.size, element.Size)) then
+                         pushUndo(resizeUndo)
+                     end
+                     local rPs = element.Parent and element.Parent.AbsoluteSize or Vector2.new(1, 1)
+                     local pXs = element.Position.X.Scale + (element.Position.X.Offset / rPs.X)
+                     local pYs = element.Position.Y.Scale + (element.Position.Y.Offset / rPs.Y)
+                     Config.HUDPositions[name] = {pXs, 0, pYs, 0}
+                     if not Config.HUDSizes then Config.HUDSizes = {} end
+                     local sXs = element.Size.X.Scale + (element.Size.X.Offset / rPs.X)
+                     local sYs = element.Size.Y.Scale + (element.Size.Y.Offset / rPs.Y)
+                     Config.HUDSizes[name] = {sXs, 0, sYs, 0}
+                 end
+             end
+        end))
+    end
+end
+
 function setupElementDragging(name, element, allMovable, snapGuideV, snapGuideH)
     element.Visible = true
     local stroke = Instance.new("UIStroke")
@@ -5777,43 +6405,48 @@ function setupElementDragging(name, element, allMovable, snapGuideV, snapGuideH)
     stroke.Parent = element
     table.insert(HUD.Strokes, stroke)
 
-    local hasLayout = element:FindFirstChildOfClass("UIListLayout")
-    local inputTarget
-    if hasLayout then
-        for _, child in pairs(element:GetChildren()) do
-            if child:IsA("GuiButton") or child:IsA("TextBox") then
-                child.Active = false
-            end
+    local isChild = false
+    for _, friendly in pairs(HUD.FriendlyNames) do
+        if name == friendly then
+            isChild = true
+            break
         end
-        element.Active = true
-        inputTarget = element
-    else
-        local dh = Instance.new("TextButton")
-        dh.Name = "HUDDragHandle"
-        dh.Parent = element
-        dh.BackgroundTransparency = 1
-        dh.Text = ""
-        dh.Size = UDim2.fromScale(1, 1)
-        dh.ZIndex = 9999
-        dh.Active = true
-        inputTarget = dh
     end
+
+    local inputTarget = Instance.new("TextButton")
+    inputTarget.Name = "HUDDragHandle_" .. name
+    inputTarget.BackgroundTransparency = 1
+    inputTarget.Text = ""
+    inputTarget.ZIndex = isChild and 10 or 5
+    inputTarget.Active = true
+    inputTarget.Parent = HUD.SelectionGui
+
+    table.insert(HUD.Connections, RunService.RenderStepped:Connect(function()
+        if element and element.Parent then
+            inputTarget.Size = UDim2.fromOffset(element.AbsoluteSize.X, element.AbsoluteSize.Y)
+            inputTarget.Position = UDim2.fromOffset(element.AbsolutePosition.X, element.AbsolutePosition.Y)
+        end
+    end))
 
     local dragging = false
     local dragStart, startPos
+    local dragUndo
     table.insert(HUD.Connections, inputTarget.InputBegan:Connect(function(input)
         if not State.hudEditorActive then return end
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             dragging = true
+            dragUndo = captureHUDState(name, element)
             dragStart = input.Position
             startPos = element.Position
             stroke.Color = Color3.fromRGB(255, 255, 255)
+            selectHUDElement(name, element)
         end
     end))
 
     table.insert(HUD.Connections, UserInputService.InputChanged:Connect(function(input)
         if not dragging then return end
         if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+            if not dragStart then return end
             local delta = input.Position - dragStart
             local ps = element.Parent and element.Parent.AbsoluteSize or Vector2.new(1, 1)
             local rawPos = UDim2.new(
@@ -5835,18 +6468,21 @@ function setupElementDragging(name, element, allMovable, snapGuideV, snapGuideH)
                 stroke.Color = Color3.fromRGB(0, 255, 100)
                 if snapGuideV then snapGuideV.Visible = false end
                 if snapGuideH then snapGuideH.Visible = false end
-                Config.HUDPositions[name] = {
-                    element.Position.X.Scale, element.Position.X.Offset,
-                    element.Position.Y.Scale, element.Position.Y.Offset
-                }
-                SaveConfig()
-            end
+                if dragUndo and not sameUDim2(dragUndo.pos, element.Position) then
+                    pushUndo(dragUndo)
+                end
+                    local dPs = element.Parent and element.Parent.AbsoluteSize or Vector2.new(1, 1)
+                    local dpXs = element.Position.X.Scale + (element.Position.X.Offset / dPs.X)
+                    local dpYs = element.Position.Y.Scale + (element.Position.Y.Offset / dPs.Y)
+                    element.Position = UDim2.new(dpXs, 0, dpYs, 0)
+                    Config.HUDPositions[name] = {dpXs, 0, dpYs, 0}
+                end
         end
     end))
 end
 
 applySavedPositions = function()
-    local elems = getMovableElements()
+    local elems = getAllHUDObjects()
     for name, el in pairs(elems) do
         local customPos = Config.HUDPositions and Config.HUDPositions[name]
         if customPos and type(customPos) == "table" and #customPos == 4 then
@@ -5854,24 +6490,58 @@ applySavedPositions = function()
         elseif HUD.DefaultPositions and HUD.DefaultPositions[name] then
              el.Position = HUD.DefaultPositions[name]
         end
+
+        local customSz = Config.HUDSizes and Config.HUDSizes[name]
+        if customSz and type(customSz) == "table" and #customSz == 4 then
+            el.Size = UDim2.new(customSz[1], customSz[2], customSz[3], customSz[4])
+        elseif HUD.DefaultSizes and HUD.DefaultSizes[name] then
+             el.Size = HUD.DefaultSizes[name]
+        end
+
+        local props = Config.HUDProperties and Config.HUDProperties[name]
+        if props then
+            for k, v in pairs(props) do
+                pcall(function()
+                    if k == "Radius" or k == "CornerRadius" then
+                        local cR = el:FindFirstChildWhichIsA("UICorner")
+                        if cR and type(v) == "table" then
+                             cR.CornerRadius = UDim.new(tonumber(v[1]) or 0, tonumber(v[2]) or 0)
+                        end
+                    elseif k == "RadiusString" or k == "PlaceholderTransparency" then
+                    else
+                        el[k] = v
+                    end
+                end)
+            end
+        end
     end
 end
 
 exitHUDEditor = function()
     if not State.hudEditorActive then return end
     State.hudEditorActive = false
-    for _, conn in pairs(HUD.Connections) do
-        pcall(function() conn:Disconnect() end)
-    end
-    HUD.Connections = {}
-    for _, stroke in pairs(HUD.Strokes) do
+    if SettingsLib and SettingsLib.UI and SettingsLib.UI:IsA("ScreenGui") and HUD.SettingsDisplayOrderPrev ~= nil then
         pcall(function()
-            if stroke and stroke.Parent then
-                stroke:Destroy()
-            end
+            SettingsLib.UI.DisplayOrder = HUD.SettingsDisplayOrderPrev
         end)
+        HUD.SettingsDisplayOrderPrev = nil
+    end
+    for _, conn in pairs(HUD.Connections) do pcall(function() conn:Disconnect() end) end
+    HUD.Connections = {}
+    for _, conn in pairs(HUD.ResizeConnections) do pcall(function() conn:Disconnect() end) end
+    HUD.ResizeConnections = {}
+    for _, h in pairs(HUD.ResizeHandles) do pcall(function() h:Destroy() end) end
+    HUD.ResizeHandles = {}
+    HUD.SelectedElement = nil
+    for _, stroke in pairs(HUD.Strokes) do
+        pcall(function() if stroke and stroke.Parent then stroke:Destroy() end end)
     end
     HUD.Strokes = {}
+
+    if HUD.SelectionGui then
+        pcall(function() HUD.SelectionGui:Destroy() end)
+        HUD.SelectionGui = nil
+    end
     for _, el in pairs(getMovableElements()) do
         local h = el:FindFirstChild("HUDDragHandle")
         if h then h:Destroy() end
@@ -5901,6 +6571,7 @@ end
 enterHUDEditor = function()
     if State.hudEditorActive then return end
     State.hudEditorActive = true
+    HUD.UndoStack = {}
 
     GuiService:SetEmotesMenuOpen(false)
     task.wait(0.15)
@@ -5920,6 +6591,26 @@ enterHUDEditor = function()
     local main = getSettingsMainFrame()
     if main then main.Visible = false end
     syncToggleVisibility()
+    if SettingsLib and SettingsLib.UI and SettingsLib.UI:IsA("ScreenGui") then
+        if HUD.SettingsDisplayOrderPrev == nil then
+            HUD.SettingsDisplayOrderPrev = SettingsLib.UI.DisplayOrder
+        end
+        pcall(function() SettingsLib.UI.DisplayOrder = 99998 end)
+    end
+    ApplyUIVisibility()
+
+    local selectionGui = game:GetService("CoreGui"):FindFirstChild("7yd7_HUDSelection")
+    if not selectionGui then
+        selectionGui = Instance.new("ScreenGui")
+        selectionGui.Name = "7yd7_HUDSelection"
+        selectionGui.IgnoreGuiInset = false
+        selectionGui.DisplayOrder = 99999
+        selectionGui.Parent = game:GetService("CoreGui")
+    else
+        selectionGui.IgnoreGuiInset = false
+        selectionGui.DisplayOrder = 99999
+    end
+    HUD.SelectionGui = selectionGui
 
     local overlay = Instance.new("Frame")
     overlay.Name = "HUDEditorOverlay"
@@ -5929,13 +6620,43 @@ enterHUDEditor = function()
     overlay.ZIndex = 6000
     overlay.Active = false
     HUD.Overlay = overlay
+    table.insert(HUD.Connections, UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        if gameProcessed then return end
+        if not State.hudEditorActive then return end
+        if input.KeyCode == Enum.KeyCode.Z then
+            if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) or UserInputService:IsKeyDown(Enum.KeyCode.RightControl) then
+                undoLastHUD()
+            end
+        end
+    end))
+    table.insert(HUD.Connections, UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            local p = input.Position
+            if HUD.SelectedElement then
+                local e = HUD.SelectedElement
+                local pos = e.AbsolutePosition
+                local sz = e.AbsoluteSize
+                if p.X < pos.X - 25 or p.X > pos.X + sz.X + 25 or p.Y < pos.Y - 25 or p.Y > pos.Y + sz.Y + 25 then
+                    task.delay(0.1, function()
+                        if HUD.SelectedElement == e then
+                            HUD.SelectedElement = nil
+                            for _, h in pairs(HUD.ResizeHandles) do pcall(function() h:Destroy() end) end
+                            HUD.ResizeHandles = {}
+                            for _, c in pairs(HUD.ResizeConnections) do pcall(function() c:Disconnect() end) end
+                            HUD.ResizeConnections = {}
+                        end
+                    end)
+                end
+            end
+        end
+    end))
 
     local bc = Instance.new("Frame")
     bc.Parent = overlay
     bc.BackgroundTransparency = 1
     bc.AnchorPoint = Vector2.new(1, 0)
     bc.Position = UDim2.new(1, -10, 0, 10)
-    bc.Size = UDim2.fromOffset(100, 42)
+    bc.Size = UDim2.fromOffset(360, 42)
     bc.ZIndex = 6000
 
     local bl = Instance.new("UIListLayout")
@@ -5944,6 +6665,39 @@ enterHUDEditor = function()
     bl.HorizontalAlignment = Enum.HorizontalAlignment.Right
     bl.VerticalAlignment = Enum.VerticalAlignment.Center
     bl.Parent = bc
+
+    local propertiesBtn = Instance.new("ImageButton")
+    propertiesBtn.Parent = bc
+    propertiesBtn.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    propertiesBtn.BackgroundTransparency = 0.4
+    propertiesBtn.Size = UDim2.fromOffset(42, 42)
+    propertiesBtn.Image = "rbxassetid://111026029750357"
+    propertiesBtn.ZIndex = 6001
+    local propCorner = Instance.new("UICorner")
+    propCorner.CornerRadius = UDim.new(0, 10)
+    propCorner.Parent = propertiesBtn
+
+    local exportBtn = Instance.new("ImageButton")
+    exportBtn.Parent = bc
+    exportBtn.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    exportBtn.BackgroundTransparency = 0.4
+    exportBtn.Size = UDim2.fromOffset(42, 42)
+    exportBtn.Image = "rbxassetid://107588515524752"
+    exportBtn.ZIndex = 6001
+    local exportCorner = Instance.new("UICorner")
+    exportCorner.CornerRadius = UDim.new(0, 10)
+    exportCorner.Parent = exportBtn
+
+    local importBtn = Instance.new("ImageButton")
+    importBtn.Parent = bc
+    importBtn.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    importBtn.BackgroundTransparency = 0.4
+    importBtn.Size = UDim2.fromOffset(42, 42)
+    importBtn.Image = "rbxassetid://78317476576895"
+    importBtn.ZIndex = 6001
+    local importCorner = Instance.new("UICorner")
+    importCorner.CornerRadius = UDim.new(0, 10)
+    importCorner.Parent = importBtn
 
     local resetBtn = Instance.new("ImageButton")
     resetBtn.Parent = bc
@@ -5956,6 +6710,28 @@ enterHUDEditor = function()
     resetCorner.CornerRadius = UDim.new(0, 10)
     resetCorner.Parent = resetBtn
 
+    local lockBtn = Instance.new("ImageButton")
+    lockBtn.Parent = bc
+    lockBtn.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    lockBtn.BackgroundTransparency = 0.4
+    lockBtn.Size = UDim2.fromOffset(42, 42)
+    lockBtn.Image = HUD.IsUnlocked and "rbxassetid://137042445663198" or "rbxassetid://137985778533954"
+    lockBtn.ZIndex = 6001
+    local lockCorner = Instance.new("UICorner")
+    lockCorner.CornerRadius = UDim.new(0, 10)
+    lockCorner.Parent = lockBtn
+
+    local addBtn = Instance.new("ImageButton")
+    addBtn.Parent = bc
+    addBtn.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    addBtn.BackgroundTransparency = 0.4
+    addBtn.Size = UDim2.fromOffset(42, 42)
+    addBtn.Image = "rbxassetid://108445456753346"
+    addBtn.ZIndex = 6001
+    local addCorner = Instance.new("UICorner")
+    addCorner.CornerRadius = UDim.new(0, 10)
+    addCorner.Parent = addBtn
+
     local backBtn = Instance.new("ImageButton")
     backBtn.Parent = bc
     backBtn.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
@@ -5967,18 +6743,911 @@ enterHUDEditor = function()
     backCorner.CornerRadius = UDim.new(0, 10)
     backCorner.Parent = backBtn
 
+
+
+    local function rebuildHUDOverlays()
+        for _, conn in pairs(HUD.ResizeConnections) do pcall(function() conn:Disconnect() end) end
+        HUD.ResizeConnections = {}
+        for _, h in pairs(HUD.ResizeHandles) do pcall(function() h:Destroy() end) end
+        HUD.ResizeHandles = {}
+        for _, stroke in pairs(HUD.Strokes) do pcall(function() stroke:Destroy() end) end
+        HUD.Strokes = {}
+        if selectionGui then selectionGui:ClearAllChildren() end
+        HUD.SelectedElement = nil
+        
+        local allMovable = getMovableElements()
+        
+        local snapGuideH = Instance.new("Frame")
+        snapGuideH.Name = "SnapGuide"
+        snapGuideH.BackgroundColor3 = Color3.fromRGB(0, 170, 255)
+        snapGuideH.BorderSizePixel = 0
+        snapGuideH.Size = UDim2.new(1, 0, 0, 1)
+        snapGuideH.ZIndex = 6002
+        snapGuideH.Visible = false
+        snapGuideH.Parent = selectionGui
+
+        local snapGuideV = Instance.new("Frame")
+        snapGuideV.Name = "SnapGuide"
+        snapGuideV.BackgroundColor3 = Color3.fromRGB(0, 170, 255)
+        snapGuideV.BorderSizePixel = 0
+        snapGuideV.Size = UDim2.new(0, 1, 1, 0)
+        snapGuideV.ZIndex = 6002
+        snapGuideV.Visible = false
+        snapGuideV.Parent = selectionGui
+
+        for name, element in pairs(allMovable) do
+            setupElementDragging(name, element, allMovable, snapGuideV, snapGuideH)
+        end
+        
+        updateHUDLayouts()
+        
+        applySavedPositions()
+    end
+
+    local function rebuildCustomFramesFromConfig()
+        if UI.CustomFrames then
+            for _, frame in pairs(UI.CustomFrames) do
+                if frame and frame.Parent then frame:Destroy() end
+            end
+        end
+        UI.CustomFrames = {}
+
+        if not Config.CustomFrames then return end
+        local _, emotesWheel = checkEmotesMenuExists()
+        if not emotesWheel then return end
+
+        for name, data in pairs(Config.CustomFrames) do
+            local cf = Instance.new("Frame")
+            cf.Name = name
+            cf.Parent = emotesWheel
+            cf.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+            cf.BackgroundTransparency = 0.4
+            cf.ZIndex = data and data.ZIndex or 3
+            cf.BorderSizePixel = 0
+            cf.Active = true
+
+            local pos = Config.HUDPositions and Config.HUDPositions[name]
+            local size = Config.HUDSizes and Config.HUDSizes[name]
+            if pos and type(pos) == "table" and #pos == 4 then
+                cf.Position = UDim2.new(pos[1], pos[2], pos[3], pos[4])
+            else
+                cf.Position = UDim2.new(0.5, 0, 0.5, 0)
+            end
+            if size and type(size) == "table" and #size == 4 then
+                cf.Size = UDim2.new(size[1], size[2], size[3], size[4])
+            else
+                cf.Size = UDim2.new(0.3, 0, 0.3, 0)
+            end
+
+            local corner = Instance.new("UICorner")
+            corner.CornerRadius = UDim.new(0, 10)
+            corner.Parent = cf
+
+            UI.CustomFrames[name] = cf
+            HUD.DefaultPositions[name] = cf.Position
+            HUD.DefaultSizes[name] = cf.Size
+        end
+    end
+
+    local function applyHUDSettingsReplace(settings)
+        local function normalizeImportTable(tbl)
+            if type(tbl) ~= "table" then return {} end
+            local allElems = getAllHUDObjects()
+            for eName, v in pairs(tbl) do
+                if type(v) == "table" and #v == 4 then
+                    local sx, ox, sy, oy = v[1], v[2], v[3], v[4]
+                    if ox ~= 0 or oy ~= 0 then
+                        local el = allElems[eName]
+                        local ps = el and el.Parent and el.Parent.AbsoluteSize
+                        if ps and ps.X > 0 and ps.Y > 0 then
+                            tbl[eName] = {sx + (ox / ps.X), 0, sy + (oy / ps.Y), 0}
+                        end
+                    end
+                end
+            end
+            return tbl
+        end
+        Config.HUDPositions = normalizeImportTable(settings.HUDPositions or {})
+        Config.HUDSizes = normalizeImportTable(settings.HUDSizes or {})
+        Config.HUDProperties = settings.HUDProperties or {}
+        Config.CustomFrames = settings.CustomFrames or {}
+        HUD.LayoutsRemoved = {}
+        SaveConfig()
+        rebuildCustomFramesFromConfig()
+        applySavedPositions()
+
+        rebuildHUDOverlays()
+        updateHUDLayouts()
+        ApplyUIVisibility()
+        pcall(function() updateGUIColors() end)
+    end
+
+    table.insert(HUD.Connections, lockBtn.MouseButton1Click:Connect(function()
+        HUD.IsUnlocked = not HUD.IsUnlocked
+        lockBtn.Image = HUD.IsUnlocked and "rbxassetid://137042445663198" or "rbxassetid://137985778533954"
+        rebuildHUDOverlays()
+        pcall(function() updateGUIColors() end)
+        getgenv().Notify({ 
+            Title = "7yd7 | HUD Editor", 
+            Content = HUD.IsUnlocked and "🔓 Interior Unlocked! Children are now editable." or "🔒 Interior Locked! Top-level only.", 
+            Duration = 2 
+        })
+    end))
+
+    rebuildHUDOverlays()
+
+    table.insert(HUD.Connections, exportBtn.MouseButton1Click:Connect(function()
+        local function normalizeExportTable(tbl)
+            if type(tbl) ~= "table" then return {} end
+            local out = {}
+            local allElems = getAllHUDObjects()
+            for eName, v in pairs(tbl) do
+                if type(v) == "table" and #v == 4 then
+                    local sx, ox, sy, oy = v[1], v[2], v[3], v[4]
+                    if ox ~= 0 or oy ~= 0 then
+                        local el = allElems[eName]
+                        local ps = el and el.Parent and el.Parent.AbsoluteSize
+                        if ps and ps.X > 0 and ps.Y > 0 then
+                            sx = sx + (ox / ps.X)
+                            sy = sy + (oy / ps.Y)
+                        end
+                    end
+                    out[eName] = {sx, 0, sy, 0}
+                else
+                    out[eName] = v
+                end
+            end
+            return out
+        end
+        local function normalizeExportProps(props)
+            if type(props) ~= "table" then return {} end
+            local out = {}
+            local allElems = getAllHUDObjects()
+            for eName, p in pairs(props) do
+                local ep = {}
+                for k, v in pairs(p) do
+                    if (k == "CornerRadius" or k == "Radius") and type(v) == "table" and #v == 2 then
+                        local rs, ro = v[1], v[2]
+                        if ro ~= 0 and rs == 0 then
+                            local el = allElems[eName]
+                            if el then
+                                local minDim = math.min(el.AbsoluteSize.X, el.AbsoluteSize.Y)
+                                if minDim > 0 then
+                                    rs = ro / minDim
+                                    ro = 0
+                                end
+                            end
+                        end
+                        ep[k] = {rs, ro}
+                    else
+                        ep[k] = v
+                    end
+                end
+                out[eName] = ep
+            end
+            return out
+        end
+        local data = {
+            Type = "HUD",
+            Settings = {
+                HUDPositions = normalizeExportTable(Config.HUDPositions or {}),
+                HUDSizes = normalizeExportTable(Config.HUDSizes or {}),
+                HUDProperties = normalizeExportProps(Config.HUDProperties or {}),
+                CustomFrames = Config.CustomFrames or {}
+            }
+        }
+        setclipboard(HttpService:JSONEncode(data))
+        getgenv().Notify({ Title = "7yd7 | HUD Editor", Content = "✅ HUD settings copied", Duration = 2 })
+    end))
+
+    table.insert(HUD.Connections, importBtn.MouseButton1Click:Connect(function()
+        local popup, content = CreatePopup("Import HUD", UDim2.fromOffset(320, 240))
+        local popupRoot = HUD.SelectionGui or SettingsLib.UI
+        if popupRoot and popup.Parent ~= popupRoot then
+            popup.Parent = popupRoot
+        end
+
+        local baseZ = 7000
+        popup.ZIndex = baseZ
+
+        local backdrop = Instance.new("TextButton")
+        backdrop.Name = "HUDImportBackdrop"
+        backdrop.Parent = popup.Parent
+        backdrop.Size = UDim2.fromScale(1, 1)
+        backdrop.BackgroundTransparency = 1
+        backdrop.Text = ""
+        backdrop.AutoButtonColor = false
+        backdrop.ZIndex = baseZ - 1
+        backdrop.Active = true
+
+        local scroll = Instance.new("ScrollingFrame")
+        scroll.Parent = content
+        scroll.BackgroundTransparency = 1
+        scroll.BorderSizePixel = 0
+        scroll.Position = UDim2.new(0.05, 0, 0, 5)
+        scroll.Size = UDim2.new(0.9, 0, 0, 130)
+        scroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+        scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+        scroll.ScrollBarThickness = 4
+        scroll.Active = true
+        scroll.ScrollingEnabled = true
+        scroll.ScrollingDirection = Enum.ScrollingDirection.Y
+        scroll.ElasticBehavior = Enum.ElasticBehavior.WhenScrollable
+
+        local box = CreateInput(scroll, "Paste HUD JSON here...", "", true)
+        box.Size = UDim2.new(1, -8, 0, 130)
+        box.Position = UDim2.new(0, 0, 0, 0)
+        box.TextYAlignment = Enum.TextYAlignment.Top
+        box.ClearTextOnFocus = false
+
+        local function updateCanvas()
+            local padding = 8
+            local h = math.max(130, (box.TextBounds.Y or 0) + padding)
+            scroll.CanvasSize = UDim2.new(0, 0, 0, h)
+        end
+        box:GetPropertyChangedSignal("Text"):Connect(updateCanvas)
+        box:GetPropertyChangedSignal("TextBounds"):Connect(updateCanvas)
+        updateCanvas()
+
+        local imp = CreateButton(content, "IMPORT HUD", (State.EmoteTheme and State.EmoteTheme.Accent) or Color3.fromRGB(0, 255, 150), UDim2.new(0.05, 0, 0.8, 0), UDim2.new(0.9, 0, 0, 35))
+
+        imp.MouseButton1Click:Connect(function()
+            local s, d = pcall(function() return HttpService:JSONDecode(box.Text) end)
+            if s and type(d) == "table" then
+                local settings = d.Settings or d
+                if d.Type and d.Type ~= "HUD" then
+                    getgenv().Notify({ Title = "Error", Content = "HUD import type mismatch!", Duration = 3 })
+                    return
+                end
+                if type(settings) ~= "table" then
+                    getgenv().Notify({ Title = "Error", Content = "Invalid HUD JSON", Duration = 3 })
+                    return
+                end
+                applyHUDSettingsReplace(settings)
+                HUD.UndoStack = {}
+                if backdrop then backdrop:Destroy() end
+                popup:Destroy()
+                getgenv().Notify({ Title = "7yd7 | HUD Editor", Content = "✅ HUD settings imported", Duration = 2 })
+            else
+                getgenv().Notify({ Title = "Error", Content = "Invalid HUD JSON", Duration = 3 })
+            end
+        end)
+
+        local close = Instance.new("TextButton")
+        close.Size = UDim2.fromOffset(24, 24)
+        close.Position = UDim2.new(1, -30, 0, 5)
+        close.Text = "×"
+        close.Font = Enum.Font.GothamBold
+        close.TextSize = 20
+        close.BackgroundTransparency = 1
+        close.TextColor3 = Color3.new(1,1,1)
+        close.ZIndex = baseZ + 2
+        close.Active = true
+        close.AutoButtonColor = false
+        close.Parent = popup
+        close.MouseButton1Click:Connect(function()
+            if backdrop then backdrop:Destroy() end
+            popup:Destroy()
+        end)
+        backdrop.MouseButton1Click:Connect(function()
+            if backdrop then backdrop:Destroy() end
+            popup:Destroy()
+        end)
+
+        local function bumpPopupZIndex(panel, z)
+            if not panel then return end
+            panel.ZIndex = z
+            for _, d in ipairs(panel:GetDescendants()) do
+                if d:IsA("GuiObject") then
+                    d.ZIndex = z + 1
+                end
+            end
+        end
+        bumpPopupZIndex(popup, baseZ)
+        close.ZIndex = baseZ + 2
+    end))
+
     table.insert(HUD.Connections, backBtn.MouseButton1Click:Connect(function()
         exitHUDEditor()
     end))
 
     table.insert(HUD.Connections, resetBtn.MouseButton1Click:Connect(function()
         Config.HUDPositions = {}
+        Config.HUDSizes = {}
+        Config.CustomFrames = {}
+        Config.HUDProperties = {}
+        HUD.LayoutsRemoved = {}
         SaveConfig()
-        for name, el in pairs(getMovableElements()) do
-            if HUD.DefaultPositions[name] then el.Position = HUD.DefaultPositions[name] end
+        
+        local allElements = getAllHUDObjects()
+        for name, el in pairs(allElements) do
+            if name:match("^CustomFrame_") then
+                el:Destroy()
+                if UI.CustomFrames then UI.CustomFrames[name] = nil end
+            else
+                if HUD.DefaultPositions[name] then el.Position = HUD.DefaultPositions[name] end
+                if HUD.DefaultSizes[name] then el.Size = HUD.DefaultSizes[name] end
+                
+                for internal, friendly in pairs(HUD.FriendlyNames) do
+                    if name == friendly then
+                        if internal:match("^Under%.") then
+                            el.Parent = UI.Under
+                        elseif internal:match("^Top%.") then
+                            el.Parent = UI.Top
+                        end
+                        break
+                    end
+                end
+
+                el.ZIndex = (name == "Top" or name == "Under") and 3 or (el:IsA("ImageButton") and 4 or 3)
+                if name == "Under" then
+                    el.BackgroundTransparency = 1
+                else
+                    el.BackgroundTransparency = (name == "Top" or name == "Reload" or name == "Changepage" or name == "EmoteWalkButton" or name == "SpeedBox" or name == "SpeedEmote" or name == "Favorite") and 0.4 or 1
+                end
+                
+                if el:IsA("ImageButton") or el:IsA("ImageLabel") then
+                    el.ImageTransparency = 0
+                end
+                
+                if el:IsA("TextLabel") or el:IsA("TextBox") then
+                    el.TextTransparency = 0.4
+                    if HUD.DefaultTexts and HUD.DefaultTexts[name] then
+                        el.Text = HUD.DefaultTexts[name]
+                    end
+                    if el:IsA("TextBox") and HUD.DefaultPlaceholders and HUD.DefaultPlaceholders[name] then
+                        el.PlaceholderText = HUD.DefaultPlaceholders[name]
+                    end
+                end
+
+                local cR = el:FindFirstChildWhichIsA("UICorner")
+                if cR then
+                    cR.CornerRadius = UDim.new(0, 10)
+                end
+            end
         end
-        getgenv().Notify({ Title = "7yd7 | HUD Editor", Content = "🔄 Positions reset to default", Duration = 3 })
+
+        pcall(function() updateGUIColors() end)
+        
+        HUD.SelectedElement = nil
+        for _, h in pairs(HUD.ResizeHandles) do pcall(function() h:Destroy() end) end
+        HUD.ResizeHandles = {}
+        for _, c in pairs(HUD.ResizeConnections) do pcall(function() c:Disconnect() end) end
+        HUD.ResizeConnections = {}
+        
+        rebuildHUDOverlays()
+        updateHUDLayouts()
+        ApplyUIVisibility()
+        State.totalPages = calculateTotalPages()
+        if State.currentPage > State.totalPages then
+            State.currentPage = State.totalPages
+        end
+        updatePageDisplay()
+        
+        getgenv().Notify({ Title = "7yd7 | HUD Editor", Content = "🔄 All designs and frames have been fully reset", Duration = 3 })
     end))
+
+    local propertiesPanel = Instance.new("Frame")
+    propertiesPanel.Name = "HUDPropertiesPanel"
+    propertiesPanel.Parent = overlay
+    propertiesPanel.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    propertiesPanel.BackgroundTransparency = 0.4
+    propertiesPanel.Size = UDim2.fromOffset(260, 150)
+    propertiesPanel.AnchorPoint = Vector2.new(1, 0)
+    propertiesPanel.Position = UDim2.new(1, -10, 0, 60)
+    propertiesPanel.Visible = false
+    propertiesPanel.ZIndex = 6005
+    propertiesPanel.ClipsDescendants = true
+    local panelCorner = Instance.new("UICorner")
+    panelCorner.CornerRadius = UDim.new(0, 10)
+    panelCorner.Parent = propertiesPanel
+    
+    local title = Instance.new("TextLabel")
+    title.Parent = propertiesPanel
+    title.BackgroundTransparency = 1
+    title.Size = UDim2.new(1, 0, 0, 26)
+    title.Position = UDim2.new(0, 0, 0, 2)
+    title.Font = Enum.Font.SourceSansBold
+    title.Text = "No Element"
+    title.TextColor3 = Color3.fromRGB(255, 255, 255)
+    title.TextSize = 14
+    title.TextScaled = true
+    title.ZIndex = 6006
+
+    local propContent = Instance.new("ScrollingFrame")
+    propContent.Parent = propertiesPanel
+    propContent.BackgroundTransparency = 1
+    propContent.Position = UDim2.new(0, 0, 0, 28)
+    propContent.Size = UDim2.new(1, 0, 1, -32)
+    propContent.CanvasSize = UDim2.new(0, 0, 0, 0)
+    propContent.ScrollBarThickness = 2
+    propContent.Active = true
+    propContent.ScrollingEnabled = true
+    propContent.ZIndex = 6006
+
+    local propLayout = Instance.new("UIListLayout")
+    propLayout.Parent = propContent
+    propLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    propLayout.Padding = UDim.new(0, 6)
+    propLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+
+    HUD.LastTouchedElement = nil
+    HUD.LastTouchedName = nil
+
+    local function createPropRow(label, lOrder, isLarge)
+        local row = Instance.new("Frame")
+        row.BackgroundTransparency = 1
+        row.Size = UDim2.new(0.92, 0, 0, isLarge and 50 or 26)
+        row.LayoutOrder = lOrder
+        row.ZIndex = 6006
+        row.Parent = propContent
+
+        local lbl = Instance.new("TextLabel")
+        lbl.Parent = row
+        lbl.Size = UDim2.new(0, 70, 0, 26)
+        lbl.BackgroundTransparency = 1
+        lbl.Text = label
+        lbl.TextColor3 = Color3.fromRGB(180, 180, 180)
+        lbl.TextXAlignment = Enum.TextXAlignment.Left
+        lbl.Font = Enum.Font.SourceSansBold
+        lbl.TextSize = 12
+        lbl.ZIndex = 6007
+
+        local tbox = Instance.new("TextBox")
+        tbox.Parent = row
+        tbox.Size = UDim2.new(1, -75, 1, -4)
+        tbox.Position = UDim2.new(0, 75, 0, 2)
+        tbox.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+        tbox.BackgroundTransparency = 0.3
+        tbox.TextColor3 = Color3.fromRGB(255, 255, 255)
+        tbox.Font = Enum.Font.Code
+        tbox.TextSize = 12
+        tbox.TextXAlignment = isLarge and Enum.TextXAlignment.Left or Enum.TextXAlignment.Center
+        tbox.TextYAlignment = isLarge and Enum.TextYAlignment.Top or Enum.TextYAlignment.Center
+        tbox.ClearTextOnFocus = false
+        tbox.TextWrapped = isLarge
+        tbox.PlaceholderText = ""
+        tbox.PlaceholderColor3 = Color3.fromRGB(80, 80, 80)
+        tbox.ZIndex = 6007
+        local tc = Instance.new("UICorner"); tc.CornerRadius = UDim.new(0, 6); tc.Parent = tbox
+
+        return row, tbox
+    end
+
+    local _, posBox = createPropRow("Position", 1)
+    local _, sizeBox = createPropRow("Size", 2)
+    local zRow, zBox = createPropRow("ZIndex", 3)
+    local bgRow, bgBox = createPropRow("BgTrans", 4)
+    local bgcRow, bgcBox = createPropRow("BgColor", 5)
+    local imgRow, imgBox = createPropRow("ImgTrans", 6)
+    local imgcRow, imgcBox = createPropRow("ImgColor", 7)
+    local radRow, radBox = createPropRow("Radius", 8)
+    local txtRow, txtBox = createPropRow("Text", 9, true)
+    local phRow, phBox = createPropRow("Placeholder", 10, true)
+    local ttrRow, ttrBox = createPropRow("TxtTrans", 11)
+    local txtcRow, txtcBox = createPropRow("TxtColor", 12)
+
+    local deleteRow = Instance.new("Frame")
+    deleteRow.BackgroundTransparency = 1
+    deleteRow.Size = UDim2.new(0.92, 0, 0, 28)
+    deleteRow.LayoutOrder = 13
+    deleteRow.ZIndex = 6006
+    deleteRow.Parent = propContent
+
+    local deleteBtn = Instance.new("TextButton")
+    deleteBtn.Parent = deleteRow
+    deleteBtn.Size = UDim2.new(1, 0, 1, 0)
+    deleteBtn.BackgroundColor3 = Color3.fromRGB(170, 60, 60)
+    deleteBtn.BackgroundTransparency = 0.1
+    deleteBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    deleteBtn.Font = Enum.Font.GothamBold
+    deleteBtn.TextSize = 12
+    deleteBtn.Text = "Delete Custom Frame"
+    deleteBtn.ZIndex = 6007
+    local delCorner = Instance.new("UICorner"); delCorner.CornerRadius = UDim.new(0, 6); delCorner.Parent = deleteBtn
+
+
+
+    local function parseUDim2(text)
+        local s1, o1, s2, o2 = text:match("{%s*([%d%.%-]+)%s*,%s*([%d%.%-]+)%s*}%s*,%s*{%s*([%d%.%-]+)%s*,%s*([%d%.%-]+)%s*}")
+        if s1 and o1 and s2 and o2 then
+            return tonumber(s1), tonumber(o1), tonumber(s2), tonumber(o2)
+        end
+        local a, b = text:match("([%d%.%-]+)%s*,%s*([%d%.%-]+)")
+        if a and b then
+            local va, vb = tonumber(a), tonumber(b)
+            if va and vb then
+                return 0, va, 0, vb
+            end
+        end
+        return nil
+    end
+
+    local function formatUDim2(udim)
+        return string.format("{%g, %g},{%g, %g}", udim.X.Scale, udim.X.Offset, udim.Y.Scale, udim.Y.Offset)
+    end
+
+    table.insert(HUD.Connections, propertiesBtn.MouseButton1Click:Connect(function()
+        propertiesPanel.Visible = not propertiesPanel.Visible
+    end))
+
+    local function formatUDim(udim)
+        return string.format("{%g, %g}", udim.Scale, udim.Offset)
+    end
+
+    local function formatRGB(c)
+        return string.format("%d, %d, %d", math.floor(c.R * 255 + 0.5), math.floor(c.G * 255 + 0.5), math.floor(c.B * 255 + 0.5))
+    end
+
+    local function parseRGB(text)
+        local a, b, c = text:match("([%d%.%-]+)%s*,%s*([%d%.%-]+)%s*,%s*([%d%.%-]+)")
+        if not a then return nil end
+        local r, g, b2 = tonumber(a), tonumber(b), tonumber(c)
+        if not r or not g or not b2 then return nil end
+        local maxv = math.max(r, g, b2)
+        if maxv <= 1 then
+            r, g, b2 = r * 255, g * 255, b2 * 255
+        end
+        r = math.clamp(r, 0, 255)
+        g = math.clamp(g, 0, 255)
+        b2 = math.clamp(b2, 0, 255)
+        return r, g, b2
+    end
+
+    table.insert(HUD.Connections, RunService.RenderStepped:Connect(function()
+        if not propertiesPanel.Visible then return end
+        local e = HUD.LastTouchedElement
+        local eName = HUD.LastTouchedName
+        if e and e.Parent then
+            title.Text = string.format("[%s] %s", e.ClassName, eName or "Unknown")
+            if not posBox:IsFocused() then posBox.Text = formatUDim2(e.Position) end
+            if not sizeBox:IsFocused() then sizeBox.Text = formatUDim2(e.Size) end
+            
+            zRow.Visible = true
+            if not zBox:IsFocused() then zBox.Text = tostring(e.ZIndex) end
+
+            bgRow.Visible = true
+            if not bgBox:IsFocused() then bgBox.Text = tostring(math.floor(e.BackgroundTransparency * 100) / 100) end
+
+            if e:IsA("ImageLabel") or e:IsA("ImageButton") then
+                imgRow.Visible = true
+                if not imgBox:IsFocused() then imgBox.Text = tostring(math.floor(e.ImageTransparency * 100) / 100) end
+            else
+                imgRow.Visible = false
+            end
+            
+            bgcRow.Visible = true
+            if not bgcBox:IsFocused() then bgcBox.Text = formatRGB(e.BackgroundColor3) end
+            
+            if e:IsA("ImageLabel") or e:IsA("ImageButton") then
+                imgcRow.Visible = true
+                if not imgcBox:IsFocused() then imgcBox.Text = formatRGB(e.ImageColor3) end
+            else
+                imgcRow.Visible = false
+            end
+            
+            if e:IsA("TextLabel") or e:IsA("TextBox") then
+                ttrRow.Visible = true
+                if not ttrBox:IsFocused() then ttrBox.Text = tostring(math.floor(e.TextTransparency * 100) / 100) end
+                
+                txtRow.Visible = true
+                if not txtBox:IsFocused() then txtBox.Text = e.Text end
+
+                txtcRow.Visible = true
+                if not txtcBox:IsFocused() then txtcBox.Text = formatRGB(e.TextColor3) end
+                
+                if e:IsA("TextBox") then
+                    phRow.Visible = true
+                    if not phBox:IsFocused() then phBox.Text = e.PlaceholderText end
+                else
+                    phRow.Visible = false
+                end
+            else
+                ttrRow.Visible = false
+                txtRow.Visible = false
+                phRow.Visible = false
+                txtcRow.Visible = false
+            end
+
+            deleteRow.Visible = (eName and eName:match("^CustomFrame_")) and true or false
+
+
+            local cR = e:FindFirstChildWhichIsA("UICorner")
+            if cR then
+                radRow.Visible = true
+                if not radBox:IsFocused() then radBox.Text = formatUDim(cR.CornerRadius) end
+            else
+                radRow.Visible = false
+            end
+        else
+            title.Text = "No Element Selected"
+            zRow.Visible = false
+            bgRow.Visible = false
+            imgRow.Visible = false
+            bgcRow.Visible = false
+            imgcRow.Visible = false
+            radRow.Visible = false
+            ttrRow.Visible = false
+            txtRow.Visible = false
+            phRow.Visible = false
+            txtcRow.Visible = false
+            deleteRow.Visible = false
+            if not posBox:IsFocused() then posBox.Text = "" end
+            if not sizeBox:IsFocused() then sizeBox.Text = "" end
+        end
+        
+        local totalH = propLayout.AbsoluteContentSize.Y + 10
+        propContent.CanvasSize = UDim2.new(0, 0, 0, totalH)
+        local vpY = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize.Y or 800
+        local maxH = math.floor(vpY * 0.55)
+        propertiesPanel.Size = UDim2.fromOffset(260, math.min(maxH, totalH + 40))
+    end))
+
+    local function saveHUDProp(eName, propKey, val)
+        if not Config.HUDProperties then Config.HUDProperties = {} end
+        if not Config.HUDProperties[eName] then Config.HUDProperties[eName] = {} end
+        Config.HUDProperties[eName][propKey] = val
+        SaveConfig()
+    end
+
+    table.insert(HUD.Connections, deleteBtn.MouseButton1Click:Connect(function()
+        local eName = HUD.LastTouchedName
+        if not eName or not eName:match("^CustomFrame_") then return end
+        local frame = UI.CustomFrames and UI.CustomFrames[eName]
+        if frame and frame.Parent then frame:Destroy() end
+        if UI.CustomFrames then UI.CustomFrames[eName] = nil end
+        if Config.CustomFrames then Config.CustomFrames[eName] = nil end
+        if Config.HUDPositions then Config.HUDPositions[eName] = nil end
+        if Config.HUDSizes then Config.HUDSizes[eName] = nil end
+        if Config.HUDProperties then Config.HUDProperties[eName] = nil end
+        if HUD.DefaultPositions then HUD.DefaultPositions[eName] = nil end
+        if HUD.DefaultSizes then HUD.DefaultSizes[eName] = nil end
+        if HUD.DefaultTexts then HUD.DefaultTexts[eName] = nil end
+        if HUD.DefaultPlaceholders then HUD.DefaultPlaceholders[eName] = nil end
+        SaveConfig()
+
+        HUD.SelectedElement = nil
+        HUD.LastTouchedElement = nil
+        HUD.LastTouchedName = nil
+        for _, h in pairs(HUD.ResizeHandles) do pcall(function() h:Destroy() end) end
+        HUD.ResizeHandles = {}
+        for _, c in pairs(HUD.ResizeConnections) do pcall(function() c:Disconnect() end) end
+        HUD.ResizeConnections = {}
+
+        rebuildHUDOverlays()
+        updateHUDLayouts()
+        ApplyUIVisibility()
+        pcall(function() updateGUIColors() end)
+        getgenv().Notify({ Title = "7yd7 | HUD Editor", Content = "🗑️ Custom Frame deleted", Duration = 2 })
+    end))
+
+
+
+    table.insert(HUD.Connections, posBox.FocusLost:Connect(function()
+        local e, eName = HUD.LastTouchedElement, HUD.LastTouchedName
+        if not e or not e.Parent or not eName then return end
+        local s1, o1, s2, o2 = parseUDim2(posBox.Text)
+        if s1 then
+            local prev = captureHUDState(eName, e)
+            e.Position = UDim2.new(s1, o1, s2, o2)
+            if prev and not sameUDim2(prev.pos, e.Position) then
+                pushUndo(prev)
+            end
+            Config.HUDPositions[eName] = {s1, o1, s2, o2}
+        end
+    end))
+
+    table.insert(HUD.Connections, sizeBox.FocusLost:Connect(function()
+        local e, eName = HUD.LastTouchedElement, HUD.LastTouchedName
+        if not e or not e.Parent or not eName then return end
+        local s1, o1, s2, o2 = parseUDim2(sizeBox.Text)
+        if s1 then
+            local prev = captureHUDState(eName, e)
+            e.Size = UDim2.new(s1, o1, s2, o2)
+            if prev and not sameUDim2(prev.size, e.Size) then
+                pushUndo(prev)
+            end
+            if not Config.HUDSizes then Config.HUDSizes = {} end
+            Config.HUDSizes[eName] = {s1, o1, s2, o2}
+        end
+    end))
+
+    table.insert(HUD.Connections, zBox.FocusLost:Connect(function()
+        local e, eName = HUD.LastTouchedElement, HUD.LastTouchedName
+        if not e or not e.Parent or not eName then return end
+        local v = tonumber(zBox.Text)
+        if v then
+            local prev = captureHUDState(eName, e)
+            e.ZIndex = v
+            if prev and prev.z ~= e.ZIndex then
+                pushUndo(prev)
+            end
+            saveHUDProp(eName, "ZIndex", v)
+        end
+    end))
+
+    table.insert(HUD.Connections, bgBox.FocusLost:Connect(function()
+        local e, eName = HUD.LastTouchedElement, HUD.LastTouchedName
+        if not e or not e.Parent or not eName then return end
+        local v = tonumber(bgBox.Text)
+        if v then
+            local prev = captureHUDState(eName, e)
+            e.BackgroundTransparency = math.clamp(v, 0, 1)
+            if prev and prev.bgTrans ~= e.BackgroundTransparency then
+                pushUndo(prev)
+            end
+            saveHUDProp(eName, "BgTrans", e.BackgroundTransparency)
+        end
+    end))
+
+    table.insert(HUD.Connections, imgBox.FocusLost:Connect(function()
+        local e, eName = HUD.LastTouchedElement, HUD.LastTouchedName
+        if not e or not e.Parent or not eName then return end
+        local v = tonumber(imgBox.Text)
+        if v and (e:IsA("ImageLabel") or e:IsA("ImageButton")) then
+            local prev = captureHUDState(eName, e)
+            e.ImageTransparency = math.clamp(v, 0, 1)
+            if prev and prev.imgTrans ~= e.ImageTransparency then
+                pushUndo(prev)
+            end
+            saveHUDProp(eName, "ImgTrans", e.ImageTransparency)
+        end
+    end))
+    
+    table.insert(HUD.Connections, bgcBox.FocusLost:Connect(function()
+        local e, eName = HUD.LastTouchedElement, HUD.LastTouchedName
+        if not e or not e.Parent or not eName then return end
+        local r, g, b = parseRGB(bgcBox.Text)
+        if r then
+            if isThemeDefaultRGB(r, g, b) then
+                if Config.HUDProperties and Config.HUDProperties[eName] then
+                    Config.HUDProperties[eName].BgColor = nil
+                    if next(Config.HUDProperties[eName]) == nil then
+                        Config.HUDProperties[eName] = nil
+                    end
+                    SaveConfig()
+                end
+                pcall(function() updateGUIColors() end)
+                return
+            end
+            local prev = captureHUDState(eName, e)
+            local c = Color3.fromRGB(r, g, b)
+            pcall(function() e.BackgroundColor3 = c end)
+            if prev and not sameColor(prev.bgColor, e.BackgroundColor3) then
+                pushUndo(prev)
+            end
+            saveHUDProp(eName, "BgColor", {r, g, b})
+        end
+    end))
+    
+    table.insert(HUD.Connections, imgcBox.FocusLost:Connect(function()
+        local e, eName = HUD.LastTouchedElement, HUD.LastTouchedName
+        if not e or not e.Parent or not eName then return end
+        if not (e:IsA("ImageLabel") or e:IsA("ImageButton")) then return end
+        local r, g, b = parseRGB(imgcBox.Text)
+        if r then
+            if isThemeDefaultRGB(r, g, b) then
+                if Config.HUDProperties and Config.HUDProperties[eName] then
+                    Config.HUDProperties[eName].ImgColor = nil
+                    if next(Config.HUDProperties[eName]) == nil then
+                        Config.HUDProperties[eName] = nil
+                    end
+                    SaveConfig()
+                end
+                pcall(function() updateGUIColors() end)
+                return
+            end
+            local prev = captureHUDState(eName, e)
+            local c = Color3.fromRGB(r, g, b)
+            pcall(function() e.ImageColor3 = c end)
+            if prev and prev.imgColor and not sameColor(prev.imgColor, e.ImageColor3) then
+                pushUndo(prev)
+            end
+            saveHUDProp(eName, "ImgColor", {r, g, b})
+        end
+    end))
+
+    table.insert(HUD.Connections, radBox.FocusLost:Connect(function(enter)
+        if not enter then return end
+        local e, eName = HUD.LastTouchedElement, HUD.LastTouchedName
+        if not e or not e.Parent or not eName then return end
+        local a, b = radBox.Text:match("{%s*([%d%.%-]+)%s*,%s*([%d%.%-]+)%s*}")
+        if not a and not b then a, b = radBox.Text:match("([%d%.%-]+)%s*,%s*([%d%.%-]+)") end
+        if a and b then
+            local va, vb = tonumber(a), tonumber(b)
+            if va and vb then
+                local cR = e:FindFirstChildWhichIsA("UICorner")
+                if cR then
+                    local prev = captureHUDState(eName, e)
+                    if vb ~= 0 and va == 0 then
+                        local minDim = math.min(e.AbsoluteSize.X, e.AbsoluteSize.Y)
+                        if minDim > 0 then
+                            va = vb / minDim
+                            vb = 0
+                        end
+                    end
+                    cR.CornerRadius = UDim.new(va, vb)
+                    if prev and prev.radius and not sameUDim(prev.radius, cR.CornerRadius) then
+                        pushUndo(prev)
+                    end
+                    saveHUDProp(eName, "CornerRadius", {va, vb})
+                end
+            end
+        end
+    end))
+
+    table.insert(HUD.Connections, txtBox.FocusLost:Connect(function(enter)
+        if not enter then return end
+        local e, eName = HUD.LastTouchedElement, HUD.LastTouchedName
+        if not e or not e.Parent or not eName then return end
+        if e:IsA("TextLabel") or e:IsA("TextBox") then
+            local prev = captureHUDState(eName, e)
+            e.Text = txtBox.Text
+            if prev and prev.text ~= e.Text then
+                pushUndo(prev)
+            end
+            saveHUDProp(eName, "Text", txtBox.Text)
+        end
+    end))
+
+    table.insert(HUD.Connections, phBox.FocusLost:Connect(function(enter)
+        if not enter then return end
+        local e, eName = HUD.LastTouchedElement, HUD.LastTouchedName
+        if not e or not e.Parent or not eName then return end
+        if e:IsA("TextBox") then
+            local prev = captureHUDState(eName, e)
+            e.PlaceholderText = phBox.Text
+            if prev and prev.placeholder ~= e.PlaceholderText then
+                pushUndo(prev)
+            end
+            saveHUDProp(eName, "PlaceholderText", phBox.Text)
+        end
+    end))
+
+    table.insert(HUD.Connections, ttrBox.FocusLost:Connect(function(enter)
+        if not enter then return end
+        local e, eName = HUD.LastTouchedElement, HUD.LastTouchedName
+        if not e or not e.Parent or not eName then return end
+        local v = tonumber(ttrBox.Text)
+        if v and (e:IsA("TextLabel") or e:IsA("TextBox")) then
+            local prev = captureHUDState(eName, e)
+            e.TextTransparency = math.clamp(v, 0, 1)
+            if prev and prev.textTrans ~= e.TextTransparency then
+                pushUndo(prev)
+            end
+            saveHUDProp(eName, "TextTransparency", e.TextTransparency)
+        end
+    end))
+
+    table.insert(HUD.Connections, txtcBox.FocusLost:Connect(function()
+        local e, eName = HUD.LastTouchedElement, HUD.LastTouchedName
+        if not e or not e.Parent or not eName then return end
+        if not (e:IsA("TextLabel") or e:IsA("TextBox")) then return end
+        local r, g, b = parseRGB(txtcBox.Text)
+        if r then
+            if isThemeDefaultRGB(r, g, b) then
+                if Config.HUDProperties and Config.HUDProperties[eName] then
+                    Config.HUDProperties[eName].TxtColor = nil
+                    if next(Config.HUDProperties[eName]) == nil then
+                        Config.HUDProperties[eName] = nil
+                    end
+                    SaveConfig()
+                end
+                pcall(function() updateGUIColors() end)
+                return
+            end
+            local prev = captureHUDState(eName, e)
+            local c = Color3.fromRGB(r, g, b)
+            pcall(function() e.TextColor3 = c end)
+            if prev and prev.textColor and not sameColor(prev.textColor, e.TextColor3) then
+                pushUndo(prev)
+            end
+            saveHUDProp(eName, "TxtColor", {r, g, b})
+        end
+    end))
+
+
+
 
     if UI.Search then UI.Search.TextEditable = false; UI.Search.Active = false; pcall(function() UI.Search:ReleaseFocus() end) end
     if UI.SpeedBox then UI.SpeedBox.TextEditable = false; UI.SpeedBox.Active = false; pcall(function() UI.SpeedBox:ReleaseFocus() end) end
@@ -6004,8 +7673,50 @@ enterHUDEditor = function()
     snapGuideV.Parent = overlay
 
     for name, element in pairs(allMovable) do
-        setupElementDragging(name, element, allMovable, snapGuideV, snapGuideH)
+        setupElementDragging(name, element, getMovableElements(), snapGuideV, snapGuideH)
     end
+
+    table.insert(HUD.Connections, addBtn.MouseButton1Click:Connect(function()
+        local nameIndex = 1
+        while UI.CustomFrames and UI.CustomFrames["CustomFrame_"..nameIndex] do
+            nameIndex = nameIndex + 1
+        end
+        local newName = "CustomFrame_"..nameIndex
+        
+        local _, emotesWheel = checkEmotesMenuExists()
+        local cf = Instance.new("Frame")
+        cf.Name = newName
+        cf.Parent = emotesWheel
+        cf.BackgroundTransparency = 0.4
+        cf.ZIndex = 3
+        cf.BorderSizePixel = 0
+        cf.Active = true
+        cf.Size = UDim2.new(0.3, 0, 0.3, 0)
+        cf.Position = UDim2.new(0.5, 0, 0.5, 0)
+        
+        local corner = Instance.new("UICorner")
+        corner.CornerRadius = UDim.new(0, 10)
+        corner.Parent = cf
+
+        if not UI.CustomFrames then UI.CustomFrames = {} end
+        UI.CustomFrames[newName] = cf
+
+        HUD.DefaultSizes[newName] = UDim2.new(0.3, 0, 0.3, 0)
+        HUD.DefaultPositions[newName] = UDim2.new(0.5, 0, 0.5, 0)
+
+        Config.HUDPositions[newName] = {0.5, 0, 0.5, 0}
+        if not Config.HUDSizes then Config.HUDSizes = {} end
+        Config.HUDSizes[newName] = {0.3, 0, 0.3, 0}
+        if not Config.CustomFrames then Config.CustomFrames = {} end
+        Config.CustomFrames[newName] = {ZIndex = 3}
+
+        pcall(function() updateGUIColors() end)
+
+        setupElementDragging(newName, cf, getMovableElements(), snapGuideV, snapGuideH)
+        selectHUDElement(newName, cf)
+        
+        getgenv().Notify({ Title = "7yd7 | HUD Editor", Content = "➕ Custom Frame added!", Duration = 2 })
+    end))
 
     getgenv().Notify({ Title = "7yd7 | HUD Editor", Content = "✏️ Drag elements to reposition", Duration = 5 })
 end
