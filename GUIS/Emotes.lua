@@ -1340,6 +1340,7 @@ State.LoadCustomAnimations = function()
         run = { RunAnim = 0 },
         jump = { JumpAnim = 0 },
         fall = { FallAnim = 0 },
+        climb = { ClimbAnim = 0 },
         swimidle = { SwimIdle = 0 },
         swim = { Swim = 0 },
         __meta = { IconImage = DEFAULT_IDLE_ICON_ID, IconColor = ColorToTable(DEFAULT_IDLE_ICON_COLOR) }
@@ -2686,11 +2687,9 @@ CreateAnimSetUI(State.CustomAnimFolders.Movement, "walk", "WalkAnim")
 CreateAnimSetUI(State.CustomAnimFolders.Movement, "run", "RunAnim")
 CreateAnimSetUI(State.CustomAnimFolders.Movement, "jump", "JumpAnim")
 CreateAnimSetUI(State.CustomAnimFolders.Movement, "fall", "FallAnim")
-
-State.CustomAnimFolders.Swimming = SettingsLib.AddFolder(State.CustomAnimTab, "Swimming Animations")
-State.CustomAnimFolders.Swimming.Parent.LayoutOrder = 4
-CreateAnimSetUI(State.CustomAnimFolders.Swimming, "swimidle", "SwimIdle")
-CreateAnimSetUI(State.CustomAnimFolders.Swimming, "swim", "Swim")
+CreateAnimSetUI(State.CustomAnimFolders.Movement, "climb", "ClimbAnim")
+CreateAnimSetUI(State.CustomAnimFolders.Movement, "swimidle", "SwimIdle")
+CreateAnimSetUI(State.CustomAnimFolders.Movement, "swim", "Swim")
 
 State.RefreshCustomAnimUI = function()
     local set = State.CustomAnimations.Sets[State.currentCustomAnimationName]
