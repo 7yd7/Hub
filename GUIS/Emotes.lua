@@ -3182,8 +3182,14 @@ function loadFavorites()
             local fileContent = readfile(State.favoriteFileName)
             return HttpService:JSONDecode(fileContent)
         end)
-        if success and result then
-            State.favoriteEmotes = result
+        if success and type(result) == "table" then
+            local filtered = {}
+            for _, fav in pairs(result) do
+                if fav and fav.id and tonumber(fav.id) and tonumber(fav.id) > 0 then
+                    table.insert(filtered, fav)
+                end
+            end
+            State.favoriteEmotes = filtered
             State.favoriteSetVersion = State.favoriteSetVersion + 1
         end
     end
@@ -3195,22 +3201,22 @@ function loadFavoritesAnimations()
             local fileContent = readfile(State.favoriteAnimationsFileName)
             return HttpService:JSONDecode(fileContent)
         end)
-        if success and result then
-            State.favoriteAnimations = result
-            for _, fav in pairs(State.favoriteAnimations) do
+        if success and type(result) == "table" then
+            local filtered = {}
+            for _, fav in pairs(result) do
                 local idNum = fav and tonumber(fav.id)
-                if fav and fav.isCustomSet == nil and idNum and idNum < 0 then
-                    fav.isCustomSet = true
-                end
-                if fav and IsCustomSetData(fav) and not fav.customSetName and type(fav.name) == "string" then
-                    local baseName = fav.name:gsub("%s*%-.*$", "")
-                    if State.CustomAnimations and State.CustomAnimations.Sets and State.CustomAnimations.Sets[baseName] then
-                        fav.customSetName = baseName
-                    else
+                if fav and idNum and (idNum > 0 or idNum < -1000) then
+                    if fav.isCustomSet == nil and idNum < 0 then
+                        fav.isCustomSet = true
+                    end
+                    if IsCustomSetData(fav) and not fav.customSetName and type(fav.name) == "string" then
+                        local baseName = fav.name:gsub("%s*%-.*$", "")
                         fav.customSetName = baseName
                     end
+                    table.insert(filtered, fav)
                 end
             end
+            State.favoriteAnimations = filtered
             State.favoriteSetVersion = State.favoriteSetVersion + 1
         end
     end
@@ -3655,14 +3661,19 @@ function getEmoteName(assetId)
 end
 
 isInFavorites = function(assetId)
+    if not assetId then return false end
     if State.favoriteSetBuiltVersion ~= State.favoriteSetVersion then
         State.favoriteEmoteSet = {}
         for _, favorite in pairs(State.favoriteEmotes) do
-            State.favoriteEmoteSet[tostring(favorite.id)] = true
+            if favorite.id then
+                State.favoriteEmoteSet[tostring(favorite.id)] = true
+            end
         end
         State.favoriteAnimationSet = {}
         for _, favorite in pairs(State.favoriteAnimations) do
-            State.favoriteAnimationSet[tostring(favorite.id)] = true
+            if favorite.id then
+                State.favoriteAnimationSet[tostring(favorite.id)] = true
+            end
         end
         State.favoriteSetBuiltVersion = State.favoriteSetVersion
     end
@@ -3778,8 +3789,8 @@ function updateAnimationImages(currentPageAnimations, randomActive)
         if i >= startSlot then
             local listIndex = randomActive and (i - 1) or i
             local animationData = currentPageAnimations[listIndex]
-            if animationData then
-                local image = "rbxthumb://type=BundleThumbnail&id=" .. animationData.id .. "&w=420&h=420"
+            if animationData and animationData.id then
+                local image = "rbxthumb://type=BundleThumbnail&id=" .. tostring(animationData.id) .. "&w=420&h=420"
                 if IsCustomSetData(animationData) then
                     local customImage = getCustomSetIcon(GetCustomSetName(animationData) or animationData.name)
                     image = GetAsset(customImage)
@@ -3803,10 +3814,10 @@ function updateAnimationImages(currentPageAnimations, randomActive)
             
             local listIndex = randomActive and (tonumber(slotName) - 1) or tonumber(slotName)
             local animationData = currentPageAnimations[listIndex]
-            if animationData then
+            if animationData and animationData.id then
                 local idValue = child:FindFirstChild("AnimationID") or Instance.new("IntValue")
                 idValue.Name = "AnimationID"
-                idValue.Value = animationData.id
+                idValue.Value = tonumber(animationData.id) or 0
                 idValue.Parent = child
                 
                 if IsCustomSetData(animationData) then
@@ -4027,8 +4038,8 @@ updateEmotes = function()
         if i >= startSlot then
             local listIndex = randomActive and (i - 1) or i
             local emoteData = currentPageEmotes[listIndex]
-            if emoteData then
-                newTargetImages[tostring(i)] = "rbxthumb://type=Asset&id=" .. emoteData.id .. "&w=420&h=420"
+            if emoteData and emoteData.id then
+                newTargetImages[tostring(i)] = "rbxthumb://type=Asset&id=" .. tostring(emoteData.id) .. "&w=420&h=420"
             else
                 newTargetImages[tostring(i)] = ""
             end
