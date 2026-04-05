@@ -4804,40 +4804,25 @@ handleSectorAction = function(index)
         return
     end
 
-    local authenticEmotes = getgenv().OwnedAuthenticEmotes or {}
-    local hasAuthentic = Config.AuthenticFirstPage and (#authenticEmotes > 0) and (State.currentMode == "emote")
-    local isAuthenticPage = hasAuthentic and (State.currentPage == 1)
-    local authenticPagesCount = hasAuthentic and 1 or 0
-
-    local favoritesToUse = (State.currentMode == "animation") and (_G.filteredFavoritesAnimationsForDisplay or State.favoriteAnimations) or (_G.filteredFavoritesForDisplay or State.favoriteEmotes)
-    local hasFavorites = #favoritesToUse > 0
-    local favoritePagesCount = hasFavorites and calcPagesForList(#favoritesToUse, true) or 0
-    local isInFavoritesPages = State.currentPage <= (favoritePagesCount + authenticPagesCount) and not isAuthenticPage
+    if State.currentMode == "animation" then
+        rebuildAnimationNormalCache()
+    else
+        rebuildEmoteNormalCache()
+    end
 
     local function getEmoteAtIndex(idx)
-        if State.currentMode == "emote" and isAuthenticPage then
-            local limitedAuthentic = {}
-            for i = 1, math.min(#authenticEmotes, 8) do
-                table.insert(limitedAuthentic, authenticEmotes[i])
+        local categories = getCategoryStats()
+        local accumulatedPages = 0
+        
+        for _, cat in ipairs(categories) do
+            if State.currentPage <= accumulatedPages + cat.pages then
+                local adjustedPage = State.currentPage - accumulatedPages
+                local pageItems = getListSlice(cat.list, adjustedPage, cat.hasRandom)
+                return pageItems[idx]
             end
-            return limitedAuthentic[idx]
-        elseif isInFavoritesPages and hasFavorites then
-            local adjustedPage = State.currentPage - authenticPagesCount
-            local pageItems = getListSlice(favoritesToUse, adjustedPage, true)
-            return pageItems[idx]
-        else
-            local filteredList = (State.currentMode == "animation") and State.filteredAnimations or State.filteredEmotes
-            local normalList = {}
-            for _, item in pairs(filteredList) do
-                if not isInFavorites(item.id) then
-                    table.insert(normalList, item)
-                end
-            end
-            local adjustedPage = State.currentPage - favoritePagesCount - authenticPagesCount
-            local isFirstNormalList = (favoritePagesCount == 0)
-            local pageItems = getListSlice(normalList, adjustedPage, isFirstNormalList)
-            return pageItems[idx]
+            accumulatedPages = accumulatedPages + cat.pages
         end
+        return nil
     end
 
     local slotOffset = randomActive and 1 or 0
