@@ -3184,7 +3184,9 @@ function loadFavorites()
         if success and type(result) == "table" then
             local filtered = {}
             for _, fav in pairs(result) do
-                if fav and fav.id and tonumber(fav.id) and tonumber(fav.id) > 0 then
+                local idNum = fav and tonumber(fav.id)
+                if fav and idNum and idNum > 0 then
+                    fav.id = idNum
                     table.insert(filtered, fav)
                 end
             end
@@ -4452,7 +4454,7 @@ toggleFavorite = function(emoteId, emoteName)
     local index = 0
 
     for i, fav in pairs(State.favoriteEmotes) do
-        if fav.id == emoteId then
+        if tostring(fav.id) == tostring(emoteId) then
             found = true
             index = i
             break
