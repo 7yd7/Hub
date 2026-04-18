@@ -577,6 +577,11 @@ AnimationSystem.MakeKey = function(gif, sheet)
     return tostring(gif) .. "|" .. tostring(sheet)
 end
 
+function ApplyFreezeButtonVisual()
+    if not UI.EmoteWalkButton then return end
+    UI.EmoteWalkButton.Image = State.emotesWalkEnabled and State.enabledButtonImage or State.defaultButtonImage
+end
+
 AnimationSystem.GetIconColor = function(key)
     if themes and themes[AnimationSystem.currentThemeName] then
         local theme = themes[AnimationSystem.currentThemeName]
@@ -1608,7 +1613,10 @@ function ApplyTheme(themeData)
         
         if UI._1left then UI._1left.Image = GetAsset(State.EmoteTheme.Icons.Left); UI._1left.ImageColor3 = getIconColor("Left") end
         if UI._9right then UI._9right.Image = GetAsset(State.EmoteTheme.Icons.Right); UI._9right.ImageColor3 = getIconColor("Right") end
-        if UI.EmoteWalkButton then UI.EmoteWalkButton.Image = GetAsset(State.EmoteTheme.Icons.Walk); UI.EmoteWalkButton.ImageColor3 = getIconColor("Walk") end
+        if UI.EmoteWalkButton then 
+            UI.EmoteWalkButton.ImageColor3 = getIconColor("Walk") 
+            ApplyFreezeButtonVisual()
+        end
         if UI.SpeedEmote then UI.SpeedEmote.Image = GetAsset(State.EmoteTheme.Icons.Speed); UI.SpeedEmote.ImageColor3 = getIconColor("Speed") end
         if UI.Changepage then UI.Changepage.Image = GetAsset(State.EmoteTheme.Icons.Page); UI.Changepage.ImageColor3 = getIconColor("Page") end
         if UI.Reload then UI.Reload.Image = GetAsset(State.EmoteTheme.Icons.Reload); UI.Reload.ImageColor3 = getIconColor("Reload") end
@@ -4428,6 +4436,7 @@ UICorner_5.Parent = UI.Changepage
     
     ApplyUIVisibility()
     
+    if ApplyFreezeButtonVisual then ApplyFreezeButtonVisual() end
     if applySavedPositions then applySavedPositions() end
     if updateHUDLayouts then updateHUDLayouts() end
     
@@ -5166,6 +5175,19 @@ function fetchAllAnimations()
     State.isLoading = false
 end
 
+local function smartSearchMatch(name, searchTerm)
+    if not searchTerm or searchTerm == "" then return true end
+    name = name:lower()
+    searchTerm = searchTerm:lower()
+    
+    for word in searchTerm:gmatch("%S+") do
+        if not name:find(word, 1, true) then
+            return false
+        end
+    end
+    return true
+end
+
 function searchEmotes(searchTerm)
     if State.isLoading then
         getgenv().Notify({
@@ -5186,7 +5208,7 @@ function searchEmotes(searchTerm)
         end
         _G.filteredFavoritesForDisplay = nil
     else
-        local isIdSearch = searchTerm:match("^%d%d%d%d%d+$")
+        local isIdSearch = searchTerm:match("^%d+$")
         
         local newFilteredList = {}
         
@@ -5196,23 +5218,9 @@ function searchEmotes(searchTerm)
                     table.insert(newFilteredList, emote)
                 end
             end
-            
-            if #newFilteredList == 0 then
-                local emoteId = tonumber(searchTerm)
-                if emoteId then
-                    local emoteName = getEmoteName(emoteId)
-                    local newEmote = {
-                        id = emoteId,
-                        name = emoteName
-                    }
-                    
-                    table.insert(State.originalEmotesData, newEmote)
-                    table.insert(newFilteredList, newEmote)
-                end
-            end
         else
             for _, emote in pairs(State.originalEmotesData) do
-                if emote.name:lower():find(searchTerm) then
+                if smartSearchMatch(emote.name, searchTerm) then
                     table.insert(newFilteredList, emote)
                 end
             end
@@ -5234,7 +5242,7 @@ function searchEmotes(searchTerm)
 
             _G.filteredFavoritesForDisplay = {}
             for _, favorite in pairs(State.favoriteEmotes) do
-                if favorite.name:lower():find(searchTerm) then
+                if smartSearchMatch(favorite.name, searchTerm) then
                     table.insert(_G.filteredFavoritesForDisplay, favorite)
                 end
             end
@@ -5280,7 +5288,7 @@ function searchAnimations(searchTerm)
             end
         else
             for _, animation in pairs(State.originalAnimationsData) do
-                if animation.name:lower():find(searchTerm) then
+                if smartSearchMatch(animation.name, searchTerm) then
                     table.insert(newFilteredList, animation)
                 end
             end
@@ -5303,7 +5311,7 @@ function searchAnimations(searchTerm)
 
             _G.filteredFavoritesAnimationsForDisplay = {}
             for _, favorite in pairs(State.favoriteAnimations) do
-                if favorite.name:lower():find(searchTerm) then
+                if smartSearchMatch(favorite.name, searchTerm) then
                     table.insert(_G.filteredFavoritesAnimationsForDisplay, favorite)
                 end
             end
@@ -5575,6 +5583,7 @@ end
 
 function toggleEmoteWalk()
     State.emotesWalkEnabled = not State.emotesWalkEnabled
+    ApplyFreezeButtonVisual()
 
     if State.emotesWalkEnabled then
         getgenv().Notify({
@@ -5583,7 +5592,6 @@ function toggleEmoteWalk()
             Duration = 5
         })
 
-        UI.EmoteWalkButton.Image = State.enabledButtonImage
         task.wait(0.1)
         stopCurrentEmote()
         if State.currentEmoteTrack and State.currentEmoteTrack.IsPlaying then
@@ -5595,7 +5603,6 @@ function toggleEmoteWalk()
             Content = '🔓 Emote freeze OFF',
             Duration = 5
         })
-        UI.EmoteWalkButton.Image = State.defaultButtonImage
         task.wait(0.1)
         stopCurrentEmote()
 
