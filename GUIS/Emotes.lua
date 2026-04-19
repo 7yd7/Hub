@@ -122,7 +122,8 @@ Config = {
     HUDProperties = {},
     CustomFrames = {},
     AutoReloadEnabled = false,
-    LastPlayedAnimationData = nil
+    LastPlayedAnimationData = nil,
+    DiscordVisible = true
 }
 
 HUD = {
@@ -846,6 +847,19 @@ ToggleBtn.Position = UDim2.new(0, 10, 1, -52)
 ToggleBtn.Size = UDim2.fromOffset(42, 42)
 ToggleBtn.Image = "rbxassetid://79568054778195"
 
+local DiscordBtn = Instance.new("ImageButton")
+DiscordBtn.Name = "DiscordButton"
+DiscordBtn.Parent = ToggleContainer
+DiscordBtn.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+DiscordBtn.BackgroundTransparency = 0.4
+DiscordBtn.Position = UDim2.new(0, 57, 1, -52)
+DiscordBtn.Size = UDim2.fromOffset(42, 42)
+DiscordBtn.Image = "rbxassetid://98681818461563"
+
+local DiscordCorner = Instance.new("UICorner")
+DiscordCorner.CornerRadius = UDim.new(0, 10)
+DiscordCorner.Parent = DiscordBtn
+
 local ToggleCorner = Instance.new("UICorner")
 ToggleCorner.CornerRadius = UDim.new(0, 10)
 ToggleCorner.Parent = ToggleBtn
@@ -859,10 +873,16 @@ end
 
 function applySettingsToggleStyle()
     local main = getSettingsMainFrame()
+    local bgColor
     if main then
-        ToggleBtn.BackgroundColor3 = main.BackgroundColor3
+        bgColor = main.BackgroundColor3
     elseif State.EmoteTheme and State.EmoteTheme.Background then
-        ToggleBtn.BackgroundColor3 = State.EmoteTheme.Background
+        bgColor = State.EmoteTheme.Background
+    end
+
+    if bgColor then
+        ToggleBtn.BackgroundColor3 = bgColor
+        DiscordBtn.BackgroundColor3 = bgColor
     end
 end
 
@@ -874,6 +894,15 @@ function syncToggleVisibility()
         ToggleContainer.Visible = true
     end
 end
+
+function syncDiscordVisibility()
+    DiscordBtn.Visible = Config.DiscordVisible
+end
+
+DiscordBtn.MouseButton1Click:Connect(function()
+    setclipboard("https://discord.gg/kRfzv2kV7X")
+    getgenv().Notify({Title = "Discord", Content = "The Discord invite has been copied", Duration = 3})
+end)
 
 ToggleBtn.MouseButton1Click:Connect(function()
     local main = getSettingsMainFrame()
@@ -887,6 +916,7 @@ end)
 
 applySettingsToggleStyle()
 syncToggleVisibility()
+syncDiscordVisibility()
 
 do
     local main = getSettingsMainFrame()
@@ -981,6 +1011,12 @@ end)
 TogglesUI.NavVisible = SettingsLib.AddToggle(ButtonsTab, "Page Controls", "Show/Hide navigation buttons", Config.NavVisible, function(v)
     Config.NavVisible = v
     ApplyUIVisibility()
+    SaveConfig()
+end)
+
+TogglesUI.DiscordVisible = SettingsLib.AddToggle(ButtonsTab, "Discord Button", "Show/Hide the discord link button", Config.DiscordVisible, function(v)
+    Config.DiscordVisible = v
+    syncDiscordVisibility()
     SaveConfig()
 end)
 
