@@ -98,7 +98,13 @@ local State = {
     currentCustomAnimationName = "Default",
     customAnimationEditorActive = false,
     customAnimationEditingKey = nil,
-    customAnimationEditingName = nil
+    customAnimationEditingName = nil,
+    EmotePagePath = "7yd7/EmotePages.json",
+    EmotePages = {},
+    currentEmotePageName = "Default",
+    AnimationPagePath = "7yd7/AnimationPages.json",
+    AnimationPages = {},
+    currentAnimationPageName = "Default"
 }
 
 Config = {
@@ -156,6 +162,30 @@ HUD = {
         ["Under"] = "Under"
     }
 }
+
+local DEFAULT_IDLE_ICON_ID = "rbxassetid://106798555684020"
+local DEFAULT_IDLE_ICON_COLOR = Color3.fromRGB(0, 255, 150)
+
+function DeepCopy(original)
+    if type(original) ~= "table" then return original end
+    local copy = {}
+    for k, v in pairs(original) do
+        if type(v) == "table" then
+            v = DeepCopy(v)
+        end
+        copy[k] = v
+    end
+    return copy
+end
+
+function ColorToTable(color)
+    return {color.R, color.G, color.B}
+end
+
+function TableToColor(tbl)
+    if not tbl or type(tbl) ~= "table" or #tbl < 3 then return Color3.new(1,1,1) end
+    return Color3.new(tbl[1], tbl[2], tbl[3])
+end
 
 function loadAnimationCache()
     if isfile and isfile(State.AnimationCachePath) then
@@ -1411,15 +1441,209 @@ State.LoadCustomAnimations = function()
         end
     end
     
-    for _, set in pairs(loaded.Sets) do
-        if type(set) == "table" then
-            set.__meta = set.__meta or {}
-            if set.__meta.IconImage == nil then set.__meta.IconImage = DEFAULT_IDLE_ICON_ID end
-            if set.__meta.IconColor == nil then set.__meta.IconColor = ColorToTable(DEFAULT_IDLE_ICON_COLOR) end
-        end
-    end
     return loaded
 end
+
+State.SaveEmotePages = function(pageData)
+    if not isfolder("7yd7") then makefolder("7yd7") end
+    local toSave = { 
+        Sets = {}, 
+        Order = pageData.Order or {"Default"}, 
+        Selected = pageData.Selected or "Default" 
+    }
+    for name, data in pairs(pageData.Sets) do
+        if name ~= "Default" then
+            toSave.Sets[name] = data
+        end
+    end
+    writefile(State.EmotePagePath, HttpService:JSONEncode(toSave))
+    
+    if pageData.Sets["Default"] then
+        writefile(State.favoriteFileName, HttpService:JSONEncode(pageData.Sets["Default"]))
+    end
+end
+
+State.SaveAnimationPages = function(pageData)
+    if not isfolder("7yd7") then makefolder("7yd7") end
+    local toSave = { 
+        Sets = {}, 
+        Order = pageData.Order or {"Default"}, 
+        Selected = pageData.Selected or "Default" 
+    }
+    for name, data in pairs(pageData.Sets) do
+        if name ~= "Default" then
+            toSave.Sets[name] = data
+        end
+    end
+    writefile(State.AnimationPagePath, HttpService:JSONEncode(toSave))
+    
+    if pageData.Sets["Default"] then
+        writefile(State.favoriteAnimationsFileName, HttpService:JSONEncode(pageData.Sets["Default"]))
+    end
+end
+
+function SwitchEmotePage(pageName)
+    if not State.EmotePages.Sets[pageName] then return end
+    
+    State.currentEmotePageName = pageName
+    State.EmotePages.Selected = pageName
+    
+    local pageData = State.EmotePages.Sets[pageName]
+    State.favoriteEmotes = DeepCopy(pageData) or {}
+    
+    -- Refresh the O(1) set
+    State.favoriteEmoteSet = {}
+    for _, fav in pairs(State.favoriteEmotes) do
+        State.favoriteEmoteSet[tostring(fav.id)] = true
+    end
+    
+    State.favoriteSetVersion = State.favoriteSetVersion + 1
+    State.totalPages = calculateTotalPages()
+    if State.currentPage > State.totalPages then
+        State.currentPage = State.totalPages
+    end
+    
+    updatePageDisplay()
+    if State.currentMode == "emote" then
+        updateEmotes()
+    end
+    updateAllFavoriteIcons()
+end
+
+function SwitchAnimationPage(pageName)
+    if not State.AnimationPages.Sets[pageName] then return end
+    
+    State.currentAnimationPageName = pageName
+    State.AnimationPages.Selected = pageName
+    
+    local pageData = State.AnimationPages.Sets[pageName]
+    State.favoriteAnimations = DeepCopy(pageData) or {}
+    
+    -- Refresh the O(1) set
+    State.favoriteAnimationSet = {}
+    for _, fav in pairs(State.favoriteAnimations) do
+        State.favoriteAnimationSet[tostring(fav.id)] = true
+    end
+    
+    State.favoriteSetVersion = State.favoriteSetVersion + 1
+    State.totalPages = calculateTotalPages()
+    if State.currentPage > State.totalPages then
+        State.currentPage = State.totalPages
+    end
+    
+    updatePageDisplay()
+    if State.currentMode == "animation" then
+        updateAnimations()
+    end
+    updateAllFavoriteIcons()
+end
+
+State.LoadEmotePages = function()
+    local defaultFavorites = {}
+    
+    -- Load from old FavoriteEmotes.json if it exists (maps to "Default" page)
+    if isfile(State.favoriteFileName) then
+        local ok, decoded = pcall(function() return HttpService:JSONDecode(readfile(State.favoriteFileName)) end)
+        if ok and type(decoded) == "table" then
+            defaultFavorites = decoded
+        end
+    end
+
+    local loaded = { Sets = { Default = defaultFavorites }, Order = {"Default"}, Selected = "Default" }
+    
+    if isfile(State.EmotePagePath) then
+        local success, decoded = pcall(function() return HttpService:JSONDecode(readfile(State.EmotePagePath)) end)
+        if success and type(decoded) == "table" then
+            local setsTable = decoded.Sets or {}
+            for name, data in pairs(setsTable) do
+                if name ~= "Default" then
+                    loaded.Sets[name] = data
+                end
+            end
+            
+            if decoded.Order then
+                loaded.Order = {"Default"}
+                for _, name in ipairs(decoded.Order) do
+                    if name ~= "Default" and loaded.Sets[name] then
+                        table.insert(loaded.Order, name)
+                    end
+                end
+            end
+            
+            if decoded.Selected and (loaded.Sets[decoded.Selected] or decoded.Selected == "Default") then
+                loaded.Selected = decoded.Selected
+            end
+        end
+    end
+    
+    return loaded
+end
+
+State.LoadAnimationPages = function()
+    local defaultFavorites = {}
+    
+    -- Load from old FavoriteAnimations.json if it exists (maps to "Default" page)
+    if isfile(State.favoriteAnimationsFileName) then
+        local ok, decoded = pcall(function() return HttpService:JSONDecode(readfile(State.favoriteAnimationsFileName)) end)
+        if ok and type(decoded) == "table" then
+            defaultFavorites = decoded
+        end
+    end
+
+    local loaded = { Sets = { Default = defaultFavorites }, Order = {"Default"}, Selected = "Default" }
+    
+    if isfile(State.AnimationPagePath) then
+        local success, decoded = pcall(function() return HttpService:JSONDecode(readfile(State.AnimationPagePath)) end)
+        if success and type(decoded) == "table" then
+            local setsTable = decoded.Sets or {}
+            for name, data in pairs(setsTable) do
+                if name ~= "Default" then
+                    loaded.Sets[name] = data
+                end
+            end
+            
+            if decoded.Order then
+                loaded.Order = {"Default"}
+                for _, name in ipairs(decoded.Order) do
+                    if name ~= "Default" and loaded.Sets[name] then
+                        table.insert(loaded.Order, name)
+                    end
+                end
+            end
+            
+            if decoded.Selected and (loaded.Sets[decoded.Selected] or decoded.Selected == "Default") then
+                loaded.Selected = decoded.Selected
+            end
+        end
+    end
+    
+    return loaded
+end
+
+State.EmotePages = State.LoadEmotePages()
+State.currentEmotePageName = State.EmotePages.Selected or "Default"
+if not State.EmotePages.Sets[State.currentEmotePageName] then 
+    State.currentEmotePageName = "Default" 
+end
+
+State.favoriteEmotes = DeepCopy(State.EmotePages.Sets[State.currentEmotePageName]) or {}
+State.favoriteEmoteSet = {}
+for _, fav in pairs(State.favoriteEmotes) do
+    State.favoriteEmoteSet[tostring(fav.id)] = true
+end
+
+State.AnimationPages = State.LoadAnimationPages()
+State.currentAnimationPageName = State.AnimationPages.Selected or "Default"
+if not State.AnimationPages.Sets[State.currentAnimationPageName] then 
+    State.currentAnimationPageName = "Default" 
+end
+
+State.favoriteAnimations = DeepCopy(State.AnimationPages.Sets[State.currentAnimationPageName]) or {}
+State.favoriteAnimationSet = {}
+for _, fav in pairs(State.favoriteAnimations) do
+    State.favoriteAnimationSet[tostring(fav.id)] = true
+end
+
 
 State.CustomAnimations = State.LoadCustomAnimations()
 State.currentCustomAnimationName = State.CustomAnimations.Selected or "Default"
@@ -2570,8 +2794,7 @@ SettingsLib.AddIconButton(CustomAnimMgtContainer, "78317476576895", function()
     imp.MouseButton1Click:Connect(function()
         local s, d = pcall(function() return HttpService:JSONDecode(box.Text) end)
         if s and type(d) == "table" then
-        if s and type(d) == "table" then
-            if d.Type and d.Type ~= "CustomAnimationSet" then
+            if d.Type and d.Type ~= "EmotePageSet" then
                 getgenv().Notify({ Title = "Error", Content = "Backup type mismatch!", Duration = 3 })
                 return
             end
@@ -2594,8 +2817,7 @@ SettingsLib.AddIconButton(CustomAnimMgtContainer, "78317476576895", function()
             State.SaveCustomAnimations(State.CustomAnimations)
             if State.CustomAnimDropdown then
                 State.CustomAnimDropdown.Refresh(State.CustomAnimations.Order)
-                State.CustomAnimDropdown.Button.Text = State.currentCustomAnimationName .. "  ???"
-            end
+                State.CustomAnimDropdown.Button.Text = State.currentCustomAnimationName .. "  ▼"
             end
             if State.RefreshCustomAnimUI then State.RefreshCustomAnimUI() end
             if State.ApplyCustomAnimIconUI then State.ApplyCustomAnimIconUI() end
@@ -2749,7 +2971,328 @@ State.RefreshCustomAnimUI = function()
 end
 State.RefreshCustomAnimUI()
 
-local BackupTab = SettingsLib.CreateTab("Backup", 5)
+State.PageTab = SettingsLib.CreateTab("Page", 5)
+
+function GetEmotePageNames()
+    return State.EmotePages.Order
+end
+
+function GetAnimationPageNames()
+    return State.AnimationPages.Order
+end
+
+SettingsLib.AddItem(State.PageTab, "Page Profiles", "Pages allow you to save different favorite sets. Switch pages to quickly change your favorite wheel loadout.")
+
+-- Emote Profiles Section
+SettingsLib.AddItem(State.PageTab, "Emote Profiles", "Manage your favorite emote profiles")
+
+State.PageDropdown = SettingsLib.AddDropdown(State.PageTab, "Select Emote Page", GetEmotePageNames(), State.currentEmotePageName, function(v)
+    SwitchEmotePage(v)
+    State.SaveEmotePages(State.EmotePages)
+end)
+
+local EmotePageMgtItem = SettingsLib.AddItem(State.PageTab, "Emote Page Management", " ")
+EmotePageMgtItem.BackgroundColor3 = Color3.fromRGB(35, 38, 42)
+EmotePageMgtItem.Size = UDim2.new(0.95, 0, 0, 70)
+for _, v in pairs(EmotePageMgtItem:GetChildren()) do if v.Name == "Title" or v.Name == "Desc" then v:Destroy() end end
+
+local EmotePageMgtContainer = Instance.new("Frame")
+EmotePageMgtContainer.Parent = EmotePageMgtItem
+EmotePageMgtContainer.BackgroundTransparency = 1
+EmotePageMgtContainer.Size = UDim2.new(1, 0, 1, 0)
+
+local EmotePageLayout = Instance.new("UIListLayout")
+EmotePageLayout.FillDirection = Enum.FillDirection.Horizontal
+EmotePageLayout.Padding = UDim.new(0, 15)
+EmotePageLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+EmotePageLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+EmotePageLayout.Parent = EmotePageMgtContainer
+
+-- Emote Buttons
+SettingsLib.AddIconButton(EmotePageMgtContainer, "108445456753346", function() -- Add
+    local popup, content = CreatePopup("Create Emote Page")
+    local In = CreateInput(content, "Page Name...")
+    local Save = CreateButton(content, "SAVE", (State.EmoteTheme and State.EmoteTheme.Accent) or Color3.fromRGB(0, 255, 150), UDim2.new(0.05, 0, 0.6, 0))
+    local Cancel = CreateButton(content, "CANCEL", Color3.fromRGB(50, 50, 50), UDim2.new(0.55, 0, 0.6, 0))
+    Save.MouseButton1Click:Connect(function()
+        if In.Text ~= "" and not State.EmotePages.Sets[In.Text] then
+            State.EmotePages.Sets[In.Text] = {}
+            table.insert(State.EmotePages.Order, In.Text)
+            table.sort(State.EmotePages.Order, function(a, b)
+                if a == "Default" then return true end
+                if b == "Default" then return false end
+                return a:lower() < b:lower()
+            end)
+            State.SaveEmotePages(State.EmotePages)
+            if State.PageDropdown then State.PageDropdown.Refresh(GetEmotePageNames()) end
+            SwitchEmotePage(In.Text)
+            if State.PageDropdown then State.PageDropdown.Button.Text = State.currentEmotePageName .. "  ▼" end
+            popup:Destroy()
+        end
+    end)
+    Cancel.MouseButton1Click:Connect(function() popup:Destroy() end)
+end)
+
+SettingsLib.AddIconButton(EmotePageMgtContainer, "71829270056766", function() -- Delete
+    if State.currentEmotePageName ~= "Default" then
+        local idx = table.find(State.EmotePages.Order, State.currentEmotePageName)
+        if idx then table.remove(State.EmotePages.Order, idx) end
+        State.EmotePages.Sets[State.currentEmotePageName] = nil
+        State.currentEmotePageName = "Default"
+        State.EmotePages.Selected = "Default"
+        State.SaveEmotePages(State.EmotePages)
+        if State.PageDropdown then
+            State.PageDropdown.Refresh(GetEmotePageNames())
+            State.PageDropdown.Button.Text = "Default  ▼"
+        end
+        SwitchEmotePage("Default")
+    end
+end)
+
+SettingsLib.AddIconButton(EmotePageMgtContainer, "117761881427472", function() -- Rename
+    if State.currentEmotePageName == "Default" then return end
+    local popup, content = CreatePopup("Rename Emote Page")
+    local In = CreateInput(content, "New Name...", State.currentEmotePageName)
+    local Save = CreateButton(content, "RENAME", (State.EmoteTheme and State.EmoteTheme.Accent) or Color3.fromRGB(0, 255, 150), UDim2.new(0.05, 0, 0.6, 0))
+    local Cancel = CreateButton(content, "CANCEL", Color3.fromRGB(50, 50, 50), UDim2.new(0.55, 0, 0.6, 0))
+    Save.MouseButton1Click:Connect(function()
+        if In.Text ~= "" and not State.EmotePages.Sets[In.Text] then
+            local idx = table.find(State.EmotePages.Order, State.currentEmotePageName)
+            if idx then State.EmotePages.Order[idx] = In.Text end
+            State.EmotePages.Sets[In.Text] = State.EmotePages.Sets[State.currentEmotePageName]
+            State.EmotePages.Sets[State.currentEmotePageName] = nil
+            State.currentEmotePageName = In.Text
+            State.EmotePages.Selected = In.Text
+            State.SaveEmotePages(State.EmotePages)
+            if State.PageDropdown then
+                State.PageDropdown.Refresh(GetEmotePageNames())
+                State.PageDropdown.Button.Text = State.currentEmotePageName .. "  ▼"
+            end
+            popup:Destroy()
+        end
+    end)
+    Cancel.MouseButton1Click:Connect(function() popup:Destroy() end)
+end)
+
+SettingsLib.AddIconButton(EmotePageMgtContainer, "107588515524752", function() -- Export
+    local currentSet = State.EmotePages.Sets[State.currentEmotePageName]
+    local data = { Type = "EmotePageSet", Name = State.currentEmotePageName, Data = currentSet }
+    local json = HttpService:JSONEncode(data)
+    local popup, content = CreatePopup("Export Emote Page", UDim2.fromOffset(320, 240))
+    local box = CreateInput(content, "", json, true)
+    box.Size = UDim2.new(0.9, 0, 0, 130)
+    box.TextEditable = false
+    local copy = CreateButton(content, "COPY TO CLIPBOARD", (State.EmoteTheme and State.EmoteTheme.Accent) or Color3.fromRGB(0, 255, 150), UDim2.new(0.05, 0, 0.8, 0), UDim2.new(0.9, 0, 0, 35))
+    copy.MouseButton1Click:Connect(function()
+        setclipboard(json)
+        copy.Text = "COPIED!"
+        task.delay(1, function() copy.Text = "COPY TO CLIPBOARD" end)
+    end)
+    local close = Instance.new("TextButton")
+    close.Size = UDim2.fromOffset(24, 24)
+    close.Position = UDim2.new(1, -30, 0, 5)
+    close.Text = "×"
+    close.Font = Enum.Font.GothamBold
+    close.TextSize = 20
+    close.BackgroundTransparency = 1
+    close.TextColor3 = Color3.new(1,1,1)
+    close.Parent = popup
+    close.MouseButton1Click:Connect(function() popup:Destroy() end)
+end)
+
+SettingsLib.AddIconButton(EmotePageMgtContainer, "78317476576895", function() -- Import
+    local popup, content = CreatePopup("Import Emote Page", UDim2.fromOffset(320, 240))
+    local box = CreateInput(content, "Paste Page JSON here...", "", true)
+    box.Size = UDim2.new(0.9, 0, 0, 130)
+    local imp = CreateButton(content, "IMPORT DATA", (State.EmoteTheme and State.EmoteTheme.Accent) or Color3.fromRGB(0, 255, 150), UDim2.new(0.05, 0, 0.8, 0), UDim2.new(0.9, 0, 0, 35))
+    imp.MouseButton1Click:Connect(function()
+        local s, d = pcall(function() return HttpService:JSONDecode(box.Text) end)
+        if s and type(d) == "table" and d.Type == "EmotePageSet" and type(d.Data) == "table" then
+            local targetName = MakeUniqueSetName(State.EmotePages.Sets, d.Name or "Imported")
+            State.EmotePages.Sets[targetName] = d.Data
+            table.insert(State.EmotePages.Order, targetName)
+            State.currentEmotePageName = targetName
+            State.EmotePages.Selected = targetName
+            State.SaveEmotePages(State.EmotePages)
+            if State.PageDropdown then
+                State.PageDropdown.Refresh(GetEmotePageNames())
+                State.PageDropdown.Button.Text = State.currentEmotePageName .. "  ▼"
+            end
+            SwitchEmotePage(targetName)
+            popup:Destroy()
+            getgenv().Notify({ Title = "7yd7 | Page", Content = "✅ Imported Emote page", Duration = 3 })
+        else
+            getgenv().Notify({ Title = "Error", Content = "Invalid Emote Page JSON", Duration = 3 })
+        end
+    end)
+    local close = Instance.new("TextButton")
+    close.Size = UDim2.fromOffset(24, 24)
+    close.Position = UDim2.new(1, -30, 0, 5)
+    close.Text = "×"
+    close.Font = Enum.Font.GothamBold
+    close.TextSize = 20
+    close.BackgroundTransparency = 1
+    close.TextColor3 = Color3.new(1,1,1)
+    close.Parent = popup
+    close.MouseButton1Click:Connect(function() popup:Destroy() end)
+end)
+
+-- Animation Profiles Section
+SettingsLib.AddItem(State.PageTab, "Animation Profiles", "Manage your favorite animation profiles")
+
+State.AnimationPageDropdown = SettingsLib.AddDropdown(State.PageTab, "Select Animation Page", GetAnimationPageNames(), State.currentAnimationPageName, function(v)
+    SwitchAnimationPage(v)
+    State.SaveAnimationPages(State.AnimationPages)
+end)
+
+local AnimPageMgtItem = SettingsLib.AddItem(State.PageTab, "Animation Page Management", " ")
+AnimPageMgtItem.BackgroundColor3 = Color3.fromRGB(35, 38, 42)
+AnimPageMgtItem.Size = UDim2.new(0.95, 0, 0, 70)
+for _, v in pairs(AnimPageMgtItem:GetChildren()) do if v.Name == "Title" or v.Name == "Desc" then v:Destroy() end end
+
+local AnimPageMgtContainer = Instance.new("Frame")
+AnimPageMgtContainer.Parent = AnimPageMgtItem
+AnimPageMgtContainer.BackgroundTransparency = 1
+AnimPageMgtContainer.Size = UDim2.new(1, 0, 1, 0)
+
+local AnimPageLayout = Instance.new("UIListLayout")
+AnimPageLayout.FillDirection = Enum.FillDirection.Horizontal
+AnimPageLayout.Padding = UDim.new(0, 15)
+AnimPageLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+AnimPageLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+AnimPageLayout.Parent = AnimPageMgtContainer
+
+-- Animation Buttons
+SettingsLib.AddIconButton(AnimPageMgtContainer, "108445456753346", function() -- Add
+    local popup, content = CreatePopup("Create Animation Page")
+    local In = CreateInput(content, "Page Name...")
+    local Save = CreateButton(content, "SAVE", (State.EmoteTheme and State.EmoteTheme.Accent) or Color3.fromRGB(0, 255, 150), UDim2.new(0.05, 0, 0.6, 0))
+    local Cancel = CreateButton(content, "CANCEL", Color3.fromRGB(50, 50, 50), UDim2.new(0.55, 0, 0.6, 0))
+    Save.MouseButton1Click:Connect(function()
+        if In.Text ~= "" and not State.AnimationPages.Sets[In.Text] then
+            State.AnimationPages.Sets[In.Text] = {}
+            table.insert(State.AnimationPages.Order, In.Text)
+            table.sort(State.AnimationPages.Order, function(a, b)
+                if a == "Default" then return true end
+                if b == "Default" then return false end
+                return a:lower() < b:lower()
+            end)
+            State.SaveAnimationPages(State.AnimationPages)
+            if State.AnimationPageDropdown then State.AnimationPageDropdown.Refresh(GetAnimationPageNames()) end
+            SwitchAnimationPage(In.Text)
+            if State.AnimationPageDropdown then State.AnimationPageDropdown.Button.Text = State.currentAnimationPageName .. "  ▼" end
+            popup:Destroy()
+        end
+    end)
+    Cancel.MouseButton1Click:Connect(function() popup:Destroy() end)
+end)
+
+SettingsLib.AddIconButton(AnimPageMgtContainer, "71829270056766", function() -- Delete
+    if State.currentAnimationPageName ~= "Default" then
+        local idx = table.find(State.AnimationPages.Order, State.currentAnimationPageName)
+        if idx then table.remove(State.AnimationPages.Order, idx) end
+        State.AnimationPages.Sets[State.currentAnimationPageName] = nil
+        State.currentAnimationPageName = "Default"
+        State.AnimationPages.Selected = "Default"
+        State.SaveAnimationPages(State.AnimationPages)
+        if State.AnimationPageDropdown then
+            State.AnimationPageDropdown.Refresh(GetAnimationPageNames())
+            State.AnimationPageDropdown.Button.Text = "Default  ▼"
+        end
+        SwitchAnimationPage("Default")
+    end
+end)
+
+SettingsLib.AddIconButton(AnimPageMgtContainer, "117761881427472", function() -- Rename
+    if State.currentAnimationPageName == "Default" then return end
+    local popup, content = CreatePopup("Rename Animation Page")
+    local In = CreateInput(content, "New Name...", State.currentAnimationPageName)
+    local Save = CreateButton(content, "RENAME", (State.EmoteTheme and State.EmoteTheme.Accent) or Color3.fromRGB(0, 255, 150), UDim2.new(0.05, 0, 0.6, 0))
+    local Cancel = CreateButton(content, "CANCEL", Color3.fromRGB(50, 50, 50), UDim2.new(0.55, 0, 0.6, 0))
+    Save.MouseButton1Click:Connect(function()
+        if In.Text ~= "" and not State.AnimationPages.Sets[In.Text] then
+            local idx = table.find(State.AnimationPages.Order, State.currentAnimationPageName)
+            if idx then State.AnimationPages.Order[idx] = In.Text end
+            State.AnimationPages.Sets[In.Text] = State.AnimationPages.Sets[State.currentAnimationPageName]
+            State.AnimationPages.Sets[State.currentAnimationPageName] = nil
+            State.currentAnimationPageName = In.Text
+            State.AnimationPages.Selected = In.Text
+            State.SaveAnimationPages(State.AnimationPages)
+            if State.AnimationPageDropdown then
+                State.AnimationPageDropdown.Refresh(GetAnimationPageNames())
+                State.AnimationPageDropdown.Button.Text = State.currentAnimationPageName .. "  ▼"
+            end
+            popup:Destroy()
+        end
+    end)
+    Cancel.MouseButton1Click:Connect(function() popup:Destroy() end)
+end)
+
+SettingsLib.AddIconButton(AnimPageMgtContainer, "107588515524752", function() -- Export
+    local currentSet = State.AnimationPages.Sets[State.currentAnimationPageName]
+    local data = { Type = "AnimationPageSet", Name = State.currentAnimationPageName, Data = currentSet }
+    local json = HttpService:JSONEncode(data)
+    local popup, content = CreatePopup("Export Animation Page", UDim2.fromOffset(320, 240))
+    local box = CreateInput(content, "", json, true)
+    box.Size = UDim2.new(0.9, 0, 0, 130)
+    box.TextEditable = false
+    local copy = CreateButton(content, "COPY TO CLIPBOARD", (State.EmoteTheme and State.EmoteTheme.Accent) or Color3.fromRGB(0, 255, 150), UDim2.new(0.05, 0, 0.8, 0), UDim2.new(0.9, 0, 0, 35))
+    copy.MouseButton1Click:Connect(function()
+        setclipboard(json)
+        copy.Text = "COPIED!"
+        task.delay(1, function() copy.Text = "COPY TO CLIPBOARD" end)
+    end)
+    local close = Instance.new("TextButton")
+    close.Size = UDim2.fromOffset(24, 24)
+    close.Position = UDim2.new(1, -30, 0, 5)
+    close.Text = "×"
+    close.Font = Enum.Font.GothamBold
+    close.TextSize = 20
+    close.BackgroundTransparency = 1
+    close.TextColor3 = Color3.new(1,1,1)
+    close.Parent = popup
+    close.MouseButton1Click:Connect(function() popup:Destroy() end)
+end)
+
+SettingsLib.AddIconButton(AnimPageMgtContainer, "78317476576895", function() -- Import
+    local popup, content = CreatePopup("Import Animation Page", UDim2.fromOffset(320, 240))
+    local box = CreateInput(content, "Paste Animation Page JSON here...", "", true)
+    box.Size = UDim2.new(0.9, 0, 0, 130)
+    local imp = CreateButton(content, "IMPORT DATA", (State.EmoteTheme and State.EmoteTheme.Accent) or Color3.fromRGB(0, 255, 150), UDim2.new(0.05, 0, 0.8, 0), UDim2.new(0.9, 0, 0, 35))
+    imp.MouseButton1Click:Connect(function()
+        local s, d = pcall(function() return HttpService:JSONDecode(box.Text) end)
+        if s and type(d) == "table" and d.Type == "AnimationPageSet" and type(d.Data) == "table" then
+            local targetName = MakeUniqueSetName(State.AnimationPages.Sets, d.Name or "Imported")
+            State.AnimationPages.Sets[targetName] = d.Data
+            table.insert(State.AnimationPages.Order, targetName)
+            State.currentAnimationPageName = targetName
+            State.AnimationPages.Selected = targetName
+            State.SaveAnimationPages(State.AnimationPages)
+            if State.AnimationPageDropdown then
+                State.AnimationPageDropdown.Refresh(GetAnimationPageNames())
+                State.AnimationPageDropdown.Button.Text = State.currentAnimationPageName .. "  ▼"
+            end
+            SwitchAnimationPage(targetName)
+            popup:Destroy()
+            getgenv().Notify({ Title = "7yd7 | Page", Content = "✅ Imported Animation page", Duration = 3 })
+        else
+            getgenv().Notify({ Title = "Error", Content = "Invalid Animation Page JSON", Duration = 3 })
+        end
+    end)
+    local close = Instance.new("TextButton")
+    close.Size = UDim2.fromOffset(24, 24)
+    close.Position = UDim2.new(1, -30, 0, 5)
+    close.Text = "×"
+    close.Font = Enum.Font.GothamBold
+    close.TextSize = 20
+    close.BackgroundTransparency = 1
+    close.TextColor3 = Color3.new(1,1,1)
+    close.Parent = popup
+    close.MouseButton1Click:Connect(function() popup:Destroy() end)
+end)
+
+
+local BackupTab = SettingsLib.CreateTab("Backup", 6)
 
 local BackupDesc = SettingsLib.AddItem(BackupTab, "What's included in a backup?", " ")
 BackupDesc.LayoutOrder = 1
@@ -2853,16 +3396,12 @@ local BtnExportSettings = CreateExportBtn("Export Settings", btnColors.blue, 3)
 local BtnExportFavorites = CreateExportBtn("Export Favorites", btnColors.blue, 4)
 
 function GetFavoritesData()
-    local favEmotesStr = "{}"
     local favAnimsStr = "{}"
-    if isfile and isfile(State.favoriteFileName) then
-        favEmotesStr = readfile(State.favoriteFileName)
-    end
     if isfile and isfile(State.favoriteAnimationsFileName) then
         favAnimsStr = readfile(State.favoriteAnimationsFileName)
     end
     return {
-        Emotes = HttpService:JSONDecode(favEmotesStr) or {},
+        EmotePages = State.EmotePages, -- Full page profile set
         Animations = HttpService:JSONDecode(favAnimsStr) or {}
     }
 end
@@ -2996,13 +3535,21 @@ function HandleImportPrompt(typeStr)
                 if applySavedPositions then applySavedPositions() end
                 if State.RefreshSettingsUI then State.RefreshSettingsUI() end
             end
-            if d.Favorites and (typeStr == "All" or typeStr == "Favorites") then
-                if d.Favorites.Emotes then
-                     State.favoriteEmotes = d.Favorites.Emotes
-                     writefile(State.favoriteFileName, HttpService:JSONEncode(d.Favorites.Emotes))
-                     State.favoriteSetVersion = State.favoriteSetVersion + 1
+            if (d.Favorites or d.EmotePages) and (typeStr == "All" or typeStr == "Favorites") then
+                local emotesData = d.EmotePages or d.Favorites.Emotes
+                if emotesData then
+                    if emotesData.Sets then
+                        -- New format (full PageSet)
+                        State.EmotePages = emotesData
+                    else
+                        -- Legacy format (raw list)
+                        State.EmotePages.Sets.Default = emotesData
+                    end
+                    State.SaveEmotePages(State.EmotePages)
+                    SwitchEmotePage(State.currentEmotePageName)
                 end
-                if d.Favorites.Animations then
+                
+                if d.Favorites and d.Favorites.Animations then
                      State.favoriteAnimations = d.Favorites.Animations
                      writefile(State.favoriteAnimationsFileName, HttpService:JSONEncode(d.Favorites.Animations))
                      State.favoriteSetVersion = State.favoriteSetVersion + 1
@@ -3205,38 +3752,12 @@ function resolveEmoteToAnimationId(emoteId)
     return fallbackId
 end
 
-function saveFavorites()
-    if writefile then
-        local jsonData = HttpService:JSONEncode(State.favoriteEmotes)
-        writefile(State.favoriteFileName, jsonData)
-    end
-end
+-- loadFavorites and saveFavorites removed in favor of EmotePages system
 
 function saveFavoritesAnimations()
     if writefile then
         local jsonData = HttpService:JSONEncode(State.favoriteAnimations)
         writefile(State.favoriteAnimationsFileName, jsonData)
-    end
-end
-
-function loadFavorites()
-    if readfile and isfile and isfile(State.favoriteFileName) then
-        local success, result = pcall(function()
-            local fileContent = readfile(State.favoriteFileName)
-            return HttpService:JSONDecode(fileContent)
-        end)
-        if success and type(result) == "table" then
-            local filtered = {}
-            for _, fav in pairs(result) do
-                local idNum = fav and tonumber(fav.id)
-                if fav and idNum and idNum > 0 then
-                    fav.id = idNum
-                    table.insert(filtered, fav)
-                end
-            end
-            State.favoriteEmotes = filtered
-            State.favoriteSetVersion = State.favoriteSetVersion + 1
-        end
     end
 end
 
@@ -3909,6 +4430,15 @@ function updateAllFavoriteIcons()
     end)
     
     if success and frontFrame then
+        if not State.favoriteEnabled then
+            for _, child in pairs(frontFrame:GetChildren()) do
+                if child:IsA("ImageLabel") then
+                    local favoriteIcon = child:FindFirstChild("FavoriteIcon")
+                    if favoriteIcon then favoriteIcon:Destroy() end
+                end
+            end
+            return
+        end
         local randomActive = isRandomSlotActive()
         for _, child in pairs(frontFrame:GetChildren()) do
             if child:IsA("ImageLabel") and child.Image ~= "" and (not randomActive or child.Name ~= "1") then
@@ -4495,7 +5025,6 @@ end
 
 toggleFavorite = function(emoteId, emoteName)
     local found = false
-
     local index = 0
 
     for i, fav in pairs(State.favoriteEmotes) do
@@ -4525,8 +5054,11 @@ toggleFavorite = function(emoteId, emoteName)
         })
     end
 
+    -- Update active page data and save
+    State.EmotePages.Sets[State.currentEmotePageName] = DeepCopy(State.favoriteEmotes)
+    State.SaveEmotePages(State.EmotePages)
+
     State.favoriteSetVersion = State.favoriteSetVersion + 1
-    saveFavorites()
     State.totalPages = calculateTotalPages()
     updatePageDisplay()
     updateEmotes()
@@ -4536,8 +5068,6 @@ end
 
 toggleFavoriteAnimation = function(animationData)
     local found = false
-
-
     local index = 0
 
     for i, fav in pairs(State.favoriteAnimations) do
@@ -4571,12 +5101,17 @@ toggleFavoriteAnimation = function(animationData)
     end
 
     State.favoriteSetVersion = State.favoriteSetVersion + 1
-    saveFavoritesAnimations()
+    
+    -- Update active page data and save
+    State.AnimationPages.Sets[State.currentAnimationPageName] = DeepCopy(State.favoriteAnimations)
+    State.SaveAnimationPages(State.AnimationPages)
+
     State.totalPages = calculateTotalPages()
     updatePageDisplay()
     updateAnimations()
     updateAllFavoriteIcons()
 end
+
 
 
 function setupEmoteClickDetection()
@@ -7851,7 +8386,6 @@ RunService.Stepped:Connect(function()
 end)
 
 task.spawn(function()
-    loadFavorites()
     loadFavoritesAnimations()
     fetchAllEmotes()
     loadSpeedEmoteConfig()
