@@ -14,6 +14,7 @@ if _G.EmotesGUIRunning then
     return
 end
 _G.EmotesGUIRunning = true
+local offsaleAnimationJson = true
 
 local HttpService = game:GetService("HttpService")
 local RunService = game:GetService("RunService")
@@ -104,7 +105,8 @@ local State = {
     currentEmotePageName = "Default",
     AnimationPagePath = "7yd7/AnimationPages.json",
     AnimationPages = {},
-    currentAnimationPageName = "Default"
+    currentAnimationPageName = "Default",
+    EmoteDataCachePath = "7yd7/EmoteDataCache.json"
 }
 
 Config = {
@@ -436,8 +438,8 @@ AnimationSystem.NormalizeUrl = function(url)
     
     targetUrl = targetUrl:gsub("%?raw=true", "")
     
-    if targetUrl:find("github.com") then
-        targetUrl = targetUrl:gsub("github.com", "raw.githubusercontent.com")
+    if targetUrl:find("github%.com/") and not targetUrl:find("raw.githubusercontent%.com") then
+        targetUrl = targetUrl:gsub("github%.com/", "raw.githubusercontent.com/")
         targetUrl = targetUrl:gsub("/blob/", "/")
         targetUrl = targetUrl:gsub("/raw/", "/")
     end
@@ -576,10 +578,15 @@ AnimationSystem.StartGif = function(img, data)
     local frameW = data.frameW or 0
     local frameH = data.frameH or 0
     local cols = data.cols or 1
+    local rows = data.rows or 1
     local delay = data.delay or 0.1
+    local sheetW = data.sheetW or (cols * frameW)
+    local sheetH = data.sheetH or (rows * frameH)
     
     img.Image = data.sprite
     img.ImageRectSize = Vector2.new(frameW, frameH)
+    img.ImageRectOffset = Vector2.new(0, 0)
+    pcall(function() ContentProvider:PreloadAsync({img}) end)
     
     local current = 0
     local acc = 0
@@ -595,7 +602,9 @@ AnimationSystem.StartGif = function(img, data)
         current = (current + 1) % frames
         local col = current % cols
         local row = math.floor(current / cols)
-        img.ImageRectOffset = Vector2.new(col * frameW, row * frameH)
+        local offsetX = math.min(col * frameW, math.max(0, sheetW - frameW))
+        local offsetY = math.min(row * frameH, math.max(0, sheetH - frameH))
+        img.ImageRectOffset = Vector2.new(offsetX, offsetY)
     end)
 end
 
@@ -741,6 +750,32 @@ function GetAsset(asset)
     end
     
     return assetStr
+end
+
+local function estimateRobloxResizedSize(origW, origH)
+    if origW <= 0 or origH <= 0 then return origW, origH end
+    local longest = math.max(origW, origH)
+    local scale = 1
+    if longest > 1024 then
+        scale = 1024 / longest
+    end
+    return origW * scale, origH * scale
+end
+
+local function getExactImageSize(asset)
+    local AssetService = game:GetService("AssetService")
+    local ok, editImage = pcall(function()
+        return AssetService:CreateEditableImageAsync(asset)
+    end)
+    if ok and editImage then
+        local w = editImage.Size.X
+        local h = editImage.Size.Y
+        editImage:Destroy()
+        if w > 0 and h > 0 then
+            return w, h
+        end
+    end
+    return nil
 end
 
 local DEFAULT_WHEEL_BG = "rbxasset://textures/ui/Emotes/Large/SegmentedCircle.png"
@@ -1718,18 +1753,16 @@ function ApplyWheelBackgroundImage(bgImg, wheel)
         end
  
         if meta and meta.Enabled == false then
-            local sheetAsset = GetAsset(sheetUrl)
             AnimationSystem.StopGif()
-            AnimationSystem.SetImageMode(bgImg, true)
-            bgImg.Image = sheetAsset or ""
+            AnimationSystem.SetImageMode(bgImg, false)
+            bgImg.Image = DEFAULT_WHEEL_BG
             bgImg.ImageRectSize = Vector2.new(0, 0)
             bgImg.ImageRectOffset = Vector2.new(0, 0)
             return
         end
  
         if meta and meta.Enabled == true then
-            local sheetAsset = GetAsset(sheetUrl)
-            if sheetAsset and sheetAsset ~= "" and (meta.FrameWidth or 0) > 0 and (meta.FrameHeight or 0) > 0 then
+            if (meta.FrameWidth or 0) > 0 and (meta.FrameHeight or 0) > 0 then
                 local frames = tonumber(meta.Frames) or 0
                 local cols = tonumber(meta.Cols) or 0
                 local rows = tonumber(meta.Rows) or 0
@@ -1737,49 +1770,68 @@ function ApplyWheelBackgroundImage(bgImg, wheel)
                 local frameH = tonumber(meta.FrameHeight) or 0
                 local fps = tonumber(meta.FPS) or 10
                 local delay = fps > 0 and (1 / fps) or 0.1
- 
-                local spriteData = {
-                    sprite = sheetAsset,
-                    frames = frames,
-                    frameW = frameW,
-                    frameH = frameH,
-                    cols = cols,
-                    rows = rows,
-                    delay = delay
-                }
-                AnimationSystem.SetImageMode(bgImg, true)
-                AnimationSystem.StartGif(bgImg, spriteData)
-                return
+                local rawSheetW = tonumber(meta.SheetWidth) or (cols * frameW)
+                local rawSheetH = tonumber(meta.SheetHeight) or (rows * frameH)
+                local sheetAsset = GetAsset(sheetUrl)
+                if sheetAsset and sheetAsset ~= "" then
+                    local resizedW, resizedH = estimateRobloxResizedSize(rawSheetW, rawSheetH)
+                    local adjFrameW = frameW * (resizedW / rawSheetW)
+                    local adjFrameH = frameH * (resizedH / rawSheetH)
+
+                    local spriteData = {
+                        sprite = sheetAsset,
+                        frames = frames,
+                        frameW = adjFrameW,
+                        frameH = adjFrameH,
+                        cols = cols,
+                        rows = rows,
+                        sheetW = resizedW,
+                        sheetH = resizedH,
+                        delay = delay
+                    }
+                    AnimationSystem.SetImageMode(bgImg, true)
+                    AnimationSystem.StartGif(bgImg, spriteData)
+                    return
+                end
             end
         end
- 
+  
         local okGif, gifBytes = pcall(function() return game:HttpGet(gifUrl) end)
         local gifInfo = okGif and gifBytes and AnimationSystem.ParseGifInfo(gifBytes) or nil
  
         local okSheet, sheetBytes = pcall(function() return game:HttpGet(sheetUrl) end)
         local sheetInfo = okSheet and sheetBytes and AnimationSystem.ParsePngInfo(sheetBytes) or nil
         local sheetAsset = GetAsset(sheetUrl)
- 
+
         if gifInfo and sheetInfo and sheetAsset and sheetAsset ~= "" then
             local frameW = gifInfo.width
             local frameH = gifInfo.height
-            local cols = math.max(1, math.floor(sheetInfo.width / frameW))
-            local rows = math.max(1, math.floor(sheetInfo.height / frameH))
-            local frames = gifInfo.frames or (cols * rows)
+            local cols = math.max(1, math.floor(sheetInfo.width / frameW + 0.0001))
+            local rows = math.max(1, math.floor(sheetInfo.height / frameH + 0.0001))
+            local maxFrames = cols * rows
+            local frames = math.min(gifInfo.frames or maxFrames, maxFrames)
             local fps = (gifInfo.avgDelayCs and gifInfo.avgDelayCs > 0) and (100 / gifInfo.avgDelayCs) or 10
- 
+
+            local resizedW, resizedH = estimateRobloxResizedSize(sheetInfo.width, sheetInfo.height)
+            local scaleX = resizedW / sheetInfo.width
+            local scaleY = resizedH / sheetInfo.height
+            local adjFrameW = frameW * scaleX
+            local adjFrameH = frameH * scaleY
+
             local spriteData = {
                 sprite = sheetAsset,
                 frames = frames,
-                frameW = frameW,
-                frameH = frameH,
+                frameW = adjFrameW,
+                frameH = adjFrameH,
                 cols = cols,
                 rows = rows,
+                sheetW = resizedW,
+                sheetH = resizedH,
                 gifInfo = gifInfo
             }
             AnimationSystem.SetImageMode(bgImg, true)
             AnimationSystem.StartGif(bgImg, spriteData)
- 
+
             local newMeta = {
                 Enabled = true,
                 FrameWidth = frameW,
@@ -1788,6 +1840,8 @@ function ApplyWheelBackgroundImage(bgImg, wheel)
                 Frames = frames,
                 Cols = cols,
                 Rows = rows,
+                SheetWidth = sheetInfo.width,
+                SheetHeight = sheetInfo.height,
                 GifUrl = gifUrl,
                 SheetUrl = sheetUrl
             }
@@ -1801,11 +1855,11 @@ function ApplyWheelBackgroundImage(bgImg, wheel)
             return
         else
             AnimationSystem.StopGif()
-            AnimationSystem.SetImageMode(bgImg, true)
-            bgImg.Image = sheetAsset or ""
+            AnimationSystem.SetImageMode(bgImg, false)
+            bgImg.Image = DEFAULT_WHEEL_BG
             bgImg.ImageRectSize = Vector2.new(0, 0)
             bgImg.ImageRectOffset = Vector2.new(0, 0)
- 
+
             local newMeta = {
                 Enabled = false,
                 FrameWidth = 0,
@@ -5614,57 +5668,97 @@ function fetchAllEmotes()
         return
     end
     State.isLoading = true
-    State.emotesData = {}
-    State.totalEmotesLoaded = 0
 
-    local success, result = pcall(function()
-        local jsonContent = game:HttpGet("https://raw.githubusercontent.com/7yd7/sniper-Emote/refs/heads/test/EmoteSniper.json")
-        
-        if jsonContent and jsonContent ~= "" then
-            local data = HttpService:JSONDecode(jsonContent)
-            return data.data or {}
-        else
-            return nil
+    local function applyData(data, total)
+        State.emotesData = data
+        State.totalEmotesLoaded = total
+        State.originalEmotesData = State.emotesData
+        State.filteredEmotes = State.emotesData
+        State.emoteCacheVersion = State.emoteCacheVersion + 1
+        State.totalPages = calculateTotalPages()
+        State.currentPage = 1
+        updatePageDisplay()
+        updateEmotes()
+        State.isLoading = false
+    end
+
+    local function fetchFromUrl()
+        local success, result = pcall(function()
+            local jsonContent = game:HttpGet("https://raw.githubusercontent.com/7yd7/sniper-Emote/refs/heads/test/EmoteSniper.json")
+            if jsonContent and jsonContent ~= "" then
+                local data = HttpService:JSONDecode(jsonContent)
+                return data.data or {}
+            else
+                return nil
+            end
+        end)
+
+        if success and result then
+            local emoteData = {}
+            local total = 0
+            for _, item in pairs(result) do
+                local id = tonumber(item.id)
+                if id and id > 0 then
+                    table.insert(emoteData, {id = id, name = item.name or ("Emote_" .. id)})
+                    total = total + 1
+                end
+            end
+            if #emoteData > 0 then
+                pcall(function()
+                    if not isfolder("7yd7") then makefolder("7yd7") end
+                    writefile(State.EmoteDataCachePath, HttpService:JSONEncode(emoteData))
+                end)
+                return emoteData, total
+            end
+        end
+        return nil, nil
+    end
+
+    local cacheLoaded = false
+    local cacheData = nil
+    pcall(function()
+        if isfile and isfile(State.EmoteDataCachePath) then
+            local json = readfile(State.EmoteDataCachePath)
+            local decoded = HttpService:JSONDecode(json)
+            if type(decoded) == "table" and #decoded > 0 then
+                cacheData = decoded
+            end
         end
     end)
 
-    if success and result then
-        for _, item in pairs(result) do
-            local emoteData = {
-                id = tonumber(item.id),
-                name = item.name or ("Emote_" .. (item.id or "Unknown"))
-            }
-            if emoteData.id and emoteData.id > 0 then
-                table.insert(State.emotesData, emoteData)
-                State.totalEmotesLoaded = State.totalEmotesLoaded + 1
+    if cacheData then
+        local total = #cacheData
+        applyData(cacheData, total)
+        cacheLoaded = true
+        getgenv().Notify({Title = '7yd7 | Emote', Content = "📦 Emotes loaded", Duration = 3})
+        task.spawn(function()
+            local emoteData, total = fetchFromUrl()
+            if emoteData then
+                applyData(emoteData, total)
             end
-        end
-    else
-        State.emotesData = {
-            {id = 3360686498, name = "Stadium"},
-            {id = 3360692915, name = "Tilt"},
-            {id = 3576968026, name = "Shrug"},
-            {id = 3360689775, name = "Salute"}
-        }
-        State.totalEmotesLoaded = #State.emotesData
+        end)
+        return
     end
 
-    State.originalEmotesData = State.emotesData
-    State.filteredEmotes = State.emotesData
-    State.emoteCacheVersion = State.emoteCacheVersion + 1
-
-    State.totalPages = calculateTotalPages()
-    State.currentPage = 1
-    updatePageDisplay()
-    updateEmotes()
-    
-    getgenv().Notify({
-        Title = '7yd7 | Emote',
-        Content = "🎉 Loaded Successfully! Total Emotes: " .. State.totalEmotesLoaded,
-        Duration = 5
-    })
-    
-    State.isLoading = false
+    State.emotesData = {}
+    State.totalEmotesLoaded = 0
+    local emoteData, total = fetchFromUrl()
+    if emoteData then
+        applyData(emoteData, total)
+        getgenv().Notify({Title = '7yd7 | Emote', Content = "📦 Emotes loaded", Duration = 3})
+    else
+        State.emotesData = {{id = 3360686498, name = "Stadium"},{id = 3360692915, name = "Tilt"},{id = 3576968026, name = "Shrug"},{id = 3360689775, name = "Salute"}}
+        State.totalEmotesLoaded = #State.emotesData
+        State.originalEmotesData = State.emotesData
+        State.filteredEmotes = State.emotesData
+        State.emoteCacheVersion = State.emoteCacheVersion + 1
+        State.totalPages = calculateTotalPages()
+        State.currentPage = 1
+        updatePageDisplay()
+        updateEmotes()
+        State.isLoading = false
+        getgenv().Notify({Title = '7yd7 | Emote', Content = "📦 Emotes loaded", Duration = 3})
+    end
 end
 
 function fetchAllAnimations()
@@ -5685,14 +5779,45 @@ function fetchAllAnimations()
         end
     end)
 
+    local offsaleSuccess, offsaleResult
+    if offsaleAnimationJson then
+        offsaleSuccess, offsaleResult = pcall(function()
+            local jsonContent = game:HttpGet("https://raw.githubusercontent.com/7yd7/sniper-Emote/refs/heads/test/AnimationSniperoffsale.json")
+            if jsonContent and jsonContent ~= "" then
+                local data = HttpService:JSONDecode(jsonContent)
+                return data.data or {}
+            else
+                return nil
+            end
+        end)
+    end
+
+    local seenIds = {}
     if success and result then
         for _, item in pairs(result) do
-            local animationData = {
-                id = tonumber(item.id),
-                name = item.name or ("Animation_" .. (item.id or "Unknown")),
-                bundledItems = item.bundledItems
-            }
-            if animationData.id and animationData.id > 0 then
+            local id = tonumber(item.id)
+            if id and id > 0 then
+                seenIds[id] = true
+                local animationData = {
+                    id = id,
+                    name = item.name or ("Animation_" .. (id or "Unknown")),
+                    bundledItems = item.bundledItems
+                }
+                table.insert(State.animationsData, animationData)
+            end
+        end
+    end
+
+    if offsaleSuccess and offsaleResult then
+        for _, item in pairs(offsaleResult) do
+            local id = tonumber(item.id)
+            if id and id > 0 and not seenIds[id] then
+                seenIds[id] = true
+                local animationData = {
+                    id = id,
+                    name = item.name or ("Animation_Offsale_" .. (id or "Unknown")),
+                    bundledItems = item.bundledItems
+                }
                 table.insert(State.animationsData, animationData)
             end
         end
@@ -6564,6 +6689,25 @@ function connectEvents()
             SaveConfig()
         end))
     end
+
+    table.insert(State.guiConnections, UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        if gameProcessed then return end
+        if State.hudEditorActive then return end
+        local exists, emotesWheel = checkEmotesMenuExists()
+        if not (exists and emotesWheel.Visible) then return end
+
+        if input.KeyCode == Enum.KeyCode.Q then
+            if UserInputService:GetFocusedTextBox() then return end
+            previousPage()
+        elseif input.KeyCode == Enum.KeyCode.E then
+            if UserInputService:GetFocusedTextBox() then return end
+            nextPage()
+        elseif (input.KeyCode == Enum.KeyCode.LeftControl or input.KeyCode == Enum.KeyCode.RightControl) then
+            if not UserInputService:GetFocusedTextBox() and UI.Search then
+                UI.Search:CaptureFocus()
+            end
+        end
+    end))
 end
 
 
