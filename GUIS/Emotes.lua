@@ -5268,17 +5268,67 @@ applyAnimation = function(animationData)
         end
     end
     
+    local mappingMap = {}
     for _, m in pairs(sorted) do
-        local categoryFolder = animate:FindFirstChild(m.category)
-        if categoryFolder then
+        local cat = m.category:lower()
+        if not mappingMap[cat] then
+            mappingMap[cat] = { folderName = m.category, items = {} }
+        end
+        mappingMap[cat].items[m.name:lower()] = m.animationId
+    end
+
+    for cat, data in pairs(mappingMap) do
+        local categoryFolder = animate:FindFirstChild(data.folderName)
+        if not categoryFolder then continue end
+
+        local items = data.items
+        local itemCount = 0
+        for _ in pairs(items) do itemCount = itemCount + 1 end
+
+        if cat == "idle" and not animationData.isCustomSet then
+            if itemCount == 1 then
+                local anim1Id = items["animation1"] or items[next(items)]
+                local anim1 = categoryFolder:FindFirstChild("Animation1")
+                if anim1 and anim1:IsA("Animation") then
+                    anim1.AnimationId = anim1Id
+                end
+                local oldAnim2 = categoryFolder:FindFirstChild("Animation2")
+                if oldAnim2 then
+                    oldAnim2:Destroy()
+                end
+                local newAnim2 = Instance.new("Animation")
+                newAnim2.Name = "Animation2"
+                newAnim2.AnimationId = anim1Id
+                newAnim2.Parent = categoryFolder
+            else
+                for _, animObj in ipairs(categoryFolder:GetChildren()) do
+                    if animObj:IsA("Animation") then
+                        local id = items[animObj.Name:lower()]
+                        if id then
+                            animObj.AnimationId = id
+                        end
+                    end
+                end
+            end
+
+        elseif animationData.isCustomSet then
             for _, animObj in ipairs(categoryFolder:GetChildren()) do
                 if animObj:IsA("Animation") then
-                    if animationData.isCustomSet then
-                        if animObj.Name == m.name then
-                            animObj.AnimationId = m.animationId
-                        end
-                    else
-                        animObj.AnimationId = m.animationId
+                    local id = items[animObj.Name:lower()]
+                    if id then
+                        animObj.AnimationId = id
+                    end
+                end
+            end
+
+        else
+            for _, animObj in ipairs(categoryFolder:GetChildren()) do
+                if animObj:IsA("Animation") then
+                    local id = items[animObj.Name:lower()]
+                    if id then
+                        animObj.AnimationId = id
+                    elseif itemCount == 1 then
+                        animObj.AnimationId = next(items, nil) and items[next(items)]
                     end
                 end
             end
