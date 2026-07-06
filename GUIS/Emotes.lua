@@ -14,7 +14,7 @@ if _G.EmotesGUIRunning then
     return
 end
 _G.EmotesGUIRunning = true
-local offsaleAnimationJson = true
+local offsaleAnimationJson = false
 
 local HttpService = game:GetService("HttpService")
 local RunService = game:GetService("RunService")
