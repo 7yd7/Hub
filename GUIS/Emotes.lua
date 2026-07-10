@@ -3656,6 +3656,9 @@ getgenv().Notify({
 
 local Players = game:GetService("Players")
 local player = Players.LocalPlayer
+if not player then
+    player = Players:GetPropertyChangedSignal("LocalPlayer"):Wait()
+end
 local character = player.Character or player.CharacterAdded:Wait()
 local humanoid = character:WaitForChild("Humanoid")
 
@@ -5788,7 +5791,6 @@ function fetchAllEmotes()
         return nil, nil
     end
 
-    local cacheLoaded = false
     local cacheData = nil
     pcall(function()
         if isfile and isfile(State.EmoteDataCachePath) then
@@ -5801,25 +5803,7 @@ function fetchAllEmotes()
     end)
 
     if cacheData then
-        local total = #cacheData
-        applyData(cacheData, total)
-        cacheLoaded = true
-        getgenv().Notify({Title = '7yd7 | Emote', Content = "📦 Emotes loaded", Duration = 3})
-        task.spawn(function()
-            local emoteData, total = fetchFromUrl()
-            if emoteData then
-                applyData(emoteData, total)
-            end
-        end)
-        return
-    end
-
-    State.emotesData = {}
-    State.totalEmotesLoaded = 0
-    local emoteData, total = fetchFromUrl()
-    if emoteData then
-        applyData(emoteData, total)
-        getgenv().Notify({Title = '7yd7 | Emote', Content = "📦 Emotes loaded", Duration = 3})
+        applyData(cacheData, #cacheData)
     else
         State.emotesData = {{id = 3360686498, name = "Stadium"},{id = 3360692915, name = "Tilt"},{id = 3576968026, name = "Shrug"},{id = 3360689775, name = "Salute"}}
         State.totalEmotesLoaded = #State.emotesData
@@ -5831,8 +5815,19 @@ function fetchAllEmotes()
         updatePageDisplay()
         updateEmotes()
         State.isLoading = false
-        getgenv().Notify({Title = '7yd7 | Emote', Content = "📦 Emotes loaded", Duration = 3})
     end
+
+    task.spawn(function()
+        while true do
+            local emoteData, total = fetchFromUrl()
+            if emoteData then
+                applyData(emoteData, total)
+                getgenv().Notify({Title = '7yd7 | Emote', Content = "📦 Emotes loaded", Duration = 3})
+                return
+            end
+            task.wait(3)
+        end
+    end)
 end
 
 function fetchAllAnimations()
@@ -5841,95 +5836,112 @@ function fetchAllAnimations()
     end
     State.isLoading = true
     State.animationsData = {}
-    
-    local success, result = pcall(function()
-        local jsonContent = game:HttpGet("https://raw.githubusercontent.com/7yd7/sniper-Emote/refs/heads/test/AnimationSniper.json")
-        
-        if jsonContent and jsonContent ~= "" then
-            local data = HttpService:JSONDecode(jsonContent)
-            return data.data or {}
-        else
-            return nil
-        end
-    end)
 
-    local offsaleSuccess, offsaleResult
-    if offsaleAnimationJson then
-        offsaleSuccess, offsaleResult = pcall(function()
-            local jsonContent = game:HttpGet("https://raw.githubusercontent.com/7yd7/sniper-Emote/refs/heads/test/AnimationSniperoffsale.json")
-            if jsonContent and jsonContent ~= "" then
-                local data = HttpService:JSONDecode(jsonContent)
-                return data.data or {}
-            else
-                return nil
-            end
-        end)
-    end
-
-    local seenIds = {}
-    if success and result then
-        for _, item in pairs(result) do
-            local id = tonumber(item.id)
-            if id and id > 0 then
-                seenIds[id] = true
-                local animationData = {
-                    id = id,
-                    name = item.name or ("Animation_" .. (id or "Unknown")),
-                    bundledItems = item.bundledItems
-                }
-                table.insert(State.animationsData, animationData)
-            end
-        end
-    end
-
-    if offsaleSuccess and offsaleResult then
-        for _, item in pairs(offsaleResult) do
-            local id = tonumber(item.id)
-            if id and id > 0 and not seenIds[id] then
-                seenIds[id] = true
-                local animationData = {
-                    id = id,
-                    name = item.name or ("Animation_Offsale_" .. (id or "Unknown")),
-                    bundledItems = item.bundledItems
-                }
-                table.insert(State.animationsData, animationData)
-            end
-        end
-    end
-
-    if State.CustomAnimations and State.CustomAnimations.Order then
-        for idx, customSetName in ipairs(State.CustomAnimations.Order) do
-            if customSetName ~= "Default" and State.CustomAnimations.Sets[customSetName] then
-                local fakeId = -1000 - idx
-                local customSetData = State.CustomAnimations.Sets[customSetName]
-                local mappings = {}
-                for cat, anims in pairs(customSetData) do
-                    if cat ~= "__meta" then
-                        for name, id in pairs(anims) do
-                            if tostring(id) ~= "0" then
-                                table.insert(mappings, {category = cat, name = name, animationId = "rbxassetid://" .. id})
+    local function processCustomSets()
+        if State.CustomAnimations and State.CustomAnimations.Order then
+            for idx, customSetName in ipairs(State.CustomAnimations.Order) do
+                if customSetName ~= "Default" and State.CustomAnimations.Sets[customSetName] then
+                    local fakeId = -1000 - idx
+                    local customSetData = State.CustomAnimations.Sets[customSetName]
+                    local mappings = {}
+                    for cat, anims in pairs(customSetData) do
+                        if cat ~= "__meta" then
+                            for name, id in pairs(anims) do
+                                if tostring(id) ~= "0" then
+                                    table.insert(mappings, {category = cat, name = name, animationId = "rbxassetid://" .. id})
+                                end
                             end
                         end
                     end
+                    mappings._version = 2
+                    State.AnimationCache[tostring(fakeId)] = mappings
+
+                    local customAnimationData = {
+                        id = fakeId,
+                        name = customSetName,
+                        bundledItems = {"Custom-Animation"},
+                        isCustomSet = true
+                    }
+                    table.insert(State.animationsData, 1, customAnimationData)
                 end
-                mappings._version = 2
-                State.AnimationCache[tostring(fakeId)] = mappings
-                
-                local customAnimationData = {
-                    id = fakeId,
-                    name = customSetName,
-                    bundledItems = {"Custom-Animation"},
-                    isCustomSet = true
-                }
-                table.insert(State.animationsData, 1, customAnimationData)
             end
         end
     end
 
-    State.originalAnimationsData = State.animationsData
-    State.filteredAnimations = State.animationsData
-    State.animationCacheVersion = State.animationCacheVersion + 1
-    State.isLoading = false
+    local function finalize()
+        State.originalAnimationsData = State.animationsData
+        State.filteredAnimations = State.animationsData
+        State.animationCacheVersion = State.animationCacheVersion + 1
+        State.isLoading = false
+    end
+
+    processCustomSets()
+    finalize()
+
+    task.spawn(function()
+        while true do
+            local success, result = pcall(function()
+                local jsonContent = game:HttpGet("https://raw.githubusercontent.com/7yd7/sniper-Emote/refs/heads/test/AnimationSniper.json")
+                if jsonContent and jsonContent ~= "" then
+                    local data = HttpService:JSONDecode(jsonContent)
+                    return data.data or {}
+                end
+                return nil
+            end)
+
+            local offsaleSuccess, offsaleResult
+            if offsaleAnimationJson then
+                offsaleSuccess, offsaleResult = pcall(function()
+                    local jsonContent = game:HttpGet("https://raw.githubusercontent.com/7yd7/sniper-Emote/refs/heads/test/AnimationSniperoffsale.json")
+                    if jsonContent and jsonContent ~= "" then
+                        local data = HttpService:JSONDecode(jsonContent)
+                        return data.data or {}
+                    end
+                    return nil
+                end)
+            end
+
+            if success or offsaleSuccess then
+                local animationsData = {}
+                local seenIds = {}
+
+                if success and result then
+                    for _, item in pairs(result) do
+                        local id = tonumber(item.id)
+                        if id and id > 0 then
+                            seenIds[id] = true
+                            table.insert(animationsData, {
+                                id = id,
+                                name = item.name or ("Animation_" .. id),
+                                bundledItems = item.bundledItems
+                            })
+                        end
+                    end
+                end
+
+                if offsaleSuccess and offsaleResult then
+                    for _, item in pairs(offsaleResult) do
+                        local id = tonumber(item.id)
+                        if id and id > 0 and not seenIds[id] then
+                            seenIds[id] = true
+                            table.insert(animationsData, {
+                                id = id,
+                                name = item.name or ("Animation_Offsale_" .. id),
+                                bundledItems = item.bundledItems
+                            })
+                        end
+                    end
+                end
+
+                State.animationsData = animationsData
+                processCustomSets()
+                finalize()
+                return
+            end
+
+            task.wait(3)
+        end
+    end)
 end
 
 local function smartSearchMatch(name, searchTerm)
