@@ -14,7 +14,7 @@ if _G.EmotesGUIRunning then
     return
 end
 _G.EmotesGUIRunning = true
-local offsaleAnimationJson = false
+local offsaleAnimationJson = true
 
 local HttpService = game:GetService("HttpService")
 local RunService = game:GetService("RunService")
@@ -222,10 +222,17 @@ function resolveAnimationMappings(bundledItems)
                         if child:IsA("Animation") then
                             local animationPath = parentPath .. "." .. child.Name
                             local pathParts = animationPath:split(".")
+                            local weightVals = {}
+                            for _, wChild in ipairs(child:GetChildren()) do
+                                if wChild:IsA("NumberValue") and wChild.Name == "Weight" then
+                                    table.insert(weightVals, wChild.Value)
+                                end
+                            end
                             table.insert(mappings, {
                                 category = pathParts[#pathParts - 1],
                                 name = pathParts[#pathParts],
-                                animationId = child.AnimationId
+                                animationId = child.AnimationId,
+                                weights = weightVals
                             })
                         elseif #child:GetChildren() > 0 then
                             searchTree(child, parentPath .. "." .. child.Name)
@@ -1795,91 +1802,95 @@ function ApplyWheelBackgroundImage(bgImg, wheel)
                 end
             end
         end
-  
-        local okGif, gifBytes = pcall(function() return game:HttpGet(gifUrl) end)
-        local gifInfo = okGif and gifBytes and AnimationSystem.ParseGifInfo(gifBytes) or nil
- 
-        local okSheet, sheetBytes = pcall(function() return game:HttpGet(sheetUrl) end)
-        local sheetInfo = okSheet and sheetBytes and AnimationSystem.ParsePngInfo(sheetBytes) or nil
-        local sheetAsset = GetAsset(sheetUrl)
 
-        if gifInfo and sheetInfo and sheetAsset and sheetAsset ~= "" then
-            local frameW = gifInfo.width
-            local frameH = gifInfo.height
-            local cols = math.max(1, math.floor(sheetInfo.width / frameW + 0.0001))
-            local rows = math.max(1, math.floor(sheetInfo.height / frameH + 0.0001))
-            local maxFrames = cols * rows
-            local frames = math.min(gifInfo.frames or maxFrames, maxFrames)
-            local fps = (gifInfo.avgDelayCs and gifInfo.avgDelayCs > 0) and (100 / gifInfo.avgDelayCs) or 10
+        bgImg.Image = DEFAULT_WHEEL_BG
+        bgImg.ImageRectSize = Vector2.new(0, 0)
+        bgImg.ImageRectOffset = Vector2.new(0, 0)
 
-            local resizedW, resizedH = estimateRobloxResizedSize(sheetInfo.width, sheetInfo.height)
-            local scaleX = resizedW / sheetInfo.width
-            local scaleY = resizedH / sheetInfo.height
-            local adjFrameW = frameW * scaleX
-            local adjFrameH = frameH * scaleY
+        task.spawn(function()
+            local okGif, gifBytes = pcall(function() return game:HttpGet(gifUrl) end)
+            local gifInfo = okGif and gifBytes and AnimationSystem.ParseGifInfo(gifBytes) or nil
 
-            local spriteData = {
-                sprite = sheetAsset,
-                frames = frames,
-                frameW = adjFrameW,
-                frameH = adjFrameH,
-                cols = cols,
-                rows = rows,
-                sheetW = resizedW,
-                sheetH = resizedH,
-                gifInfo = gifInfo
-            }
-            AnimationSystem.SetImageMode(bgImg, true)
-            AnimationSystem.StartGif(bgImg, spriteData)
+            local okSheet, sheetBytes = pcall(function() return game:HttpGet(sheetUrl) end)
+            local sheetInfo = okSheet and sheetBytes and AnimationSystem.ParsePngInfo(sheetBytes) or nil
+            local sheetAsset = GetAsset(sheetUrl)
 
-            local newMeta = {
-                Enabled = true,
-                FrameWidth = frameW,
-                FrameHeight = frameH,
-                FPS = math.floor(fps + 0.5),
-                Frames = frames,
-                Cols = cols,
-                Rows = rows,
-                SheetWidth = sheetInfo.width,
-                SheetHeight = sheetInfo.height,
-                GifUrl = gifUrl,
-                SheetUrl = sheetUrl
-            }
-            if not AnimationSystem.AreMetaEqual(wheel.Animation, newMeta) then
-                wheel.Animation = newMeta
-                AnimationSystem.Cache[cacheKey] = newMeta
-                if AnimationSystem.currentThemeName and AnimationSystem.currentThemeName ~= "Default" then
-                    SaveThemes(themes)
+            if gifInfo and sheetInfo and sheetAsset and sheetAsset ~= "" then
+                local frameW = gifInfo.width
+                local frameH = gifInfo.height
+                local cols = math.max(1, math.floor(sheetInfo.width / frameW + 0.0001))
+                local rows = math.max(1, math.floor(sheetInfo.height / frameH + 0.0001))
+                local maxFrames = cols * rows
+                local frames = math.min(gifInfo.frames or maxFrames, maxFrames)
+                local fps = (gifInfo.avgDelayCs and gifInfo.avgDelayCs > 0) and (100 / gifInfo.avgDelayCs) or 10
+
+                local resizedW, resizedH = estimateRobloxResizedSize(sheetInfo.width, sheetInfo.height)
+                local scaleX = resizedW / sheetInfo.width
+                local scaleY = resizedH / sheetInfo.height
+                local adjFrameW = frameW * scaleX
+                local adjFrameH = frameH * scaleY
+
+                local spriteData = {
+                    sprite = sheetAsset,
+                    frames = frames,
+                    frameW = adjFrameW,
+                    frameH = adjFrameH,
+                    cols = cols,
+                    rows = rows,
+                    sheetW = resizedW,
+                    sheetH = resizedH,
+                    gifInfo = gifInfo
+                }
+                AnimationSystem.SetImageMode(bgImg, true)
+                AnimationSystem.StartGif(bgImg, spriteData)
+
+                local newMeta = {
+                    Enabled = true,
+                    FrameWidth = frameW,
+                    FrameHeight = frameH,
+                    FPS = math.floor(fps + 0.5),
+                    Frames = frames,
+                    Cols = cols,
+                    Rows = rows,
+                    SheetWidth = sheetInfo.width,
+                    SheetHeight = sheetInfo.height,
+                    GifUrl = gifUrl,
+                    SheetUrl = sheetUrl
+                }
+                if not AnimationSystem.AreMetaEqual(wheel.Animation, newMeta) then
+                    wheel.Animation = newMeta
+                    AnimationSystem.Cache[cacheKey] = newMeta
+                    if AnimationSystem.currentThemeName and AnimationSystem.currentThemeName ~= "Default" then
+                        SaveThemes(themes)
+                    end
                 end
-            end
-            return
-        else
-            AnimationSystem.StopGif()
-            AnimationSystem.SetImageMode(bgImg, false)
-            bgImg.Image = DEFAULT_WHEEL_BG
-            bgImg.ImageRectSize = Vector2.new(0, 0)
-            bgImg.ImageRectOffset = Vector2.new(0, 0)
+                return
+            else
+                AnimationSystem.StopGif()
+                AnimationSystem.SetImageMode(bgImg, false)
 
-            local newMeta = {
-                Enabled = false,
-                FrameWidth = 0,
-                FrameHeight = 0,
-                FPS = 10,
-                Frames = 1,
-                Cols = 0,
-                Rows = 0,
-                GifUrl = gifUrl,
-                SheetUrl = sheetUrl
-            }
-            if not AnimationSystem.AreMetaEqual(wheel.Animation, newMeta) then
-                wheel.Animation = newMeta
-                AnimationSystem.Cache[cacheKey] = newMeta
-                if AnimationSystem.currentThemeName and AnimationSystem.currentThemeName ~= "Default" then
-                    SaveThemes(themes)
+                local newMeta = {
+                    Enabled = false,
+                    FrameWidth = 0,
+                    FrameHeight = 0,
+                    FPS = 10,
+                    Frames = 1,
+                    Cols = 0,
+                    Rows = 0,
+                    GifUrl = gifUrl,
+                    SheetUrl = sheetUrl
+                }
+                if not AnimationSystem.AreMetaEqual(wheel.Animation, newMeta) then
+                    wheel.Animation = newMeta
+                    AnimationSystem.Cache[cacheKey] = newMeta
+                    if AnimationSystem.currentThemeName and AnimationSystem.currentThemeName ~= "Default" then
+                        SaveThemes(themes)
+                    end
                 end
+                return
             end
-            return
-        end
+        end)
+        return
     end
  
     AnimationSystem.StopGif()
@@ -1899,109 +1910,117 @@ function ApplyTheme(themeData)
     
     State.isApplyingTheme = true
     
-    if themeData.Background then
-        State.EmoteTheme = {
-            Background = TableToColor(themeData.Background),
-            Accent = TableToColor(themeData.Accent or {0, 255, 150}),
-            ImageColor = TableToColor(themeData.ImageColor or {255, 255, 255}),
-            Icons = themeData.Icons or {},
-            IconColors = themeData.IconColors or {},
-            Wheel = themeData.Wheel or {}
-        }
-        
-        local function getIconColor(key)
-            if State.EmoteTheme.IconColors and State.EmoteTheme.IconColors[key] then
-                return TableToColor(State.EmoteTheme.IconColors[key])
-            end
-            return State.EmoteTheme.ImageColor 
-        end
-        
-        State.favoriteIconId = GetAsset(State.EmoteTheme.Icons.Favorite)
-        State.notFavoriteIconId = GetAsset(State.EmoteTheme.Icons.NotFavorite)
-        
-        updateGUIColors()
-        
-        if UI._1left then UI._1left.Image = GetAsset(State.EmoteTheme.Icons.Left); UI._1left.ImageColor3 = getIconColor("Left") end
-        if UI._9right then UI._9right.Image = GetAsset(State.EmoteTheme.Icons.Right); UI._9right.ImageColor3 = getIconColor("Right") end
-        if UI.EmoteWalkButton then 
-            UI.EmoteWalkButton.ImageColor3 = getIconColor("Walk") 
-            ApplyFreezeButtonVisual()
-        end
-        if UI.SpeedEmote then UI.SpeedEmote.Image = GetAsset(State.EmoteTheme.Icons.Speed); UI.SpeedEmote.ImageColor3 = getIconColor("Speed") end
-        if UI.Changepage then UI.Changepage.Image = GetAsset(State.EmoteTheme.Icons.Page); UI.Changepage.ImageColor3 = getIconColor("Page") end
-        if UI.Reload then UI.Reload.Image = GetAsset(State.EmoteTheme.Icons.Reload); UI.Reload.ImageColor3 = getIconColor("Reload") end
-        
-        if UI.Favorite then ApplyFavoriteButtonVisual() end 
-
-        
-        if UI.Background and UI.Background.Main then UI.Background.Main.SetValue(State.EmoteTheme.Background) end
-        
-        for key, comp in pairs(UIElements.Icons) do
-            local iconVal = State.EmoteTheme.Icons[key] or ""
-            local specificColor = State.EmoteTheme.IconColors and State.EmoteTheme.IconColors[key]
-            local colorVal
+    local ok, err = pcall(function()
+        if themeData.Background then
+            State.EmoteTheme = {
+                Background = TableToColor(themeData.Background),
+                Accent = TableToColor(themeData.Accent or {0, 255, 150}),
+                ImageColor = TableToColor(themeData.ImageColor or {255, 255, 255}),
+                Icons = themeData.Icons or {},
+                IconColors = themeData.IconColors or {},
+                Wheel = themeData.Wheel or {}
+            }
             
-            if specificColor then
-                colorVal = TableToColor(specificColor)
-            else
-                colorVal = State.EmoteTheme.ImageColor 
+            local function getIconColor(key)
+                if State.EmoteTheme.IconColors and State.EmoteTheme.IconColors[key] then
+                    return TableToColor(State.EmoteTheme.IconColors[key])
+                end
+                return State.EmoteTheme.ImageColor 
             end
             
-            if comp then comp.SetValue(iconVal, colorVal) end
-        end
+            State.favoriteIconId = GetAsset(State.EmoteTheme.Icons.Favorite)
+            State.notFavoriteIconId = GetAsset(State.EmoteTheme.Icons.NotFavorite)
+            
+            updateGUIColors()
+            
+            if UI._1left then UI._1left.Image = GetAsset(State.EmoteTheme.Icons.Left); UI._1left.ImageColor3 = getIconColor("Left") end
+            if UI._9right then UI._9right.Image = GetAsset(State.EmoteTheme.Icons.Right); UI._9right.ImageColor3 = getIconColor("Right") end
+            if UI.EmoteWalkButton then 
+                UI.EmoteWalkButton.ImageColor3 = getIconColor("Walk") 
+                ApplyFreezeButtonVisual()
+            end
+            if UI.SpeedEmote then UI.SpeedEmote.Image = GetAsset(State.EmoteTheme.Icons.Speed); UI.SpeedEmote.ImageColor3 = getIconColor("Speed") end
+            if UI.Changepage then UI.Changepage.Image = GetAsset(State.EmoteTheme.Icons.Page); UI.Changepage.ImageColor3 = getIconColor("Page") end
+            if UI.Reload then UI.Reload.Image = GetAsset(State.EmoteTheme.Icons.Reload); UI.Reload.ImageColor3 = getIconColor("Reload") end
+            
+            if UI.Favorite then ApplyFavoriteButtonVisual() end 
 
-        local function applyWheel()
-            pcall(function()
-                local root = game:GetService("CoreGui"):FindFirstChild("RobloxGui")
-                if not root then return end
-                root = root:FindFirstChild("EmotesMenu")
-                if not root then return end
-                root = root.Children.Main.EmotesWheel.Back.Background
+            
+            if UI.Background and UI.Background.Main then UI.Background.Main.SetValue(State.EmoteTheme.Background) end
+            
+            for key, comp in pairs(UIElements.Icons) do
+                local iconVal = State.EmoteTheme.Icons[key] or ""
+                local specificColor = State.EmoteTheme.IconColors and State.EmoteTheme.IconColors[key]
+                local colorVal
                 
-                local wheel = State.EmoteTheme.Wheel
-                if not wheel then return end
-
-                local function getAsset(id)
-                    return GetAsset(id)
+                if specificColor then
+                    colorVal = TableToColor(specificColor)
+                else
+                    colorVal = State.EmoteTheme.ImageColor 
                 end
+                
+                if comp then comp.SetValue(iconVal, colorVal) end
+            end
 
-                local bgImg = root:FindFirstChild("BackgroundImage")
-                if bgImg then
-                    ApplyWheelBackgroundImage(bgImg, wheel)
-                    bgImg.ImageColor3 = TableToColor(wheel.BackgroundImageColor or {255,255,255})
-                end
+            local function applyWheel()
+                pcall(function()
+                    local root = game:GetService("CoreGui"):FindFirstChild("RobloxGui")
+                    if not root then return end
+                    root = root:FindFirstChild("EmotesMenu")
+                    if not root then return end
+                    root = root.Children.Main.EmotesWheel.Back.Background
+                    
+                    local wheel = State.EmoteTheme.Wheel
+                    if not wheel then return end
 
-                local gradContainer = root:FindFirstChild("BackgroundGradient")
-                local selectionGrad = gradContainer and gradContainer:FindFirstChild("SelectionGradient")
-                local grad = selectionGrad and selectionGrad:FindFirstChild("SelectedGradient")
-                if grad then
-                    grad.Image = getAsset(wheel.SelectionGradient)
-                    grad.ImageColor3 = TableToColor(wheel.SelectionGradientColor or {255,255,255})
-                end
+                    local function getAsset(id)
+                        return GetAsset(id)
+                    end
 
-                local selection = root:FindFirstChild("Selection")
-                local selectionEffect = selection and selection:FindFirstChild("SelectionEffect")
-                local line = selectionEffect and selectionEffect:FindFirstChild("SelectedLine")
-                if line then
-                    line.Image = getAsset(wheel.SelectionLine)
-                    line.ImageColor3 = TableToColor(wheel.SelectionLineColor or {255,255,255})
-                end
-            end)
+                    local bgImg = root:FindFirstChild("BackgroundImage")
+                    if bgImg then
+                        ApplyWheelBackgroundImage(bgImg, wheel)
+                        bgImg.ImageColor3 = TableToColor(wheel.BackgroundImageColor or {255,255,255})
+                    end
+
+                    local gradContainer = root:FindFirstChild("BackgroundGradient")
+                    local selectionGrad = gradContainer and gradContainer:FindFirstChild("SelectionGradient")
+                    local grad = selectionGrad and selectionGrad:FindFirstChild("SelectedGradient")
+                    if grad then
+                        grad.Image = getAsset(wheel.SelectionGradient)
+                        grad.ImageColor3 = TableToColor(wheel.SelectionGradientColor or {255,255,255})
+                    end
+
+                    local selection = root:FindFirstChild("Selection")
+                    local selectionEffect = selection and selection:FindFirstChild("SelectionEffect")
+                    local line = selectionEffect and selectionEffect:FindFirstChild("SelectedLine")
+                    if line then
+                        line.Image = getAsset(wheel.SelectionLine)
+                        line.ImageColor3 = TableToColor(wheel.SelectionLineColor or {255,255,255})
+                    end
+                end)
+            end
+            applyWheel()
+
+            for key, comp in pairs(UIElements.Wheel) do
+                local imgVal = State.EmoteTheme.Wheel[key] or ""
+                local colorVal = TableToColor(State.EmoteTheme.Wheel[key.."Color"] or {255, 255, 255})
+                if comp then comp.SetValue(imgVal, colorVal) end
+            end
         end
-        applyWheel()
-
-        for key, comp in pairs(UIElements.Wheel) do
-            local imgVal = State.EmoteTheme.Wheel[key] or ""
-            local colorVal = TableToColor(State.EmoteTheme.Wheel[key.."Color"] or {255, 255, 255})
-            if comp then comp.SetValue(imgVal, colorVal) end
+        
+        for name, data in pairs(themes) do
+            if data == themeData then
+                AnimationSystem.currentThemeName = name
+                break
+            end
         end
-    end
+    end)
+    
     State.isApplyingTheme = false
-    for name, data in pairs(themes) do
-        if data == themeData then
-            AnimationSystem.currentThemeName = name
-            break
-        end
+    
+    if not ok then
+        warn("7yd7 | ApplyTheme error: " .. tostring(err))
     end
 end
 
@@ -5243,15 +5262,21 @@ applyAnimation = function(animationData)
     local cacheKey = tostring(bundleId)
     local mappings = State.AnimationCache[cacheKey]
     
+    if mappings and #mappings > 0 and mappings._version ~= 2 then
+        mappings = nil
+    end
+    
         if animationData.isCustomSet then
             mappings = buildCustomSetMappings(GetCustomSetName(animationData) or animationData.name)
             if #mappings > 0 then
+                mappings._version = 2
                 State.AnimationCache[cacheKey] = mappings
                 task.spawn(saveAnimationCache)
             end
     elseif not mappings then
         mappings = resolveAnimationMappings(bundledItems)
         if #mappings > 0 then
+            mappings._version = 2
             State.AnimationCache[cacheKey] = mappings
             task.spawn(saveAnimationCache)
         end
@@ -5260,7 +5285,7 @@ applyAnimation = function(animationData)
     if #mappings == 0 then return end
     
     local sorted = {}
-    for _, m in pairs(mappings) do
+    for _, m in ipairs(mappings) do
         if m.category:lower() == "idle" then
             table.insert(sorted, 1, m)
         else
@@ -5268,70 +5293,69 @@ applyAnimation = function(animationData)
         end
     end
     
+    local function applyAnimationToObject(animObj, animId, weights)
+        if not animObj or not animObj:IsA("Animation") then return end
+
+        animObj.AnimationId = animId
+
+        if weights ~= nil then
+            for _, child in ipairs(animObj:GetChildren()) do
+                if child:IsA("NumberValue") and child.Name == "Weight" then
+                    child:Destroy()
+                end
+            end
+            for _, wVal in ipairs(weights) do
+                local w = Instance.new("NumberValue")
+                w.Name = "Weight"
+                w.Value = wVal
+                w.Parent = animObj
+            end
+        end
+    end
+
     local mappingMap = {}
-    for _, m in pairs(sorted) do
+    for _, m in ipairs(sorted) do
         local cat = m.category:lower()
         if not mappingMap[cat] then
             mappingMap[cat] = { folderName = m.category, items = {} }
         end
-        mappingMap[cat].items[m.name:lower()] = m.animationId
+        mappingMap[cat].items[m.name:lower()] = m
     end
 
     for cat, data in pairs(mappingMap) do
         local categoryFolder = animate:FindFirstChild(data.folderName)
-        if not categoryFolder then continue end
+        if not categoryFolder then
+            continue
+        end
 
         local items = data.items
-        local itemCount = 0
-        for _ in pairs(items) do itemCount = itemCount + 1 end
 
-        if cat == "idle" and not animationData.isCustomSet then
-            if itemCount == 1 then
-                local anim1Id = items["animation1"] or items[next(items)]
-                local anim1 = categoryFolder:FindFirstChild("Animation1")
-                if anim1 and anim1:IsA("Animation") then
-                    anim1.AnimationId = anim1Id
-                end
-                local oldAnim2 = categoryFolder:FindFirstChild("Animation2")
-                if oldAnim2 then
-                    oldAnim2:Destroy()
-                end
-                local newAnim2 = Instance.new("Animation")
-                newAnim2.Name = "Animation2"
-                newAnim2.AnimationId = anim1Id
-                newAnim2.Parent = categoryFolder
-            else
-                for _, animObj in ipairs(categoryFolder:GetChildren()) do
-                    if animObj:IsA("Animation") then
-                        local id = items[animObj.Name:lower()]
-                        if id then
-                            animObj.AnimationId = id
-                        end
+        local sourceByName = {}
+        for name, m in pairs(items) do
+            sourceByName[name] = m
+        end
+
+        for _, animObj in ipairs(categoryFolder:GetChildren()) do
+            if animObj:IsA("Animation") then
+                local lowerName = animObj.Name:lower()
+                local m = sourceByName[lowerName]
+                if m then
+                    sourceByName[lowerName] = nil
+                    applyAnimationToObject(animObj, m.animationId, m.weights)
+                    if animObj.Name ~= m.name then
+                        animObj.Name = m.name
                     end
+                else
+                    animObj:Destroy()
                 end
             end
+        end
 
-        elseif animationData.isCustomSet then
-            for _, animObj in ipairs(categoryFolder:GetChildren()) do
-                if animObj:IsA("Animation") then
-                    local id = items[animObj.Name:lower()]
-                    if id then
-                        animObj.AnimationId = id
-                    end
-                end
-            end
-
-        else
-            for _, animObj in ipairs(categoryFolder:GetChildren()) do
-                if animObj:IsA("Animation") then
-                    local id = items[animObj.Name:lower()]
-                    if id then
-                        animObj.AnimationId = id
-                    elseif itemCount == 1 then
-                        animObj.AnimationId = next(items, nil) and items[next(items)]
-                    end
-                end
-            end
+        for name, m in pairs(sourceByName) do
+            local animObj = Instance.new("Animation")
+            animObj.Name = m.name
+            applyAnimationToObject(animObj, m.animationId, m.weights)
+            animObj.Parent = categoryFolder
         end
     end
     
@@ -5888,6 +5912,7 @@ function fetchAllAnimations()
                         end
                     end
                 end
+                mappings._version = 2
                 State.AnimationCache[tostring(fakeId)] = mappings
                 
                 local customAnimationData = {
@@ -6228,7 +6253,7 @@ function onCharacterAdded(character)
                 if not character or not character.Parent or not humanoid then break end
                 local mappings = State.AnimationCache[cacheKey]
                 if mappings and animate and animate.Parent then
-                    for _, m in pairs(mappings) do
+                    for _, m in ipairs(mappings) do
                         local categoryFolder = animate:FindFirstChild(m.category)
                         if categoryFolder then
                             for _, animObj in ipairs(categoryFolder:GetChildren()) do
