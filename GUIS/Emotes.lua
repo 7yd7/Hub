@@ -29,6 +29,8 @@ local request = http_request or (syn and syn.request) or request
 
 local State = {
     currentMode = "emote",
+    savedAnimPage = 1,
+    savedEmotePage = 1,
     emotesWalkEnabled = false,
     favoriteEnabled = false,
     hudEditorActive = false,
@@ -103,9 +105,6 @@ local State = {
     EmotePagePath = "7yd7/EmotePages.json",
     EmotePages = {},
     currentEmotePageName = "Default",
-    AnimationPagePath = "7yd7/AnimationPages.json",
-    AnimationPages = {},
-    currentAnimationPageName = "Default",
     EmoteDataCachePath = "7yd7/EmoteDataCache.json"
 }
 
@@ -1505,25 +1504,6 @@ State.SaveEmotePages = function(pageData)
     end
 end
 
-State.SaveAnimationPages = function(pageData)
-    if not isfolder("7yd7") then makefolder("7yd7") end
-    local toSave = { 
-        Sets = {}, 
-        Order = pageData.Order or {"Default"}, 
-        Selected = pageData.Selected or "Default" 
-    }
-    for name, data in pairs(pageData.Sets) do
-        if name ~= "Default" then
-            toSave.Sets[name] = data
-        end
-    end
-    writefile(State.AnimationPagePath, HttpService:JSONEncode(toSave))
-    
-    if pageData.Sets["Default"] then
-        writefile(State.favoriteAnimationsFileName, HttpService:JSONEncode(pageData.Sets["Default"]))
-    end
-end
-
 function SwitchEmotePage(pageName)
     if not State.EmotePages.Sets[pageName] then return end
     
@@ -1547,33 +1527,6 @@ function SwitchEmotePage(pageName)
     updatePageDisplay()
     if State.currentMode == "emote" then
         updateEmotes()
-    end
-    updateAllFavoriteIcons()
-end
-
-function SwitchAnimationPage(pageName)
-    if not State.AnimationPages.Sets[pageName] then return end
-    
-    State.currentAnimationPageName = pageName
-    State.AnimationPages.Selected = pageName
-    
-    local pageData = State.AnimationPages.Sets[pageName]
-    State.favoriteAnimations = DeepCopy(pageData) or {}
-    
-    State.favoriteAnimationSet = {}
-    for _, fav in pairs(State.favoriteAnimations) do
-        State.favoriteAnimationSet[tostring(fav.id)] = true
-    end
-    
-    State.favoriteSetVersion = State.favoriteSetVersion + 1
-    State.totalPages = calculateTotalPages()
-    if State.currentPage > State.totalPages then
-        State.currentPage = State.totalPages
-    end
-    
-    updatePageDisplay()
-    if State.currentMode == "animation" then
-        updateAnimations()
     end
     updateAllFavoriteIcons()
 end
@@ -1618,46 +1571,6 @@ State.LoadEmotePages = function()
     return loaded
 end
 
-State.LoadAnimationPages = function()
-    local defaultFavorites = {}
-    
-    if isfile(State.favoriteAnimationsFileName) then
-        local ok, decoded = pcall(function() return HttpService:JSONDecode(readfile(State.favoriteAnimationsFileName)) end)
-        if ok and type(decoded) == "table" then
-            defaultFavorites = decoded
-        end
-    end
-
-    local loaded = { Sets = { Default = defaultFavorites }, Order = {"Default"}, Selected = "Default" }
-    
-    if isfile(State.AnimationPagePath) then
-        local success, decoded = pcall(function() return HttpService:JSONDecode(readfile(State.AnimationPagePath)) end)
-        if success and type(decoded) == "table" then
-            local setsTable = decoded.Sets or {}
-            for name, data in pairs(setsTable) do
-                if name ~= "Default" then
-                    loaded.Sets[name] = data
-                end
-            end
-            
-            if decoded.Order then
-                loaded.Order = {"Default"}
-                for _, name in ipairs(decoded.Order) do
-                    if name ~= "Default" and loaded.Sets[name] then
-                        table.insert(loaded.Order, name)
-                    end
-                end
-            end
-            
-            if decoded.Selected and (loaded.Sets[decoded.Selected] or decoded.Selected == "Default") then
-                loaded.Selected = decoded.Selected
-            end
-        end
-    end
-    
-    return loaded
-end
-
 State.EmotePages = State.LoadEmotePages()
 State.currentEmotePageName = State.EmotePages.Selected or "Default"
 if not State.EmotePages.Sets[State.currentEmotePageName] then 
@@ -1670,13 +1583,16 @@ for _, fav in pairs(State.favoriteEmotes) do
     State.favoriteEmoteSet[tostring(fav.id)] = true
 end
 
-State.AnimationPages = State.LoadAnimationPages()
-State.currentAnimationPageName = State.AnimationPages.Selected or "Default"
-if not State.AnimationPages.Sets[State.currentAnimationPageName] then 
-    State.currentAnimationPageName = "Default" 
-end
-
-State.favoriteAnimations = DeepCopy(State.AnimationPages.Sets[State.currentAnimationPageName]) or {}
+State.favoriteAnimations = {}
+pcall(function()
+    if isfile and isfile(State.favoriteAnimationsFileName) then
+        local json = readfile(State.favoriteAnimationsFileName)
+        local decoded = HttpService:JSONDecode(json)
+        if type(decoded) == "table" then
+            State.favoriteAnimations = decoded
+        end
+    end
+end)
 State.favoriteAnimationSet = {}
 for _, fav in pairs(State.favoriteAnimations) do
     State.favoriteAnimationSet[tostring(fav.id)] = true
@@ -2504,7 +2420,10 @@ State.exitCustomAnimationEditor = function()
         State.suppressSearch = true
         if UI.Search then UI.Search.Text = State.animationSearchTerm end
         State.suppressSearch = false
-        State.currentPage = Config.AnimationPage or 1
+        if State.animationSearchTerm ~= "" and searchAnimations then
+            searchAnimations(State.animationSearchTerm)
+        end
+        State.currentPage = State.savedAnimPage
         State.totalPages = calculateTotalPages()
         updatePageDisplay()
         updateEmotes()
@@ -2534,7 +2453,7 @@ State.enterCustomAnimationEditor = function(category, animName)
         State.suppressSearch = true
         if UI.Search then UI.Search.Text = State.animationSearchTerm end
         State.suppressSearch = false
-        State.currentPage = Config.AnimationPage or 1
+        State.currentPage = State.savedAnimPage
         State.totalPages = calculateTotalPages()
         updatePageDisplay()
         updateEmotes()
@@ -2560,7 +2479,10 @@ State.enterCustomAnimationEditor = function(category, animName)
                 State.suppressSearch = true
                 if UI.Search then UI.Search.Text = State.animationSearchTerm end
                 State.suppressSearch = false
-                State.currentPage = Config.AnimationPage or 1
+                if State.animationSearchTerm ~= "" and searchAnimations then
+                    searchAnimations(State.animationSearchTerm)
+                end
+                State.currentPage = State.savedAnimPage
                 State.totalPages = calculateTotalPages()
                 updatePageDisplay()
                 updateEmotes()
@@ -3046,10 +2968,6 @@ function GetEmotePageNames()
     return State.EmotePages.Order
 end
 
-function GetAnimationPageNames()
-    return State.AnimationPages.Order
-end
-
 SettingsLib.AddItem(State.PageTab, "Page Profiles", "Pages allow you to save different favorite sets. Switch pages to quickly change your favorite wheel loadout.")
 
 SettingsLib.AddItem(State.PageTab, "Emote Profiles", "Manage your favorite emote profiles")
@@ -3205,156 +3123,6 @@ SettingsLib.AddIconButton(EmotePageMgtContainer, "78317476576895", function()
 end)
 
 SettingsLib.AddItem(State.PageTab, "Animation Profiles", "Manage your favorite animation profiles")
-
-State.AnimationPageDropdown = SettingsLib.AddDropdown(State.PageTab, "Select Animation Page", GetAnimationPageNames(), State.currentAnimationPageName, function(v)
-    SwitchAnimationPage(v)
-    State.SaveAnimationPages(State.AnimationPages)
-end)
-
-local AnimPageMgtItem = SettingsLib.AddItem(State.PageTab, "Animation Page Management", " ")
-AnimPageMgtItem.BackgroundColor3 = Color3.fromRGB(35, 38, 42)
-AnimPageMgtItem.Size = UDim2.new(0.95, 0, 0, 70)
-for _, v in pairs(AnimPageMgtItem:GetChildren()) do if v.Name == "Title" or v.Name == "Desc" then v:Destroy() end end
-
-local AnimPageMgtContainer = Instance.new("Frame")
-AnimPageMgtContainer.Parent = AnimPageMgtItem
-AnimPageMgtContainer.BackgroundTransparency = 1
-AnimPageMgtContainer.Size = UDim2.new(1, 0, 1, 0)
-
-local AnimPageLayout = Instance.new("UIListLayout")
-AnimPageLayout.FillDirection = Enum.FillDirection.Horizontal
-AnimPageLayout.Padding = UDim.new(0, 15)
-AnimPageLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-AnimPageLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-AnimPageLayout.Parent = AnimPageMgtContainer
-
-SettingsLib.AddIconButton(AnimPageMgtContainer, "108445456753346", function() 
-    local popup, content = CreatePopup("Create Animation Page")
-    local In = CreateInput(content, "Page Name...")
-    local Save = CreateButton(content, "SAVE", (State.EmoteTheme and State.EmoteTheme.Accent) or Color3.fromRGB(0, 255, 150), UDim2.new(0.05, 0, 0.6, 0))
-    local Cancel = CreateButton(content, "CANCEL", Color3.fromRGB(50, 50, 50), UDim2.new(0.55, 0, 0.6, 0))
-    Save.MouseButton1Click:Connect(function()
-        if In.Text ~= "" and not State.AnimationPages.Sets[In.Text] then
-            State.AnimationPages.Sets[In.Text] = {}
-            table.insert(State.AnimationPages.Order, In.Text)
-            table.sort(State.AnimationPages.Order, function(a, b)
-                if a == "Default" then return true end
-                if b == "Default" then return false end
-                return a:lower() < b:lower()
-            end)
-            State.SaveAnimationPages(State.AnimationPages)
-            if State.AnimationPageDropdown then State.AnimationPageDropdown.Refresh(GetAnimationPageNames()) end
-            SwitchAnimationPage(In.Text)
-            if State.AnimationPageDropdown then State.AnimationPageDropdown.Button.Text = State.currentAnimationPageName .. "  ▼" end
-            popup:Destroy()
-        end
-    end)
-    Cancel.MouseButton1Click:Connect(function() popup:Destroy() end)
-end)
-
-SettingsLib.AddIconButton(AnimPageMgtContainer, "71829270056766", function()
-    if State.currentAnimationPageName ~= "Default" then
-        local idx = table.find(State.AnimationPages.Order, State.currentAnimationPageName)
-        if idx then table.remove(State.AnimationPages.Order, idx) end
-        State.AnimationPages.Sets[State.currentAnimationPageName] = nil
-        State.currentAnimationPageName = "Default"
-        State.AnimationPages.Selected = "Default"
-        State.SaveAnimationPages(State.AnimationPages)
-        if State.AnimationPageDropdown then
-            State.AnimationPageDropdown.Refresh(GetAnimationPageNames())
-            State.AnimationPageDropdown.Button.Text = "Default  ▼"
-        end
-        SwitchAnimationPage("Default")
-    end
-end)
-
-SettingsLib.AddIconButton(AnimPageMgtContainer, "117761881427472", function()
-    if State.currentAnimationPageName == "Default" then return end
-    local popup, content = CreatePopup("Rename Animation Page")
-    local In = CreateInput(content, "New Name...", State.currentAnimationPageName)
-    local Save = CreateButton(content, "RENAME", (State.EmoteTheme and State.EmoteTheme.Accent) or Color3.fromRGB(0, 255, 150), UDim2.new(0.05, 0, 0.6, 0))
-    local Cancel = CreateButton(content, "CANCEL", Color3.fromRGB(50, 50, 50), UDim2.new(0.55, 0, 0.6, 0))
-    Save.MouseButton1Click:Connect(function()
-        if In.Text ~= "" and not State.AnimationPages.Sets[In.Text] then
-            local idx = table.find(State.AnimationPages.Order, State.currentAnimationPageName)
-            if idx then State.AnimationPages.Order[idx] = In.Text end
-            State.AnimationPages.Sets[In.Text] = State.AnimationPages.Sets[State.currentAnimationPageName]
-            State.AnimationPages.Sets[State.currentAnimationPageName] = nil
-            State.currentAnimationPageName = In.Text
-            State.AnimationPages.Selected = In.Text
-            State.SaveAnimationPages(State.AnimationPages)
-            if State.AnimationPageDropdown then
-                State.AnimationPageDropdown.Refresh(GetAnimationPageNames())
-                State.AnimationPageDropdown.Button.Text = State.currentAnimationPageName .. "  ▼"
-            end
-            popup:Destroy()
-        end
-    end)
-    Cancel.MouseButton1Click:Connect(function() popup:Destroy() end)
-end)
-
-SettingsLib.AddIconButton(AnimPageMgtContainer, "107588515524752", function()
-    local currentSet = State.AnimationPages.Sets[State.currentAnimationPageName]
-    local data = { Type = "AnimationPageSet", Name = State.currentAnimationPageName, Data = currentSet }
-    local json = HttpService:JSONEncode(data)
-    local popup, content = CreatePopup("Export Animation Page", UDim2.fromOffset(320, 240))
-    local box = CreateInput(content, "", json, true)
-    box.Size = UDim2.new(0.9, 0, 0, 130)
-    box.TextEditable = false
-    local copy = CreateButton(content, "COPY TO CLIPBOARD", (State.EmoteTheme and State.EmoteTheme.Accent) or Color3.fromRGB(0, 255, 150), UDim2.new(0.05, 0, 0.8, 0), UDim2.new(0.9, 0, 0, 35))
-    copy.MouseButton1Click:Connect(function()
-        setclipboard(json)
-        copy.Text = "COPIED!"
-        task.delay(1, function() copy.Text = "COPY TO CLIPBOARD" end)
-    end)
-    local close = Instance.new("TextButton")
-    close.Size = UDim2.fromOffset(24, 24)
-    close.Position = UDim2.new(1, -30, 0, 5)
-    close.Text = "×"
-    close.Font = Enum.Font.GothamBold
-    close.TextSize = 20
-    close.BackgroundTransparency = 1
-    close.TextColor3 = Color3.new(1,1,1)
-    close.Parent = popup
-    close.MouseButton1Click:Connect(function() popup:Destroy() end)
-end)
-
-SettingsLib.AddIconButton(AnimPageMgtContainer, "78317476576895", function()
-    local popup, content = CreatePopup("Import Animation Page", UDim2.fromOffset(320, 240))
-    local box = CreateInput(content, "Paste Animation Page JSON here...", "", true)
-    box.Size = UDim2.new(0.9, 0, 0, 130)
-    local imp = CreateButton(content, "IMPORT DATA", (State.EmoteTheme and State.EmoteTheme.Accent) or Color3.fromRGB(0, 255, 150), UDim2.new(0.05, 0, 0.8, 0), UDim2.new(0.9, 0, 0, 35))
-    imp.MouseButton1Click:Connect(function()
-        local s, d = pcall(function() return HttpService:JSONDecode(box.Text) end)
-        if s and type(d) == "table" and d.Type == "AnimationPageSet" and type(d.Data) == "table" then
-            local targetName = MakeUniqueSetName(State.AnimationPages.Sets, d.Name or "Imported")
-            State.AnimationPages.Sets[targetName] = d.Data
-            table.insert(State.AnimationPages.Order, targetName)
-            State.currentAnimationPageName = targetName
-            State.AnimationPages.Selected = targetName
-            State.SaveAnimationPages(State.AnimationPages)
-            if State.AnimationPageDropdown then
-                State.AnimationPageDropdown.Refresh(GetAnimationPageNames())
-                State.AnimationPageDropdown.Button.Text = State.currentAnimationPageName .. "  ▼"
-            end
-            SwitchAnimationPage(targetName)
-            popup:Destroy()
-            getgenv().Notify({ Title = "7yd7 | Page", Content = "✅ Imported Animation page", Duration = 3 })
-        else
-            getgenv().Notify({ Title = "Error", Content = "Invalid Animation Page JSON", Duration = 3 })
-        end
-    end)
-    local close = Instance.new("TextButton")
-    close.Size = UDim2.fromOffset(24, 24)
-    close.Position = UDim2.new(1, -30, 0, 5)
-    close.Text = "×"
-    close.Font = Enum.Font.GothamBold
-    close.TextSize = 20
-    close.BackgroundTransparency = 1
-    close.TextColor3 = Color3.new(1,1,1)
-    close.Parent = popup
-    close.MouseButton1Click:Connect(function() popup:Destroy() end)
-end)
 
 
 local BackupTab = SettingsLib.CreateTab("Backup", 6)
@@ -5078,12 +4846,6 @@ updatePageDisplay = function()
         UI._4pages.Text = tostring(State.totalPages)
         UI._2Routenumber.Text = tostring(State.currentPage)
     end
-    if State.currentMode == "animation" then
-        Config.AnimationPage = State.currentPage
-    else
-        Config.EmotePage = State.currentPage
-    end
-    SaveConfig()
 end
 
 
@@ -5165,8 +4927,10 @@ toggleFavoriteAnimation = function(animationData)
 
     State.favoriteSetVersion = State.favoriteSetVersion + 1
     
-    State.AnimationPages.Sets[State.currentAnimationPageName] = DeepCopy(State.favoriteAnimations)
-    State.SaveAnimationPages(State.AnimationPages)
+    pcall(function()
+        if not isfolder("7yd7") then makefolder("7yd7") end
+        writefile(State.favoriteAnimationsFileName, HttpService:JSONEncode(State.favoriteAnimations))
+    end)
 
     State.totalPages = calculateTotalPages()
     updatePageDisplay()
@@ -5879,67 +5643,75 @@ function fetchAllAnimations()
     finalize()
 
     task.spawn(function()
-        while true do
-            local success, result = pcall(function()
-                local jsonContent = game:HttpGet("https://raw.githubusercontent.com/7yd7/sniper-Emote/refs/heads/test/AnimationSniper.json")
+        local success, result = pcall(function()
+            local jsonContent = game:HttpGet("https://raw.githubusercontent.com/7yd7/sniper-Emote/refs/heads/test/AnimationSniper.json")
+            if jsonContent and jsonContent ~= "" then
+                local data = HttpService:JSONDecode(jsonContent)
+                return data.data or {}
+            end
+            return nil
+        end)
+
+        local offsaleSuccess, offsaleResult
+        if offsaleAnimationJson then
+            offsaleSuccess, offsaleResult = pcall(function()
+                local jsonContent = game:HttpGet("https://raw.githubusercontent.com/7yd7/sniper-Emote/refs/heads/test/AnimationSniperoffsale.json")
                 if jsonContent and jsonContent ~= "" then
                     local data = HttpService:JSONDecode(jsonContent)
                     return data.data or {}
                 end
                 return nil
             end)
+        end
 
-            local offsaleSuccess, offsaleResult
-            if offsaleAnimationJson then
-                offsaleSuccess, offsaleResult = pcall(function()
-                    local jsonContent = game:HttpGet("https://raw.githubusercontent.com/7yd7/sniper-Emote/refs/heads/test/AnimationSniperoffsale.json")
-                    if jsonContent and jsonContent ~= "" then
-                        local data = HttpService:JSONDecode(jsonContent)
-                        return data.data or {}
-                    end
-                    return nil
-                end)
-            end
+        if success or offsaleSuccess then
+            local animationsData = {}
+            local seenIds = {}
 
-            if success or offsaleSuccess then
-                local animationsData = {}
-                local seenIds = {}
-
-                if success and result then
-                    for _, item in pairs(result) do
-                        local id = tonumber(item.id)
-                        if id and id > 0 then
-                            seenIds[id] = true
-                            table.insert(animationsData, {
-                                id = id,
-                                name = item.name or ("Animation_" .. id),
-                                bundledItems = item.bundledItems
-                            })
-                        end
+            if success and result then
+                for _, item in pairs(result) do
+                    local id = tonumber(item.id)
+                    if id and id > 0 then
+                        seenIds[id] = true
+                        table.insert(animationsData, {
+                            id = id,
+                            name = item.name or ("Animation_" .. id),
+                            bundledItems = item.bundledItems
+                        })
                     end
                 end
-
-                if offsaleSuccess and offsaleResult then
-                    for _, item in pairs(offsaleResult) do
-                        local id = tonumber(item.id)
-                        if id and id > 0 and not seenIds[id] then
-                            seenIds[id] = true
-                            table.insert(animationsData, {
-                                id = id,
-                                name = item.name or ("Animation_Offsale_" .. id),
-                                bundledItems = item.bundledItems
-                            })
-                        end
-                    end
-                end
-
-                State.animationsData = animationsData
-                processCustomSets()
-                finalize()
-                return
             end
 
-            task.wait(3)
+            if offsaleSuccess and offsaleResult then
+                for _, item in pairs(offsaleResult) do
+                    local id = tonumber(item.id)
+                    if id and id > 0 and not seenIds[id] then
+                        seenIds[id] = true
+                        table.insert(animationsData, {
+                            id = id,
+                            name = item.name or ("Animation_Offsale_" .. id),
+                            bundledItems = item.bundledItems
+                        })
+                    end
+                end
+            end
+
+            local prevMode = State.currentMode
+            State.animationsData = animationsData
+            processCustomSets()
+            finalize()
+            State.totalPages = calculateTotalPages()
+            if State.currentPage > State.totalPages then
+                State.currentPage = State.totalPages
+            end
+            if prevMode == "animation" then
+                if State.animationSearchTerm ~= "" and searchAnimations then
+                    searchAnimations(State.animationSearchTerm)
+                else
+                    updatePageDisplay()
+                    updateAnimations()
+                end
+            end
         end
     end)
 end
@@ -6704,13 +6476,17 @@ function connectEvents()
                 end
                 
                 if State.currentMode == "emote" then
+                    State.savedEmotePage = State.currentPage
                     State.currentMode = "animation"
                     
                     local function applyAnimationModeUI()
                         State.suppressSearch = true
                         UI.Search.Text = State.animationSearchTerm
                         State.suppressSearch = false
-                        State.currentPage = Config.AnimationPage or 1
+                        if State.animationSearchTerm ~= "" then
+                            searchAnimations(State.animationSearchTerm)
+                        end
+                        State.currentPage = State.savedAnimPage
                         State.totalPages = calculateTotalPages()
                         updatePageDisplay()
                         updateEmotes() 
@@ -6741,12 +6517,16 @@ function connectEvents()
                     })
 
                 else
+                    State.savedAnimPage = State.currentPage
                     State.currentMode = "emote"
                     clearCustomHitboxes()
                     State.suppressSearch = true
                     UI.Search.Text = State.emoteSearchTerm
                     State.suppressSearch = false
-                    State.currentPage = Config.EmotePage or 1
+                    if State.emoteSearchTerm ~= "" and searchEmotes then
+                        searchEmotes(State.emoteSearchTerm)
+                    end
+                    State.currentPage = State.savedEmotePage
                     State.totalPages = calculateTotalPages()
                     updatePageDisplay() 
                     updateEmotes()
@@ -8605,6 +8385,7 @@ end)
 task.spawn(function()
     loadFavoritesAnimations()
     fetchAllEmotes()
+    fetchAllAnimations()
     loadSpeedEmoteConfig()
 end)
 
