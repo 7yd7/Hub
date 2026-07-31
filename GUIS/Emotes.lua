@@ -3369,7 +3369,10 @@ function HandleImportPrompt(typeStr)
                 if State.RefreshSettingsUI then State.RefreshSettingsUI() end
             end
             if (d.Favorites or d.EmotePages) and (typeStr == "All" or typeStr == "Favorites") then
-                local emotesData = d.EmotePages or d.Favorites.Emotes
+                local emotesData = d.EmotePages
+                if not emotesData and type(d.Favorites) == "table" then
+                    emotesData = d.Favorites.EmotePages or d.Favorites.Emotes
+                end
                 if emotesData then
                     if emotesData.Sets then
                         State.EmotePages = emotesData
@@ -3377,7 +3380,9 @@ function HandleImportPrompt(typeStr)
                         State.EmotePages.Sets.Default = emotesData
                     end
                     State.SaveEmotePages(State.EmotePages)
-                    SwitchEmotePage(State.currentEmotePageName)
+                    local targetPage = State.EmotePages.Selected
+                    if not State.EmotePages.Sets[targetPage] then targetPage = "Default" end
+                    SwitchEmotePage(targetPage)
                 end
                 
                 if d.Favorites and d.Favorites.Animations then
