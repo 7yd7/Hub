@@ -3417,10 +3417,6 @@ BtnImportThemes.MouseButton1Click:Connect(function() HandleImportPrompt("Themes"
 BtnImportSettings.MouseButton1Click:Connect(function() HandleImportPrompt("Settings") end)
 BtnImportFavorites.MouseButton1Click:Connect(function() HandleImportPrompt("Favorites") end)
 
-pcall(function()
-    SafeLoad("https://raw.githubusercontent.com/7yd7/Hub/Branch/GUIS/count-emote", "Count Emote")
-end)
-
 getgenv().Notify({
     Title = '7yd7 | Emote',
     Content = '⚠️ Script loading...',
