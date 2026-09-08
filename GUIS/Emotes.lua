@@ -89,6 +89,7 @@ local State = {
     enabledButtonImage = "rbxassetid://106798555684020",
     favoriteIconId = "rbxassetid://97307461910825",
     notFavoriteIconId = "rbxassetid://124025954365505",
+    toolEquipped = false,
     EmoteTheme = nil,
     isApplyingTheme = false,
     targetImages = {},
@@ -586,13 +587,16 @@ AnimationSystem.StartGif = function(img, data)
     local cols = data.cols or 1
     local rows = data.rows or 1
     local delay = data.delay or 0.1
+    if delay <= 0 then delay = 0.1 end
     local sheetW = data.sheetW or (cols * frameW)
     local sheetH = data.sheetH or (rows * frameH)
     
     img.Image = data.sprite
     img.ImageRectSize = Vector2.new(frameW, frameH)
     img.ImageRectOffset = Vector2.new(0, 0)
-    pcall(function() ContentProvider:PreloadAsync({img}) end)
+    task.spawn(function()
+        pcall(function() ContentProvider:PreloadAsync({img}) end)
+    end)
     
     local current = 0
     local acc = 0
@@ -602,10 +606,16 @@ AnimationSystem.StartGif = function(img, data)
             connection:Disconnect()
             return
         end
+        if not img or not img.Parent then
+            connection:Disconnect()
+            return
+        end
         acc = acc + dt
         if acc < delay then return end
-        acc = 0
-        current = (current + 1) % frames
+        while acc >= delay do
+            acc = acc - delay
+            current = (current + 1) % frames
+        end
         local col = current % cols
         local row = math.floor(current / cols)
         local offsetX = math.min(col * frameW, math.max(0, sheetW - frameW))
@@ -689,7 +699,53 @@ end
 
 SafeLoad("https://raw.githubusercontent.com/7yd7/Menu-7yd7/refs/heads/Script/GUIS/Off-site/Notify.lua", "Notify System")
 
-function GetAsset(asset)
+local function getAssetCustom(filePath)
+    if not filePath or filePath == "" then return nil end
+    local customFn = getcustomasset or getsynasset
+    if customFn then
+        local ok, res = pcall(customFn, filePath)
+        if ok and res and res ~= "" then
+            return res
+        end
+    end
+    return nil
+end
+
+local function fetchBinary(url)
+    if not url or url == "" then return nil end
+    local targetUrl = AnimationSystem.NormalizeUrl(url)
+    
+    if request then
+        local ok, res = pcall(function()
+            return request({
+                Url = targetUrl,
+                Method = "GET",
+                Headers = {
+                    ["User-Agent"] = "Roblox/WinInet"
+                }
+            })
+        end)
+        if ok and res and (res.StatusCode == 200 or res.Status == 200) and res.Body and #res.Body > 0 then
+            local low = res.Body:sub(1, 100):lower()
+            if not (low:find("<!doctype") or low:find("<html") or low:find("<head")) then
+                return res.Body
+            end
+        end
+    end
+
+    local ok, body = pcall(function()
+        return game:HttpGet(targetUrl)
+    end)
+    if ok and body and #body > 0 then
+        local low = body:sub(1, 100):lower()
+        if not (low:find("<!doctype") or low:find("<html") or low:find("<head")) then
+            return body
+        end
+    end
+    return nil
+end
+
+function GetAsset(asset, preloadedBytes)
     if not asset or asset == "" then return "" end
     local assetStr = tostring(asset)
     
@@ -721,36 +777,32 @@ function GetAsset(asset)
         
         local path = "7yd7/Assets/" .. filename
         
-        if isfile(path) then
-            local success, result = pcall(function() return getcustomasset(path) end)
-            if success and result then
-                _G.AssetCache[assetStr] = result
-                return result
+        if isfile and isfile(path) then
+            local res = getAssetCustom(path)
+            if res and res ~= "" then
+                _G.AssetCache[assetStr] = res
+                return res
             end
-        else
-            if not isfolder("7yd7/Assets") then 
-                pcall(function()
-                    if not isfolder("7yd7") then makefolder("7yd7") end
-                    makefolder("7yd7/Assets") 
-                end)
-            end
+        end
+
+        if not isfolder("7yd7/Assets") then 
+            pcall(function()
+                if not isfolder("7yd7") then makefolder("7yd7") end
+                makefolder("7yd7/Assets") 
+            end)
+        end
+        
+        local content = preloadedBytes or fetchBinary(targetUrl)
+        if content and #content > 0 then
+            pcall(function() writefile(path, content) end)
             
-            local success, content = pcall(function() return game:HttpGet(targetUrl) end)
-            if success and content and content ~= "" then
-                local low = content:sub(1, 100):lower()
-                if low:find("<!doctype") or low:find("<html") or low:find("<head") then
-                    warn("7yd7 | GetAsset: Downloaded content appears to be HTML. Link might be incorrect: " .. targetUrl)
-                    return ""
+            for attempt = 1, 4 do
+                local res = getAssetCustom(path)
+                if res and res ~= "" then
+                    _G.AssetCache[assetStr] = res
+                    return res
                 end
-                
-                pcall(function() writefile(path, content) end)
-                task.wait(0.2) 
-                
-                local s, result = pcall(function() return getcustomasset(path) end)
-                if s and result then
-                    _G.AssetCache[assetStr] = result
-                    return result
-                end
+                task.wait(0.08)
             end
         end
     end
@@ -1045,6 +1097,235 @@ TogglesUI.RandomEnabled = SettingsLib.AddToggle(GeneralTab, "Random Enabled", "E
     updatePageDisplay()
     updateEmotes()
     SaveConfig()
+end)
+
+local CleanFavItem = SettingsLib.AddItem(GeneralTab, "Clean Deleted Favorites", "Scan all favorites (emotes + animations) and remove any that were deleted (click twice)")
+CleanFavItem.LayoutOrder = 10
+local CleanFavBtn = SettingsLib:Create("TextButton", {
+    Parent = CleanFavItem,
+    BackgroundColor3 = Color3.fromRGB(220, 60, 60),
+    Position = UDim2.new(1, -90, 0.5, -12),
+    Size = UDim2.new(0, 80, 0, 24),
+    Font = Enum.Font.GothamBold,
+    Text = "CLEAN",
+    TextColor3 = Color3.new(1, 1, 1),
+    TextSize = 11
+}, { SettingsLib:Create("UICorner", {CornerRadius = UDim.new(0, 6)}) })
+
+local cleanFavConfirm = false
+local cleanFavConfirmConn = nil
+local cleanFavCleaning = false
+
+local function resetCleanButton()
+    cleanFavConfirm = false
+    if cleanFavConfirmConn then
+        pcall(function() cleanFavConfirmConn:Cancel() end)
+        cleanFavConfirmConn = nil
+    end
+    if CleanFavBtn and CleanFavBtn.Parent then
+        CleanFavBtn.Text = "CLEAN"
+        CleanFavBtn.BackgroundColor3 = Color3.fromRGB(220, 60, 60)
+    end
+end
+
+local cleanDeletedFavorites
+
+cleanDeletedFavorites = function()
+    if cleanFavCleaning then return end
+    cleanFavCleaning = true
+
+    local emoteIds = {}
+    local animIds = {}
+
+    local emotePages = (State.EmotePages and State.EmotePages.Sets) or {}
+    for _, favList in pairs(emotePages) do
+        if type(favList) == "table" then
+            for _, fav in ipairs(favList) do
+                if fav and fav.id and tonumber(fav.id) and tonumber(fav.id) > 0 then
+                    emoteIds[tostring(fav.id)] = true
+                end
+            end
+        end
+    end
+
+    for _, fav in ipairs(State.favoriteAnimations or {}) do
+        if fav and fav.id and not fav.isCustomSet and tonumber(fav.id) and tonumber(fav.id) > 0 then
+            animIds[tostring(fav.id)] = true
+        end
+    end
+
+    local emoteIdList = {}
+    for id in pairs(emoteIds) do table.insert(emoteIdList, id) end
+    local animIdList = {}
+    for id in pairs(animIds) do table.insert(animIdList, id) end
+
+    local totalChecks = #emoteIdList + #animIdList
+    if totalChecks == 0 then
+        getgenv().Notify({ Title = "7yd7 | Clean", Content = "No favorites to check!", Duration = 3 })
+        cleanFavCleaning = false
+        resetCleanButton()
+        return
+    end
+
+    getgenv().Notify({ Title = "7yd7 | Clean", Content = "Checking " .. totalChecks .. " favorites...", Duration = 3 })
+
+    local deletedEmotes = {}
+    local deletedAnims = {}
+    local checked = 0
+
+    local function updateProgress()
+        if CleanFavBtn and CleanFavBtn.Parent then
+            CleanFavBtn.Text = math.floor((checked / totalChecks) * 100) .. "%"
+        end
+    end
+
+    local function checkBatch(ids, isBundle, deletedOut)
+        local url
+        if isBundle then
+            url = "https://thumbnails.roblox.com/v1/bundles/thumbnails?bundleIds=" .. table.concat(ids, ",") .. "&size=420x420&format=Png"
+        else
+            url = "https://thumbnails.roblox.com/v1/assets?assetIds=" .. table.concat(ids, ",") .. "&size=420x420&format=Png"
+        end
+        local body = fetchBinary(url)
+        local parsed = nil
+        if body and #body > 0 then
+            pcall(function()
+                parsed = HttpService:JSONDecode(body)
+            end)
+        end
+        if parsed and parsed.data and type(parsed.data) == "table" then
+            for _, entry in ipairs(parsed.data) do
+                local targetId = tostring(entry.targetId)
+                if entry.state == "Blocked" or entry.state == "Error" or not entry.imageUrl or entry.imageUrl == "" then
+                    deletedOut[targetId] = true
+                end
+            end
+        end
+        task.wait(0.05)
+    end
+
+    local BATCH = 50
+    for i = 1, #emoteIdList, BATCH do
+        local chunk = {}
+        for j = i, math.min(i + BATCH - 1, #emoteIdList) do table.insert(chunk, emoteIdList[j]) end
+        checkBatch(chunk, false, deletedEmotes)
+        checked = checked + #chunk
+        updateProgress()
+    end
+    for i = 1, #animIdList, BATCH do
+        local chunk = {}
+        for j = i, math.min(i + BATCH - 1, #animIdList) do table.insert(chunk, animIdList[j]) end
+        checkBatch(chunk, true, deletedAnims)
+        checked = checked + #chunk
+        updateProgress()
+    end
+
+    local removedEmotes = 0
+    for pageName, favList in pairs(emotePages) do
+        if type(favList) == "table" then
+            local newList = {}
+            for _, fav in ipairs(favList) do
+                if fav and fav.id and deletedEmotes[tostring(fav.id)] then
+                    removedEmotes = removedEmotes + 1
+                else
+                    table.insert(newList, fav)
+                end
+            end
+            State.EmotePages.Sets[pageName] = newList
+        end
+    end
+
+    local removedAnims = 0
+    local newAnims = {}
+    for _, fav in ipairs(State.favoriteAnimations or {}) do
+        if fav and fav.id and not fav.isCustomSet and deletedAnims[tostring(fav.id)] then
+            removedAnims = removedAnims + 1
+        else
+            table.insert(newAnims, fav)
+        end
+    end
+    State.favoriteAnimations = newAnims
+
+    State.favoriteEmotes = DeepCopy(State.EmotePages.Sets[State.currentEmotePageName] or {}) or {}
+    State.favoriteEmoteSet = {}
+    for _, fav in pairs(State.favoriteEmotes) do
+        State.favoriteEmoteSet[tostring(fav.id)] = true
+    end
+    State.favoriteAnimationSet = {}
+    for _, fav in pairs(State.favoriteAnimations) do
+        State.favoriteAnimationSet[tostring(fav.id)] = true
+    end
+    State.favoriteSetVersion = State.favoriteSetVersion + 1
+
+    State.SaveEmotePages(State.EmotePages)
+    pcall(function()
+        if not isfolder("7yd7") then makefolder("7yd7") end
+        writefile(State.favoriteAnimationsFileName, HttpService:JSONEncode(State.favoriteAnimations))
+    end)
+
+    _G.filteredFavoritesForDisplay = nil
+    _G.filteredFavoritesAnimationsForDisplay = nil
+
+    State.totalPages = calculateTotalPages()
+    if State.currentPage > State.totalPages then
+        State.currentPage = State.totalPages
+    end
+    updatePageDisplay()
+    if State.currentMode == "animation" then
+        updateAnimations()
+    else
+        updateEmotes()
+    end
+    updateAllFavoriteIcons()
+
+    for _, fav in pairs(State.favoriteEmotes) do
+        if fav and fav.id then
+            preloadThumbnail("rbxthumb://type=Asset&id=" .. tostring(fav.id) .. "&w=420&h=420")
+        end
+    end
+    for _, fav in pairs(State.favoriteAnimations) do
+        if fav and fav.id and not fav.isCustomSet then
+            preloadThumbnail("rbxthumb://type=BundleThumbnail&id=" .. tostring(fav.id) .. "&w=420&h=420")
+        end
+    end
+
+    local cleanUpToken = State.imageUpdateToken
+    task.delay(0.35, function()
+        if State.imageUpdateToken ~= cleanUpToken then return end
+        updatePageDisplay()
+        if State.currentMode == "animation" then
+            updateAnimations()
+        else
+            updateEmotes()
+        end
+        updateAllFavoriteIcons()
+    end)
+
+    getgenv().Notify({
+        Title = "7yd7 | Cleaned",
+        Content = "Removed " .. removedEmotes .. " deleted emote" .. (removedEmotes == 1 and "" or "s") .. " & " .. removedAnims .. " deleted animation" .. (removedAnims == 1 and "" or "s"),
+        Duration = 5
+    })
+    cleanFavCleaning = false
+    resetCleanButton()
+end
+
+CleanFavBtn.MouseButton1Click:Connect(function()
+    if cleanFavCleaning then return end
+    if not cleanFavConfirm then
+        cleanFavConfirm = true
+        CleanFavBtn.Text = "CONFIRM?"
+        CleanFavBtn.BackgroundColor3 = Color3.fromRGB(255, 140, 30)
+        if cleanFavConfirmConn then
+            pcall(function() cleanFavConfirmConn:Cancel() end)
+        end
+        cleanFavConfirmConn = task.delay(3, resetCleanButton)
+        return
+    end
+    resetCleanButton()
+    CleanFavBtn.Text = "0%"
+    CleanFavBtn.BackgroundColor3 = Color3.fromRGB(0, 180, 90)
+    task.spawn(cleanDeletedFavorites)
 end)
 
 local ButtonsTab = SettingsLib.CreateTab("Buttons", 2)
@@ -1667,21 +1948,18 @@ function ApplyWheelBackgroundImage(bgImg, wheel)
     if sheetUrl then sheetUrl = AnimationSystem.NormalizeUrl(sheetUrl) end
  
     if gifUrl and sheetUrl and sheetUrl ~= "" then
+        if gifUrl:lower():find("%.png") and (sheetUrl:lower():find("%.gif") or sheetUrl:lower():find("format=gif")) then
+            local temp = gifUrl
+            gifUrl = sheetUrl
+            sheetUrl = temp
+        end
+
         local cacheKey = AnimationSystem.MakeKey(gifUrl, sheetUrl)
         local meta = wheel.Animation
         if meta and meta.GifUrl == gifUrl and meta.SheetUrl == sheetUrl then
             AnimationSystem.Cache[cacheKey] = meta
         else
             meta = AnimationSystem.Cache[cacheKey]
-        end
- 
-        if meta and meta.Enabled == false then
-            AnimationSystem.StopGif()
-            AnimationSystem.SetImageMode(bgImg, false)
-            bgImg.Image = DEFAULT_WHEEL_BG
-            bgImg.ImageRectSize = Vector2.new(0, 0)
-            bgImg.ImageRectOffset = Vector2.new(0, 0)
-            return
         end
  
         if meta and meta.Enabled == true then
@@ -1696,7 +1974,7 @@ function ApplyWheelBackgroundImage(bgImg, wheel)
                 local rawSheetW = tonumber(meta.SheetWidth) or (cols * frameW)
                 local rawSheetH = tonumber(meta.SheetHeight) or (rows * frameH)
                 local sheetAsset = GetAsset(sheetUrl)
-                if sheetAsset and sheetAsset ~= "" then
+                if sheetAsset and sheetAsset ~= "" and not sheetAsset:find("^https?://") then
                     local resizedW, resizedH = estimateRobloxResizedSize(rawSheetW, rawSheetH)
                     local adjFrameW = frameW * (resizedW / rawSheetW)
                     local adjFrameH = frameH * (resizedH / rawSheetH)
@@ -1719,19 +1997,15 @@ function ApplyWheelBackgroundImage(bgImg, wheel)
             end
         end
 
-        bgImg.Image = DEFAULT_WHEEL_BG
-        bgImg.ImageRectSize = Vector2.new(0, 0)
-        bgImg.ImageRectOffset = Vector2.new(0, 0)
-
         task.spawn(function()
-            local okGif, gifBytes = pcall(function() return game:HttpGet(gifUrl) end)
-            local gifInfo = okGif and gifBytes and AnimationSystem.ParseGifInfo(gifBytes) or nil
+            local gifBytes = fetchBinary(gifUrl)
+            local gifInfo = gifBytes and AnimationSystem.ParseGifInfo(gifBytes) or nil
 
-            local okSheet, sheetBytes = pcall(function() return game:HttpGet(sheetUrl) end)
-            local sheetInfo = okSheet and sheetBytes and AnimationSystem.ParsePngInfo(sheetBytes) or nil
-            local sheetAsset = GetAsset(sheetUrl)
+            local sheetBytes = fetchBinary(sheetUrl)
+            local sheetInfo = sheetBytes and AnimationSystem.ParsePngInfo(sheetBytes) or nil
+            local sheetAsset = GetAsset(sheetUrl, sheetBytes)
 
-            if gifInfo and sheetInfo and sheetAsset and sheetAsset ~= "" then
+            if gifInfo and sheetInfo and sheetAsset and sheetAsset ~= "" and not sheetAsset:find("^https?://") then
                 local frameW = gifInfo.width
                 local frameH = gifInfo.height
                 local cols = math.max(1, math.floor(sheetInfo.width / frameW + 0.0001))
@@ -1757,8 +2031,6 @@ function ApplyWheelBackgroundImage(bgImg, wheel)
                     sheetH = resizedH,
                     gifInfo = gifInfo
                 }
-                AnimationSystem.SetImageMode(bgImg, true)
-                AnimationSystem.StartGif(bgImg, spriteData)
 
                 local newMeta = {
                     Enabled = true,
@@ -1773,37 +2045,26 @@ function ApplyWheelBackgroundImage(bgImg, wheel)
                     GifUrl = gifUrl,
                     SheetUrl = sheetUrl
                 }
-                if not AnimationSystem.AreMetaEqual(wheel.Animation, newMeta) then
-                    wheel.Animation = newMeta
-                    AnimationSystem.Cache[cacheKey] = newMeta
-                    if AnimationSystem.currentThemeName and AnimationSystem.currentThemeName ~= "Default" then
-                        SaveThemes(themes)
-                    end
+                wheel.Animation = newMeta
+                AnimationSystem.Cache[cacheKey] = newMeta
+                if AnimationSystem.currentThemeName and AnimationSystem.currentThemeName ~= "Default" then
+                    SaveThemes(themes)
                 end
+
+                AnimationSystem.SetImageMode(bgImg, true)
+                AnimationSystem.StartGif(bgImg, spriteData)
                 return
             else
                 AnimationSystem.StopGif()
-                AnimationSystem.SetImageMode(bgImg, false)
-
-                local newMeta = {
-                    Enabled = false,
-                    FrameWidth = 0,
-                    FrameHeight = 0,
-                    FPS = 10,
-                    Frames = 1,
-                    Cols = 0,
-                    Rows = 0,
-                    GifUrl = gifUrl,
-                    SheetUrl = sheetUrl
-                }
-                if not AnimationSystem.AreMetaEqual(wheel.Animation, newMeta) then
-                    wheel.Animation = newMeta
-                    AnimationSystem.Cache[cacheKey] = newMeta
-                    if AnimationSystem.currentThemeName and AnimationSystem.currentThemeName ~= "Default" then
-                        SaveThemes(themes)
-                    end
+                AnimationSystem.SetImageMode(bgImg, isCustomBg)
+                local fallback = GetAsset(sheetUrl, sheetBytes)
+                if fallback and fallback ~= "" and not fallback:find("^https?://") then
+                    bgImg.Image = fallback
+                else
+                    bgImg.Image = DEFAULT_WHEEL_BG
                 end
-                return
+                bgImg.ImageRectSize = Vector2.new(0, 0)
+                bgImg.ImageRectOffset = Vector2.new(0, 0)
             end
         end)
         return
@@ -1878,13 +2139,26 @@ function ApplyTheme(themeData)
                 if comp then comp.SetValue(iconVal, colorVal) end
             end
 
+            for name, data in pairs(themes) do
+                if data == themeData then
+                    AnimationSystem.currentThemeName = name
+                    break
+                end
+            end
+
             local function applyWheel()
                 pcall(function()
-                    local root = game:GetService("CoreGui"):FindFirstChild("RobloxGui")
+                    local coreGui = game:GetService("CoreGui")
+                    local robloxGui = coreGui:FindFirstChild("RobloxGui")
+                    if not robloxGui then return end
+                    local emotesMenu = robloxGui:FindFirstChild("EmotesMenu")
+                    if not emotesMenu then return end
+                    local children = emotesMenu:FindFirstChild("Children")
+                    local main = children and children:FindFirstChild("Main")
+                    local emotesWheel = main and main:FindFirstChild("EmotesWheel")
+                    local back = emotesWheel and emotesWheel:FindFirstChild("Back")
+                    local root = back and back:FindFirstChild("Background")
                     if not root then return end
-                    root = root:FindFirstChild("EmotesMenu")
-                    if not root then return end
-                    root = root.Children.Main.EmotesWheel.Back.Background
                     
                     local wheel = State.EmoteTheme.Wheel
                     if not wheel then return end
@@ -1922,13 +2196,6 @@ function ApplyTheme(themeData)
                 local imgVal = State.EmoteTheme.Wheel[key] or ""
                 local colorVal = TableToColor(State.EmoteTheme.Wheel[key.."Color"] or {255, 255, 255})
                 if comp then comp.SetValue(imgVal, colorVal) end
-            end
-        end
-        
-        for name, data in pairs(themes) do
-            if data == themeData then
-                AnimationSystem.currentThemeName = name
-                break
             end
         end
     end)
@@ -4189,10 +4456,13 @@ function updateAnimationImages(currentPageAnimations, randomActive)
             local listIndex = randomActive and (i - 1) or i
             local animationData = currentPageAnimations[listIndex]
             if animationData and animationData.id then
-                local image = "rbxthumb://type=BundleThumbnail&id=" .. tostring(animationData.id) .. "&w=420&h=420"
+                local idStr = tostring(animationData.id)
+                local image
                 if IsCustomSetData(animationData) then
                     local customImage = getCustomSetIcon(GetCustomSetName(animationData) or animationData.name)
                     image = GetAsset(customImage)
+                else
+                    image = "rbxthumb://type=BundleThumbnail&id=" .. idStr .. "&w=420&h=420"
                 end
                 newTargetImages[tostring(i)] = image
                 imageMap[tostring(i)] = image
@@ -4447,7 +4717,8 @@ updateEmotes = function()
             local listIndex = randomActive and (i - 1) or i
             local emoteData = currentPageEmotes[listIndex]
             if emoteData and emoteData.id then
-                newTargetImages[tostring(i)] = "rbxthumb://type=Asset&id=" .. tostring(emoteData.id) .. "&w=420&h=420"
+                local idStr = tostring(emoteData.id)
+                newTargetImages[tostring(i)] = "rbxthumb://type=Asset&id=" .. idStr .. "&w=420&h=420"
             else
                 newTargetImages[tostring(i)] = ""
             end
@@ -4515,8 +4786,67 @@ function isGivenAnimation(animationHolder, animationId)
     return false
 end
 
+local function isToolAnimation(animationTrack)
+    local animation = animationTrack and animationTrack.Animation
+    if not animation then return false end
+    local current = animation.Parent
+    while current do
+        if current:IsA("Tool") then
+            return true
+        end
+        current = current.Parent
+    end
+    return false
+end
+
+local function findAnimationInDescendants(folder, animationId)
+    if not folder then return false end
+    for _, obj in ipairs(folder:GetDescendants()) do
+        if obj:IsA("Animation") and urlToId(obj.AnimationId) == animationId then
+            return true
+        end
+    end
+    return false
+end
+
+local toolAnimationIds = {}
+
+local function refreshToolAnimationIds()
+    local newSet = {}
+    local function addFrom(container)
+        if not container then return end
+        for _, tool in ipairs(container:GetChildren()) do
+            if tool:IsA("Tool") then
+                for _, obj in ipairs(tool:GetDescendants()) do
+                    if obj:IsA("Animation") then
+                        local animId = urlToId(obj.AnimationId)
+                        if animId ~= "" and animId ~= "0" then
+                            newSet[animId] = true
+                        end
+                    end
+                end
+            end
+        end
+    end
+    addFrom(player.Character)
+    addFrom(player.Backpack)
+    toolAnimationIds = newSet
+end
+
 function isDancing(character, animationTrack)
+    if not character or not character.Animate or not animationTrack or not animationTrack.Animation then
+        return false
+    end
+    if isToolAnimation(animationTrack) then
+        return false
+    end
     local animationId = urlToId(animationTrack.Animation.AnimationId)
+    if toolAnimationIds[animationId] then
+        return false
+    end
+    if findAnimationInDescendants(character.Animate:FindFirstChild("Tools"), animationId) then
+        return false
+    end
     for _, animationHolder in character.Animate:GetChildren() do
         if animationHolder:IsA("StringValue") then
             local sharesAnimationId = isGivenAnimation(animationHolder, animationId)
@@ -6037,14 +6367,30 @@ function onCharacterAdded(character)
                 task.wait(0.01)
                 if not character or not character.Parent or not humanoid then break end
                 local mappings = State.AnimationCache[cacheKey]
+                if not mappings and lastAnim.isCustomSet then
+                    mappings = buildCustomSetMappings(GetCustomSetName and GetCustomSetName(lastAnim) or lastAnim.name)
+                end
                 if mappings and animate and animate.Parent then
                     for _, m in ipairs(mappings) do
                         local categoryFolder = animate:FindFirstChild(m.category)
                         if categoryFolder then
                             for _, animObj in ipairs(categoryFolder:GetChildren()) do
-                                if animObj:IsA("Animation") then
+                                if animObj:IsA("Animation") and animObj.Name:lower() == m.name:lower() then
                                     if animObj.AnimationId ~= m.animationId then
                                         animObj.AnimationId = m.animationId
+                                        if m.weights ~= nil then
+                                            for _, child in ipairs(animObj:GetChildren()) do
+                                                if child:IsA("NumberValue") and child.Name == "Weight" then
+                                                    child:Destroy()
+                                                end
+                                            end
+                                            for _, wVal in ipairs(m.weights) do
+                                                local w = Instance.new("NumberValue")
+                                                w.Name = "Weight"
+                                                w.Value = wVal
+                                                w.Parent = animObj
+                                            end
+                                        end
                                         changed = true
                                     end
                                 end
@@ -6053,19 +6399,52 @@ function onCharacterAdded(character)
                     end
                 end
             end
-            --[[
             if changed and humanoid.MoveDirection.Magnitude == 0 then
                 animate.Disabled = true
                 animate.Disabled = false
             end
-            --]]
         end)
     end
+
+    local function isAnyEmoteEnhanceActive()
+        return State.emotesWalkEnabled or State.speedEmoteEnabled
+    end
+
+    local function handleFrozenToolEquip()
+        State.toolEquipped = true
+        refreshToolAnimationIds()
+    end
+
+    local function handleFrozenToolUnequip()
+        State.toolEquipped = false
+        refreshToolAnimationIds()
+    end
+
+    if character:FindFirstChildOfClass("Tool") then
+        State.toolEquipped = true
+    end
+    refreshToolAnimationIds()
+
+    character.ChildAdded:Connect(function(child)
+        if child:IsA("Tool") then
+            handleFrozenToolEquip()
+        end
+    end)
+
+    character.ChildRemoved:Connect(function(child)
+        if child:IsA("Tool") and not character:FindFirstChildOfClass("Tool") then
+            handleFrozenToolUnequip()
+        end
+    end)
 
     animator.AnimationPlayed:Connect(function(animationTrack)
         if isDancing(character, animationTrack) then
             local playedEmoteId = urlToId(animationTrack.Animation.AnimationId)
             if playedEmoteId == "" or playedEmoteId == "0" then return end
+
+            if State.toolEquipped then
+                return
+            end
 
             if State.emotesWalkEnabled then
                 if State.currentEmoteTrack then
@@ -6116,6 +6495,7 @@ function onCharacterAdded(character)
     State.emotesWalkEnabled = false
     State.speedEmoteEnabled = false
     State.favoriteEnabled = false
+    State.toolEquipped = false
     State.currentEmoteTrack = nil
 
     stopEmotes()
@@ -8375,7 +8755,7 @@ end)
 RunService.Stepped:Connect(function()
     if humanoid and State.currentEmoteTrack and typeof(State.currentEmoteTrack) == "Instance" and State.currentEmoteTrack:IsA("AnimationTrack") and State.currentEmoteTrack.IsPlaying then
         if humanoid.MoveDirection.Magnitude > 0 then
-            if State.speedEmoteEnabled and not State.emotesWalkEnabled then
+            if State.toolEquipped or (State.speedEmoteEnabled and not State.emotesWalkEnabled) then
                 State.currentEmoteTrack:Stop()
                 State.currentEmoteTrack = nil
             end
